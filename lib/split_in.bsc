@@ -148,7 +148,7 @@ generate_repo_split_args_in() {
                     i="./"
                 fi
                 if [[ -d $i ]]; then
-                    echo "including everything in directory $i as $previous_i"
+                    echo "INCLUDING EVERYTHING IN DIRECTORY $i AS $previous_i"
                     # iterate all files in i, including files that start with dot
                     for item in "${i%*/}"/* "${i%*/}"/.[^.]*; do
                         # remove the common prefix/suffic
@@ -179,10 +179,12 @@ generate_repo_split_args_in() {
                                     fi
 
                                     if [[ "${previous_i: -1}" == "/" ]]; then
+                                        if [[ ! -z $verbose ]]; then echo "$previous_i$file" ; fi
                                         # echo "including $input_file as $previous_i$file"
                                         # no need to add a slash, it already has one
                                         repo_split_include_as+=("$input_file:$previous_i$file")
                                     else
+                                        if [[ ! -z $verbose ]]; then echo "$previous_i/$file" ; fi
                                         # echo "including $input_file as $previous_i/$file"
                                         repo_split_include_as+=("$input_file:$previous_i/$file")
                                     fi
@@ -191,7 +193,7 @@ generate_repo_split_args_in() {
                         done
                     done
                 else
-                    echo "including $i as $previous_i"
+                    echo "INCLUDING $i AS $previous_i"
                     # echo "$i is a file, adding $i:$previous_i"
                     # echo "LOCAL $i IS A FILE, ADD REPO SPLIT ARGS AS IS:"
                     repo_split_include_as+=("$i:$previous_i")
@@ -213,6 +215,7 @@ generate_repo_split_args_in() {
 split_in() {
     # get a --merge-branch option if the user supplied it
     get_arg merge_branch,m "$@"
+    get_arg verbose "$@"
 
     if [[ -z $1 ]]; then
         echo "Missing required input file"
@@ -253,4 +256,16 @@ split_in() {
 
     populate_empty_branch_with_remote_commits
     generate_repo_split_args_in
+
+    include_as_path_str=""
+    for i in ${repo_split_include_as[@]}; do
+        include_as_path_str="$include_as_path_str--path-rename $i "
+    done
+
+    if [[ ! -z $include_as_path_str ]]; then
+        echo "git filter-repo --force --refs $output_branch_name $include_as_path_str"
+        if [[ -z $dry_run ]]; then
+            git filter-repo --force --refs $output_branch_name $include_as_path_str
+        fi
+    fi
 }
