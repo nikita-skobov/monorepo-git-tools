@@ -1,0 +1,15 @@
+# if compiling this file individually, use:
+# import ./helpers.bsc
+# otherwise helpers.bsc already included from git-split.bsc
+
+# sources an input file that contains
+# variables needed for splitting in
+# a remote repository and (optionally) changing paths.
+# back into this local repository.
+# it uses previously defined variables:
+# dry_run.
+# If dry_run is defined, it will simply
+# print out the commands instead of running them.
+split_in() {
+
+}

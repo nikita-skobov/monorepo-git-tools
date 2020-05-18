@@ -1,5 +1,6 @@
 import ./lib/helpers.bsc
 import ./lib/split_out.bsc
+import ./lib/split_in.bsc
 import ./lib/get_arg.bsc
 
 # I like a nice little space between the command
@@ -30,4 +31,7 @@ elif [[
 elif [[ $subcommand == "out" ]]; then
     shift
     split_out "$@"
+elif [[ $subcommand == "in" ]]; then
+    shift
+    split_in "$@"
 fi
