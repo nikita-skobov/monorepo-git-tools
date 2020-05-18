@@ -10,11 +10,19 @@
 input_file_valid_in() {
     if [[ -z $repo_name ]]; then
         echo "The file: $1 does not include a 'repo_name' variable"
-        echo "To split out a subrepo, it must include a repo name"
+        echo "To split in a subrepo, it must include a repo name"
+        return 1
+    elif [[ -z $merge_branch ]] && [[ -z $remote_repo ]] && [[ -z $repo_name || -z $username ]]; then
+        echo "The file: $1 does not contain a remote source to pull from"
+        echo "You must provide either a 'remote_repo' URL as a string"
+        echo "Or a 'repo_name' and a 'username'"
+        echo "Alternatively, you can provide a '--merge-branch' option"
+        echo "to use a local branch to merge in from instead of merging in"
+        echo "from a remote source"
         return 1
     elif [[ -z $include && -z $include_as ]]; then
         echo "The file: $1 does not have an 'include' or an 'include_as' variable"
-        echo "To split out a subrepo, the input file must contain at least one include file/folder"
+        echo "To split in a subrepo, the input file must contain at least one include file/folder"
         return 1
     elif [[ ! -z $include_as ]] && ! is_array "include_as"; then
         echo "The file: $1 contains an include_as variable, but this variable is not an array"
@@ -39,6 +47,9 @@ input_file_valid_in() {
 # If dry_run is defined, it will simply
 # print out the commands instead of running them.
 split_in() {
+    # get a --merge-branch option if the user supplied it
+    get_arg merge_branch,m "$@"
+
     if [[ -z $1 ]]; then
         echo "Missing required input file"
         echo ""
@@ -55,10 +66,20 @@ split_in() {
     elif ! input_file_valid_in "$1"; then
         echo ""
         print_usage_and_exit 4
-    fi
-
-    if ! cd_into_toplevel_without_error; then
+    elif ! cd_into_toplevel_without_error; then
         echo ""
         print_usage_and_exit 6
     fi
+
+    # TODO: allow user to use an option --output-branch
+    # instead of an env var
+    local output_branch_name=${OUTPUT_BRANCH_NAME:-"$repo_name-reverse"}
+    if [[ ! -z $dry_run ]]; then
+        echo "git checkout -b $output_branch_name"
+    elif ! make_output_branch_without_error "$output_branch_name"; then
+        echo ""
+        print_usage_and_exit 5
+    fi
+
+
 }
