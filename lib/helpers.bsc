@@ -55,7 +55,7 @@ make_output_branch_without_error() {
 # returns true if there was no error,
 # false otherwise.
 cd_into_toplevel_without_error() {
-    repo_absolute_path=$(git rev-parse --show-toplevel)
+    repo_absolute_path=$(git rev-parse --show-toplevel 2>&1)
     if [[ $repo_absolute_path == *"fatal: not a git repo"* ]]; then
         echo "Failed to find git toplevel directory"
         echo "This script must be ran from within a git repository"
