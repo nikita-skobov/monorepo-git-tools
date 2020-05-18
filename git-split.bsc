@@ -1,0 +1,33 @@
+import ./lib/helpers.bsc
+import ./lib/split_out.bsc
+import ./lib/get_arg.bsc
+
+# I like a nice little space between the command
+# and the output :)
+echo ""
+
+# if running the command as
+# git split X Y Z
+# X = $1, Y = $2, Z = $3
+# similarly for git-split:
+# git-split X Y Z
+# X = $1, Y = $2, Z = $3
+# git takes care of removing the git command name
+# from the arg list
+
+
+subcommand="$1"
+get_arg dry_run "$@"
+
+if [[ -z $subcommand ]]; then
+    print_usage_and_exit 1
+elif [[
+    $subcommand == "help" || \
+    $subcommand == "-h" || \
+    $subcommand == "--help"
+]]; then
+    print_usage_and_exit 0
+elif [[ $subcommand == "out" ]]; then
+    shift
+    split_out "$@"
+fi

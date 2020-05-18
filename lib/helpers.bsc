@@ -1,0 +1,69 @@
+
+# prints the usage and exits
+# takes argument: $1
+# the exit code
+print_usage_and_exit() {
+    local exit_code="${1:-"0"}"
+    echo "Usage:"
+    echo "git split out <path/to/repo_file>"
+    exit $exit_code
+}
+
+# args: $1 = the file to source.
+# tries to source the file and
+# returns whether or not the source
+# was successful
+source_without_error() {
+    source "$1" > /dev/null 2>&1
+    return $?
+}
+
+# args: $1 the name of the variable to check.
+# returns true if variable is an array
+# false otherwise
+is_array() {
+    if [[ "$(declare -p $1)" =~ "declare -a" ]]; then
+        return 0
+    fi
+    return 1
+}
+
+
+# Checks if output branch of $1
+# exists. If it already exists returns false.
+# Otherwise, it creates the branch and returns
+# true if there was no error.
+make_output_branch_without_error() {
+    local branch_exists=$(git branch --list $1)
+    if [[ ! -z $branch_exists ]]; then
+        echo "The branch $1 already exists."
+        echo "Please use a different output repo name via an environment variable:"
+        echo "OUTPUT_BRANCH_NAME=\"some_new_branch\" git split"
+        echo "Or delete the branch and run this again."
+        return 1
+    fi
+    echo "MAKING BRANCH: $1"
+    git checkout -b "$1"
+    if [[ $? != "0" ]]; then
+        echo "Failed to create output branch: $1"
+        return 1
+    fi
+    return 0
+}
+
+# Changes to the git repo's root directory.
+# returns true if there was no error,
+# false otherwise.
+cd_into_toplevel_without_error() {
+    repo_absolute_path=$(git rev-parse --show-toplevel)
+    if [[ $repo_absolute_path == *"fatal: not a git repo"* ]]; then
+        echo "Failed to find git toplevel directory"
+        echo "This script must be ran from within a git repository"
+        return 1
+    fi
+
+    # TODO: should we do printouts?
+    # echo "Changing to repo: $repo_absolute_path"
+    cd "$repo_absolute_path" > /dev/null 2>&1
+    return $?
+}

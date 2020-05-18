@@ -1,0 +1,179 @@
+# if compiling this file individually, use:
+# import ./helpers.bsc
+# otherwise helpers.bsc already included from git-split.bsc
+
+# assumes that the input file has been sourced
+# validates the variables that the input file has set.
+# takes arg: $1 = the name of the file that was sourced.
+# echoes out error message and returns false if invalid.
+# otherwise returns true
+input_file_valid() {
+    if [[ -z $repo_name ]]; then
+        echo "The file: $1 does not include a 'repo_name' variable"
+        echo "To split out a subrepo, it must include a repo name"
+        return 1
+    elif [[ -z $include && -z $include_as ]]; then
+        echo "The file: $1 does not have an 'include' or an 'include_as' variable"
+        echo "To split out a subrepo, the input file must contain at least one include file/folder"
+        return 1
+    elif [[ ! -z $include_as ]] && ! is_array "include_as"; then
+        echo "The file: $1 contains an include_as variable, but this variable is not an array"
+        echo "To use include_as functionality, make sure it is an array"
+        return 1
+    elif [[ ! -z $include_as ]] && [[ ! $((${#include_as[@]} % 2)) -eq 0 ]]; then
+        echo "include_as array provided, but it has an odd length"
+        echo "include_as must be even so every even argument"
+        echo "is the source file, and every odd argument"
+        echo "is the desired destination"
+        return 1
+    fi
+    return 0
+}
+
+# creates 3 repo split variables:
+# repo_split_exclude, repo_split_include, and
+# repo_split_include_as. Then iterates over
+# the user defined include, or include_as, or
+# exclude variables, and fills in
+# the repo_split_* arrays as needed.
+generate_repo_split_args() {
+    repo_split_exclude=()
+    repo_split_include=()
+    repo_split_include_as=()
+
+    if [[ ! -z $include ]] && is_array "include"; then
+        for i in ${include[@]}; do
+            repo_split_include+=($i)
+        done
+    elif [[ ! -z $include ]]; then
+        # its a single string
+        repo_split_include+=($include)
+    fi
+    if [[ ! -z $include_as ]] && is_array "include_as"; then
+        include_as_len=${#include_as[@]}
+        include_as_index=0
+        previous_i=""
+        while [[ $include_as_index -lt $include_as_len ]]; do
+            i=${include_as[include_as_index]}
+            if [[ $((include_as_index%2)) -eq 0 ]]; then
+                # even
+                previous_i="$i"
+                repo_split_include+=($i)
+            else
+                repo_split_include_as+=("$previous_i:$i")
+            fi
+            ((include_as_index+=1))
+        done
+    fi
+
+    if [[ ! -z $exclude ]] && is_array "exclude"; then
+        # its an array
+        for i in ${exclude[@]}; do
+            repo_split_exclude+=($i)
+        done
+    elif [[ ! -z $exclude ]]; then
+        # its a single string
+        repo_split_exclude+=($exclude)
+    fi
+}
+
+# using the previously defined arrays:
+# repo_split_include, repo_split_include_as,
+# repo_split_exclude.
+# creates the variables: exclude_path_str
+# include_path_str, include_as_path_str
+# which are used in the call(s) to git-filter-repo
+generate_repo_split_strings() {
+    exclude_path_str=""
+    include_path_str=""
+    include_as_path_str=""
+    for i in ${repo_split_include[@]}; do
+        if [[ -z $dry_run ]]; then echo "INCLUDING: $i"; fi
+        include_path_str="$include_path_str--path $i "
+    done
+    for i in ${repo_split_include_as[@]}; do
+        if [[ -z $dry_run ]]; then echo "INCLUDING AS: $i"; fi
+        include_as_path_str="$include_as_path_str--path-rename $i "
+    done
+    for i in ${repo_split_exclude[@]}; do
+        if [[ -z $dry_run ]]; then echo "EXCLUDING: $i"; fi
+        exclude_path_str="$exclude_path_str--path $i "
+    done
+}
+
+# sources an input file that contains
+# variables needed for splitting out
+# a repository and (optionally) changing paths.
+# it uses previously defined variables:
+# dry_run.
+# If dry_run is defined, it will simply
+# print out the commands instead of running them.
+split_out() {
+    if [[ -z $1 ]]; then
+        echo "Missing required input file"
+        echo ""
+        print_usage_and_exit 1
+    elif [[ ! -f $1 ]]; then
+        echo "Failed to find input file: $1"
+        echo ""
+        print_usage_and_exit 2
+    elif ! source_without_error "$1"; then
+        echo "Failed to source input file: $1"
+        echo "Is this a shell script file?"
+        echo ""
+        print_usage_and_exit 3
+    elif ! input_file_valid "$1"; then
+        echo ""
+        print_usage_and_exit 4
+    fi
+
+    if ! cd_into_toplevel_without_error; then
+        echo ""
+        print_usage_and_exit 6
+    fi
+
+    # this relies on include, include_as, or exclude variables
+    # being defined.
+    # it creates the following arrays:
+    # repo_split_include, repo_split_include_as, repo_split_exclude
+    generate_repo_split_args
+    # and then creates include_path_str, exclude_path_str, include_as_path_str
+    generate_repo_split_strings
+
+    # TODO: allow user to use an option --output-branch
+    # instead of an env var
+    local output_branch_name=${OUTPUT_BRANCH_NAME:-"$repo_name"}
+    if [[ ! -z $dry_run ]]; then
+        echo "git checkout -b $output_branch_name"
+    elif ! make_output_branch_without_error "$output_branch_name"; then
+        echo ""
+        print_usage_and_exit 5
+    fi
+
+    # Now run the git filter-repo command with the generated arguments:
+    # exclude anything not in the include paths:
+    # only run the command if dry_run is unset
+    # echo out the command no matter what
+    echo "git filter-repo $include_path_str --refs $output_branch_name --force"
+    if [[ -z $dry_run ]]; then
+        git filter-repo $include_path_str --refs $output_branch_name --force
+    fi
+
+    # exclude anything specified by the exclude paths:
+    if [[ ! -z $exclude_path_str ]]; then
+        echo "git filter-repo $exclude_path_str --invert-paths --refs $output_branch_name --force"
+        if [[ -z $dry_run ]]; then
+            git filter-repo $exclude_path_str --invert-paths --refs $output_branch_name --force
+        fi
+    fi
+
+    # change the paths from source to dest
+    # ie: renaming a private repo structure to a
+    # public repo structure while preserving commits
+    if [[ ! -z $include_as_path_str ]]; then
+        echo "git filter-repo $include_as_path_str --refs $output_branch_name --force"
+        if [[ -z $dry_run ]]; then
+            git filter-repo $include_as_path_str --refs $output_branch_name --force
+        fi
+    fi
+}
