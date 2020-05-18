@@ -38,6 +38,32 @@ branch_exists() {
     return 1
 }
 
+make_orphan_branch_without_error() {
+    # create a new empty branch
+    git checkout --orphan "$1" 2>&1
+    if [[ $? != "0" ]]; then
+        echo "Error creating an orphan branch: $1"
+        return 1
+    fi
+
+    # woah this looks scary right?
+    # normally yes, but we are on an orphan branch
+    # which means that we still have the files from our
+    # previous branch, and git is saying that we are
+    # ready to commit them, but we dont want to commit because
+    # we want to be on an empty branch. We can safely rm everything from
+    # our git directory because we will get them back when we checkout
+    # back to our previous branch.
+    # NOTE THIS ONLY REMOVES FILES/FOLDERS THAT WERE COMMITED
+    # THIS DOES NOT REMOVE UNCOMMITED FILES/FOLDERS.
+    git rm -rf . > /dev/null 2>&1
+    if [[ $? != "0" ]]; then
+        echo "Error clearing out the orphan branch: $1"
+        return 1
+    fi
+
+    return 0
+}
 
 # Checks if output branch of $1
 # exists. If it already exists returns false.

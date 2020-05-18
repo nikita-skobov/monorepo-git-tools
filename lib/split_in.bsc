@@ -38,6 +38,29 @@ input_file_valid_in() {
     return 0
 }
 
+# relies on previously defined variables:
+# uses $merge_branch if set. If merge_branch
+# is set, it does git merge $merge_branch
+# otherwise it does
+# git pull https://github.com/username/repo_name
+populate_empty_branch_with_remote_commits() {
+    # # populate the empty branch with the current master of the remote
+    if [[ ! -z $merge_branch ]]; then
+        # if user provided merge branch, use that instead of pull:
+        if [[ ! -z $dry_run ]]; then
+            echo "git merge $merge_branch"
+        else
+            git merge $merge_branch
+        fi
+    else
+        if [[ ! -z $dry_run ]]; then
+            echo "git pull https://github.com/$username/$repo_name"
+        else
+            git pull "https://github.com/$username/$repo_name"
+        fi
+    fi
+}
+
 # sources an input file that contains
 # variables needed for splitting in
 # a remote repository and (optionally) changing paths.
@@ -80,9 +103,12 @@ split_in() {
     # instead of an env var
     local output_branch_name=${OUTPUT_BRANCH_NAME:-"$repo_name-reverse"}
     if [[ ! -z $dry_run ]]; then
-        echo "git checkout -b $output_branch_name"
-    elif ! make_output_branch_without_error "$output_branch_name"; then
+        echo "git checkout --orphan $output_branch_name"
+        echo "git rm -rf . > /dev/null"
+    elif ! make_orphan_branch_without_error "$output_branch_name"; then
         echo ""
         print_usage_and_exit 5
     fi
+
+    populate_empty_branch_with_remote_commits
 }
