@@ -28,14 +28,23 @@ is_array() {
     return 1
 }
 
+# args: $1 the name of the branch to check
+# returns true if the branch exists, false otherwise
+branch_exists() {
+    local it_exists=$(git branch --list $1 2>&1)
+    if [[ ! -z $it_exists ]]; then
+        return 0
+    fi
+    return 1
+}
+
 
 # Checks if output branch of $1
 # exists. If it already exists returns false.
 # Otherwise, it creates the branch and returns
 # true if there was no error.
 make_output_branch_without_error() {
-    local branch_exists=$(git branch --list $1)
-    if [[ ! -z $branch_exists ]]; then
+    if branch_exists "$1"; then
         echo "The branch $1 already exists."
         echo "Please use a different output repo name via an environment variable:"
         echo "OUTPUT_BRANCH_NAME=\"some_new_branch\" git split"
