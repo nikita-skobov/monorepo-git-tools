@@ -38,6 +38,49 @@ input_file_valid_in() {
     return 0
 }
 
+# given a list of arguments,
+# the first being the name that you are searching for
+# and the rest is an arbitrary list or keywords.
+# returns true if the list of key words contains
+# the first argument.
+does_item_match_any_of() {
+    local item_name="$1"
+    shift
+    for thing in "$@"; do
+        if [[ $item_name == "$thing"* ]]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+# given a single argument: $1
+# iterate over that folder, recursively
+# and echo out a list of files, ignoring
+# files that are git-ignored, and files
+# that are not committed in the repo.
+get_all_files_from() {
+    local f_or_d="$1"
+
+    if [[ -d "$f_or_d" ]]; then
+        # all files/folders in f_or_d/ including
+        # files/folders that start with a dot:
+        for next in $f_or_d/* $f_or_d/.[^.]* ; do
+            if ! git check-ignore "$next" > /dev/null 2>&1 ; then
+                # only recurse as long as this is not a .gitignored file
+                get_all_files_from "$next"
+            fi
+        done
+    else
+        # only echo out the file
+        # if it actually has history in the git repo
+        if git cat-file -e HEAD:"$f_or_d" > /dev/null 2>&1 ; then
+            echo "$f_or_d"
+        fi
+    fi
+}
+
 # relies on previously defined variables:
 # uses $merge_branch if set. If merge_branch
 # is set, it does git merge $merge_branch
@@ -79,22 +122,23 @@ generate_repo_split_args_in() {
         include_as_len=${#include_as[@]}
         include_as_index=0
         previous_i=""
+        include_key_index=0
+        valid_include_keys=()
+
+        # get all keys of the include_as odd indices
+        # these must be excluded from the directory part
+        # of the next iteration
+        while [[ $include_key_index -lt $include_as_len ]]; do
+            if [[ $((include_key_index%2)) -eq 1 ]]; then
+                if [[ ${include_as[include_key_index]} != "$i" ]]; then
+                    valid_include_keys+=("${include_as[include_key_index]}")
+                fi
+            fi
+            ((include_key_index+=1))
+        done
+
         while [[ $include_as_index -lt $include_as_len ]]; do
             i=${include_as[include_as_index]}
-            valid_include_keys=()
-            include_key_index=0
-            # get all keys of the include_as odd indices
-            # these must be excluded from the directory part
-            # of the next iteration
-            while [[ $include_key_index -lt $include_as_len ]]; do
-                if [[ $((include_key_index%2)) -eq 1 ]]; then
-                    if [[ ${include_as[include_key_index]} != "$i" ]]; then
-                        valid_include_keys+=("${include_as[include_key_index]}")
-                    fi
-                fi
-                ((include_key_index+=1))
-            done
-            echo "valid include keys: ${valid_include_keys[@]}"
 
             if [[ $((include_as_index%2)) -eq 0 ]]; then
                 # even, this will be used on the next iteration
@@ -104,6 +148,7 @@ generate_repo_split_args_in() {
                     i="./"
                 fi
                 if [[ -d $i ]]; then
+                    echo "including everything in directory $i as $previous_i"
                     # iterate all files in i, including files that start with dot
                     for item in "${i%*/}"/* "${i%*/}"/.[^.]*; do
                         # remove the common prefix/suffic
@@ -119,9 +164,6 @@ generate_repo_split_args_in() {
                         fi
                         all_files=$(get_all_files_from "$item")
                         for file in $all_files; do
-                            if [[ $file == "ig"* ]]; then
-                                continue
-                            fi
                             if ! does_item_match_any_of "$file" "${repo_split_include[@]}" ; then
                                 # it does not match any of the include=() strings
                                 # so we will add a repo split arg:
@@ -130,16 +172,18 @@ generate_repo_split_args_in() {
                                 # if it is, then it will be included 
                                 if ! does_item_match_any_of "$file" "${valid_include_keys[@]}" ; then
                                     # echo "REPO SPLIT ARG: --path-rename $file:$previous_i/$file"
-                                    echo "previous i: $previous_i, file: $file"
+                                    # echo "previous i: $previous_i, file: $file"
                                     input_file="$file"
                                     if [[ $remove_common == true ]]; then
                                         file="${file#*/}"
                                     fi
 
                                     if [[ "${previous_i: -1}" == "/" ]]; then
+                                        # echo "including $input_file as $previous_i$file"
                                         # no need to add a slash, it already has one
                                         repo_split_include_as+=("$input_file:$previous_i$file")
                                     else
+                                        # echo "including $input_file as $previous_i/$file"
                                         repo_split_include_as+=("$input_file:$previous_i/$file")
                                     fi
                                 fi
@@ -147,6 +191,8 @@ generate_repo_split_args_in() {
                         done
                     done
                 else
+                    echo "including $i as $previous_i"
+                    # echo "$i is a file, adding $i:$previous_i"
                     # echo "LOCAL $i IS A FILE, ADD REPO SPLIT ARGS AS IS:"
                     repo_split_include_as+=("$i:$previous_i")
                 fi
