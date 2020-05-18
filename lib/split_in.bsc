@@ -69,6 +69,11 @@ split_in() {
     elif ! cd_into_toplevel_without_error; then
         echo ""
         print_usage_and_exit 6
+    elif [[ ! -z $merge_branch ]] && ! branch_exists "$merge_branch"; then
+        echo "You provided a merge branch: $merge_branch"
+        echo "That does not exist."
+        echo ""
+        print_usage_and_exit 7
     fi
 
     # TODO: allow user to use an option --output-branch
@@ -80,6 +85,4 @@ split_in() {
         echo ""
         print_usage_and_exit 5
     fi
-
-
 }
