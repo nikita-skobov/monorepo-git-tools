@@ -2,6 +2,34 @@
 # import ./helpers.bsc
 # otherwise helpers.bsc already included from git-split.bsc
 
+# assumes that the input file has been sourced
+# validates the variables that the input file has set.
+# takes arg: $1 = the name of the file that was sourced.
+# echoes out error message and returns false if invalid.
+# otherwise returns true
+input_file_valid_in() {
+    if [[ -z $repo_name ]]; then
+        echo "The file: $1 does not include a 'repo_name' variable"
+        echo "To split out a subrepo, it must include a repo name"
+        return 1
+    elif [[ -z $include && -z $include_as ]]; then
+        echo "The file: $1 does not have an 'include' or an 'include_as' variable"
+        echo "To split out a subrepo, the input file must contain at least one include file/folder"
+        return 1
+    elif [[ ! -z $include_as ]] && ! is_array "include_as"; then
+        echo "The file: $1 contains an include_as variable, but this variable is not an array"
+        echo "To use include_as functionality, make sure it is an array"
+        return 1
+    elif [[ ! -z $include_as ]] && [[ ! $((${#include_as[@]} % 2)) -eq 0 ]]; then
+        echo "include_as array provided, but it has an odd length"
+        echo "include_as must be even so every even argument"
+        echo "is the source file, and every odd argument"
+        echo "is the desired destination"
+        return 1
+    fi
+    return 0
+}
+
 # sources an input file that contains
 # variables needed for splitting in
 # a remote repository and (optionally) changing paths.
@@ -11,5 +39,26 @@
 # If dry_run is defined, it will simply
 # print out the commands instead of running them.
 split_in() {
+    if [[ -z $1 ]]; then
+        echo "Missing required input file"
+        echo ""
+        print_usage_and_exit 1
+    elif [[ ! -f $1 ]]; then
+        echo "Failed to find input file: $1"
+        echo ""
+        print_usage_and_exit 2
+    elif ! source_without_error "$1"; then
+        echo "Failed to source input file: $1"
+        echo "Is this a shell script file?"
+        echo ""
+        print_usage_and_exit 3
+    elif ! input_file_valid_in "$1"; then
+        echo ""
+        print_usage_and_exit 4
+    fi
 
+    if ! cd_into_toplevel_without_error; then
+        echo ""
+        print_usage_and_exit 6
+    fi
 }
