@@ -36,12 +36,13 @@ input_file_valid_out() {
 # the user defined include, or include_as, or
 # exclude variables, and fills in
 # the repo_split_* arrays as needed.
-generate_repo_split_args() {
+generate_repo_split_args_out() {
     repo_split_exclude=()
     repo_split_include=()
     repo_split_include_as=()
 
     generate_repo_split_include
+    generate_repo_split_exclude
 
     if [[ ! -z $include_as ]] && is_array "include_as"; then
         include_as_len=${#include_as[@]}
@@ -60,7 +61,6 @@ generate_repo_split_args() {
         done
     fi
 
-    generate_repo_split_exclude
 }
 
 # using the previously defined arrays:
@@ -69,7 +69,7 @@ generate_repo_split_args() {
 # creates the variables: exclude_path_str
 # include_path_str, include_as_path_str
 # which are used in the call(s) to git-filter-repo
-generate_repo_split_strings() {
+generate_repo_split_strings_out() {
     exclude_path_str=""
     include_path_str=""
     include_as_path_str=""
@@ -120,9 +120,9 @@ split_out() {
     # being defined.
     # it creates the following arrays:
     # repo_split_include, repo_split_include_as, repo_split_exclude
-    generate_repo_split_args
+    generate_repo_split_args_out
     # and then creates include_path_str, exclude_path_str, include_as_path_str
-    generate_repo_split_strings
+    generate_repo_split_strings_out
 
     # TODO: allow user to use an option --output-branch
     # instead of an env var
