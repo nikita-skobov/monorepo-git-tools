@@ -102,3 +102,30 @@ cd_into_toplevel_without_error() {
     cd "$repo_absolute_path" > /dev/null 2>&1
     return $?
 }
+
+# generates the repo_split_include array
+# from the previously defined include variable
+generate_repo_split_include() {
+    if [[ ! -z $include ]] && is_array "include"; then
+        for i in ${include[@]}; do
+            repo_split_include+=($i)
+        done
+    elif [[ ! -z $include ]]; then
+        # its a single string
+        repo_split_include+=($include)
+    fi
+}
+
+# generates the repo_split_exclude array
+# from the previously defined exclude variable
+generate_repo_split_exclude() {
+    if [[ ! -z $exclude ]] && is_array "exclude"; then
+        # its an array
+        for i in ${exclude[@]}; do
+            repo_split_exclude+=($i)
+        done
+    elif [[ ! -z $exclude ]]; then
+        # its a single string
+        repo_split_exclude+=($exclude)
+    fi
+}

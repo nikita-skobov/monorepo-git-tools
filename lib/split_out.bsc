@@ -41,14 +41,8 @@ generate_repo_split_args() {
     repo_split_include=()
     repo_split_include_as=()
 
-    if [[ ! -z $include ]] && is_array "include"; then
-        for i in ${include[@]}; do
-            repo_split_include+=($i)
-        done
-    elif [[ ! -z $include ]]; then
-        # its a single string
-        repo_split_include+=($include)
-    fi
+    generate_repo_split_include
+
     if [[ ! -z $include_as ]] && is_array "include_as"; then
         include_as_len=${#include_as[@]}
         include_as_index=0
@@ -66,15 +60,7 @@ generate_repo_split_args() {
         done
     fi
 
-    if [[ ! -z $exclude ]] && is_array "exclude"; then
-        # its an array
-        for i in ${exclude[@]}; do
-            repo_split_exclude+=($i)
-        done
-    elif [[ ! -z $exclude ]]; then
-        # its a single string
-        repo_split_exclude+=($exclude)
-    fi
+    generate_repo_split_exclude
 }
 
 # using the previously defined arrays:
