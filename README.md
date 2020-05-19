@@ -8,7 +8,7 @@
 * [List of commands](#list-of-commands)
 * [Installation](#installation)
 * [Usage](#usage)
-* [What is a "repo_file"?](#what-is-a-"repo_file")
+* [What is a "repo file"?](#what-is-a-repo-file)
 * [Development](#development)
 
 ## Prerequisites
@@ -49,7 +49,7 @@ sudo cp dist/git-split /usr/lib/git-core
 
 The usage for each command can be found in `doc/<command_name>.md` (TODO!)
 
-## What is a "repo_file"?
+## What is a "repo file"?
 
 I created these tools with the intention of defining `repo_file`s that contain information on how to split out/in local repositories back and forth from remote repositories. A `repo_file` is just a shell script that contains some variables. It is sourced by commands in this repository, and the variables that it sources are used to do the splitting out/in.
 
