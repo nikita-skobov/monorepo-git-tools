@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 
+# usage
+# get_arg file_extension,e "$@"
+# matches: "--file-extension <value>" or "-e <value>"
+# to use the output:
+# echo "what is my file extension? $file_extension"
+# note in the usage, the long form will be the variable
+# name, so short form must come after long form, if at all
 get_arg() {
     # todo: implement positional commands
     # local POSITIONAL=()
@@ -73,12 +80,3 @@ get_arg() {
         esac
     done
 }
-
-# usage
-# get_arg file_extension,e "$@"
-#
-# matches: "--file-extension <value>" or "-e <value>"
-# to use the output:
-# echo "what is my file extension? $file_extension"
-# note in the usage, the long form will be the variable
-# name, so short form must come after long form, if at all
