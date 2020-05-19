@@ -1,0 +1,3 @@
+# detect bash-source-combine files as shell script
+# because thats really what they are
+*.bsc linguist-language=bash
