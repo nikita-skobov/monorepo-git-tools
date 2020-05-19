@@ -9,6 +9,7 @@
 * [Installation](#installation)
 * [Usage](#usage)
 * [What is a "repo_file"?](#what-is-a-"repo_file")
+* [Development](#development)
 
 ## Prerequisites
 
@@ -106,3 +107,23 @@ exclude=(
     "old/embarassing/project/"
 )
 ```
+
+## Development
+
+This project uses my library: [bash-source-combine](https://github.com/nikita-skobov/bash-source-combine). Bash source combine lets you write relatively neat and compact bash code in seperate files using an import syntax. These files are then combined into one single output. The files in this repository are mostly `.bsc` files, which stands for bash source combine.
+
+If you want to develop on this project, please do not make any changes
+to the `dist/` directory, as these are the built files. Instead, edit any of the `.bsc` files. And then to compile/run them, you will need to install bash-source-combine.
+
+To generate the output script, simply run:
+
+```sh
+source_combine git-split.bsc > dist/git-split
+```
+
+Or, to compile and run in place:
+
+```sh
+run_source_combine git-split.bsc --any-args-you-want
+```
+
