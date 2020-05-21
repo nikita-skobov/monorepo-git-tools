@@ -13,6 +13,7 @@ function make_temp_repo() {
 }
 
 function setup() {
+    source $BATS_TEST_DIRNAME/../lib/helpers.bsc
     make_temp_repo test_remote_repo
     make_temp_repo test_remote_repo2
     cd $BATS_TMPDIR/test_remote_repo
@@ -172,4 +173,57 @@ function teardown() {
     [[ -d this/path/will/be/created ]]
     [[ -f this/path/will/be/created/test_remote_repo2.txt ]]
     [[ -f this/path/will/be/created/lib/test-branch-file.txt ]]
+}
+
+
+@test 'can specify an output branch with --output-branch' {
+    repo_file_contents="
+    repo_name=\"doesnt_matter\"
+    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    include_as=(
+        \"this/path/will/be/created/\" \"\"
+    )
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+
+    # branch should not exist at first:
+    run branch_exists some-output-branch
+    echo "$output"
+    [[ $status -eq 1 ]]
+
+    run $BATS_TEST_DIRNAME/git-split in repo_file.sh --output-branch some-output-branch
+    
+    # now it should:
+    run branch_exists some-output-branch
+    [[ $status -eq 0 ]]
+    # also we should be on that branch:
+    run get_current_branch_name
+    [[ $output == "some-output-branch" ]]
+}
+
+@test 'can specify an output branch with -o' {
+    repo_file_contents="
+    repo_name=\"doesnt_matter\"
+    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    include_as=(
+        \"this/path/will/be/created/\" \"\"
+    )
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+
+    # branch should not exist at first:
+    run branch_exists some-output-branch
+    echo "$output"
+    [[ $status -eq 1 ]]
+
+    run $BATS_TEST_DIRNAME/git-split in repo_file.sh -o some-output-branch
+    
+    # now it should:
+    run branch_exists some-output-branch
+    [[ $status -eq 0 ]]
+    # also we should be on that branch:
+    run get_current_branch_name
+    [[ $output == "some-output-branch" ]]
 }

@@ -40,6 +40,7 @@ input_file_valid_out() {
 # If dry_run is defined, it will simply
 # print out the commands instead of running them.
 split_out() {
+    get_arg output_branch,o "$@"
     if [[ -z $1 ]]; then
         echo "Missing required input file"
         echo ""
@@ -69,9 +70,7 @@ split_out() {
     # and then creates include_path_str, exclude_path_str, include_as_path_str
     generate_repo_split_strings_out
 
-    # TODO: allow user to use an option --output-branch
-    # instead of an env var
-    local output_branch_name=${OUTPUT_BRANCH_NAME:-"$repo_name"}
+    local output_branch_name=${output_branch:-"$repo_name"}
     if [[ ! -z $dry_run ]]; then
         echo "git checkout -b $output_branch_name"
     elif ! make_output_branch_without_error "$output_branch_name"; then

@@ -118,6 +118,7 @@ split_in() {
     # get a --merge-branch option if the user supplied it
     get_arg merge_branch,m "$@"
     get_arg verbose "$@"
+    get_arg output_branch,o "$@"
 
     if [[ -z $1 ]]; then
         echo "Missing required input file"
@@ -145,9 +146,7 @@ split_in() {
         print_usage_and_exit $ecf_failed_to_find_merge_branch
     fi
 
-    # TODO: allow user to use an option --output-branch
-    # instead of an env var
-    local output_branch_name=${OUTPUT_BRANCH_NAME:-"$repo_name-reverse"}
+    local output_branch_name=${output_branch:-"$repo_name-reverse"}
     if [[ ! -z $dry_run ]]; then
         echo "git checkout --orphan $output_branch_name"
         echo "git rm -rf . > /dev/null"
