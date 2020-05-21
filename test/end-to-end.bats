@@ -8,14 +8,14 @@ function make_temp_repo() {
         git config --local user.name "temp"
         echo "name of repo: $1" > $1.txt
         git add $1.txt
-        git commit -m "initial commit"
+        git commit -m "initial commit for $1"
     fi
 }
 
 function setup() {
     make_temp_repo test_remote_repo
     make_temp_repo test_remote_repo2
-    echo "$PWD"
+    cd $BATS_TMPDIR/test_remote_repo
 }
 
 function teardown() {
@@ -85,7 +85,6 @@ function teardown() {
     [[ -f this/path/will/be/created/lib/file.txt ]]
 }
 
-# TODO: implement using remote_repo
 @test 'can split in a remote_repo into a subfolder of current repo' {
     repo_file_contents="
     repo_name=\"doesnt_matter\"

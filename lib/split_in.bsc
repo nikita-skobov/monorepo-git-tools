@@ -97,9 +97,10 @@ populate_empty_branch_with_remote_commits() {
         fi
     else
         if [[ ! -z $dry_run ]]; then
-            echo "git pull https://github.com/$username/$repo_name"
+            echo "git pull $@"
         else
-            git pull "https://github.com/$username/$repo_name"
+            echo "git pull $@"
+            git pull $@
         fi
     fi
 }
@@ -155,7 +156,11 @@ split_in() {
         print_usage_and_exit $ecf_failed_to_make_output_branch
     fi
 
-    populate_empty_branch_with_remote_commits
+    local remote_uri="https://github.com/$username/$repo_name"
+    if [[ ! -z $remote_repo ]]; then
+        remote_uri="$remote_repo"
+    fi
+    populate_empty_branch_with_remote_commits $remote_uri
     generate_repo_split_args_in
     generate_repo_split_strings_in
 
