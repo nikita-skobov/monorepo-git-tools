@@ -47,7 +47,7 @@ sudo cp dist/git-split /usr/lib/git-core
 
 ## Usage
 
-The usage for each command can be found in `doc/<command_name>.md` (TODO!)
+The usage for each command can be found in `doc/<command_name>.md`
 
 ## What is a "repo file"?
 
@@ -59,6 +59,10 @@ An example `repo_file`:
 # used for: git pull $remote_repo when doing
 # git split in
 remote_repo="https://github.com/myname/myrepo"
+
+# instead of pulling remote_repo from HEAD,
+# it can pull from a specific branch instead
+remote_branch="feature/X"
 
 # used for the branch name that gets output.
 # also, if `remote_repo` is NOT provided,
@@ -126,4 +130,3 @@ Or, to compile and run in place:
 ```sh
 run_source_combine git-split.bsc --any-args-you-want
 ```
-
