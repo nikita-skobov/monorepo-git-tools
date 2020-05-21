@@ -104,105 +104,6 @@ populate_empty_branch_with_remote_commits() {
     fi
 }
 
-# creates 2 repo split variables:
-# repo_split_include, and
-# repo_split_include_as. Then iterates over
-# the user defined include, or include_as, or
-# variables, and fills in
-# the repo_split_* arrays as needed.
-generate_repo_split_args_in() {
-    repo_split_include=()
-    repo_split_include_as=()
-
-    # generate the repo_split_include array:
-    generate_repo_split_include
-    
-    # generate the repo_split_include_as array:
-    if [[ ! -z $include_as ]] && is_array "include_as"; then
-        include_as_len=${#include_as[@]}
-        include_as_index=0
-        previous_i=""
-        include_key_index=0
-        valid_include_keys=()
-
-        # get all keys of the include_as odd indices
-        # these must be excluded from the directory part
-        # of the next iteration
-        while [[ $include_key_index -lt $include_as_len ]]; do
-            if [[ $((include_key_index%2)) -eq 1 ]]; then
-                if [[ ${include_as[include_key_index]} != "$i" ]]; then
-                    valid_include_keys+=("${include_as[include_key_index]}")
-                fi
-            fi
-            ((include_key_index+=1))
-        done
-
-        while [[ $include_as_index -lt $include_as_len ]]; do
-            i=${include_as[include_as_index]}
-
-            if [[ $((include_as_index%2)) -eq 0 ]]; then
-                # even, this will be used on the next iteration
-                previous_i="$i"
-            else
-                if [[ $i == "" || $i == " " ]]; then
-                    i="./"
-                fi
-                if [[ -d $i ]]; then
-                    echo "INCLUDING EVERYTHING IN DIRECTORY $i AS $previous_i"
-                    # iterate all files in i, including files that start with dot
-                    for item in "${i%*/}"/* "${i%*/}"/.[^.]*; do
-                        # remove the common prefix/suffic
-                        # so the paths line up properly
-                        remove_common=true
-                        if [[ $item == "./"* ]]; then
-                            item="${item:2}"
-                            remove_common=false
-                        fi
-                        if [[ $item == ".git" ]]; then
-                            # no need to iterate over the .git directory
-                            continue
-                        fi
-                        all_files=$(get_all_files_from "$item")
-                        for file in $all_files; do
-                            if ! does_item_match_any_of "$file" "${repo_split_include[@]}" ; then
-                                # it does not match any of the include=() strings
-                                # so we will add a repo split arg:
-                                # but we also need to check if this is one of the
-                                # other include_as=() strings
-                                # if it is, then it will be included 
-                                if ! does_item_match_any_of "$file" "${valid_include_keys[@]}" ; then
-                                    # echo "REPO SPLIT ARG: --path-rename $file:$previous_i/$file"
-                                    # echo "previous i: $previous_i, file: $file"
-                                    input_file="$file"
-                                    if [[ $remove_common == true ]]; then
-                                        file="${file#*/}"
-                                    fi
-
-                                    if [[ "${previous_i: -1}" == "/" ]]; then
-                                        if [[ ! -z $verbose ]]; then echo "$previous_i$file" ; fi
-                                        # echo "including $input_file as $previous_i$file"
-                                        # no need to add a slash, it already has one
-                                        repo_split_include_as+=("$input_file:$previous_i$file")
-                                    else
-                                        if [[ ! -z $verbose ]]; then echo "$previous_i/$file" ; fi
-                                        # echo "including $input_file as $previous_i/$file"
-                                        repo_split_include_as+=("$input_file:$previous_i/$file")
-                                    fi
-                                fi
-                            fi
-                        done
-                    done
-                else
-                    echo "INCLUDING $i AS $previous_i"
-                    # echo "$i is a file, adding $i:$previous_i"
-                    # echo "LOCAL $i IS A FILE, ADD REPO SPLIT ARGS AS IS:"
-                    repo_split_include_as+=("$i:$previous_i")
-                fi
-            fi
-            ((include_as_index+=1))
-        done
-    fi
-}
 
 # sources an input file that contains
 # variables needed for splitting in
@@ -256,11 +157,7 @@ split_in() {
 
     populate_empty_branch_with_remote_commits
     generate_repo_split_args_in
-
-    include_as_path_str=""
-    for i in ${repo_split_include_as[@]}; do
-        include_as_path_str="$include_as_path_str--path-rename $i "
-    done
+    generate_repo_split_strings_in
 
     if [[ ! -z $include_as_path_str ]]; then
         echo "git filter-repo --force --refs $output_branch_name $include_as_path_str"

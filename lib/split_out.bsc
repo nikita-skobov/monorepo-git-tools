@@ -30,62 +30,7 @@ input_file_valid_out() {
     return 0
 }
 
-# creates 3 repo split variables:
-# repo_split_exclude, repo_split_include, and
-# repo_split_include_as. Then iterates over
-# the user defined include, or include_as, or
-# exclude variables, and fills in
-# the repo_split_* arrays as needed.
-generate_repo_split_args_out() {
-    repo_split_exclude=()
-    repo_split_include=()
-    repo_split_include_as=()
 
-    generate_repo_split_include
-    generate_repo_split_exclude
-
-    if [[ ! -z $include_as ]] && is_array "include_as"; then
-        include_as_len=${#include_as[@]}
-        include_as_index=0
-        previous_i=""
-        while [[ $include_as_index -lt $include_as_len ]]; do
-            i=${include_as[include_as_index]}
-            if [[ $((include_as_index%2)) -eq 0 ]]; then
-                # even
-                previous_i="$i"
-                repo_split_include+=($i)
-            else
-                repo_split_include_as+=("$previous_i:$i")
-            fi
-            ((include_as_index+=1))
-        done
-    fi
-
-}
-
-# using the previously defined arrays:
-# repo_split_include, repo_split_include_as,
-# repo_split_exclude.
-# creates the variables: exclude_path_str
-# include_path_str, include_as_path_str
-# which are used in the call(s) to git-filter-repo
-generate_repo_split_strings_out() {
-    exclude_path_str=""
-    include_path_str=""
-    include_as_path_str=""
-    for i in ${repo_split_include[@]}; do
-        if [[ -z $dry_run ]]; then echo "INCLUDING: $i"; fi
-        include_path_str="$include_path_str--path $i "
-    done
-    for i in ${repo_split_include_as[@]}; do
-        if [[ -z $dry_run ]]; then echo "INCLUDING AS: $i"; fi
-        include_as_path_str="$include_as_path_str--path-rename $i "
-    done
-    for i in ${repo_split_exclude[@]}; do
-        if [[ -z $dry_run ]]; then echo "EXCLUDING: $i"; fi
-        exclude_path_str="$exclude_path_str--path $i "
-    done
-}
 
 # sources an input file that contains
 # variables needed for splitting out

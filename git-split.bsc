@@ -19,6 +19,7 @@
 import ./lib/helpers.bsc
 import ./lib/split_out.bsc
 import ./lib/split_in.bsc
+import ./lib/filter_repo.bsc
 import get_arg from ./lib/get_arg.bsc
 
 # I like a nice little space between the command
