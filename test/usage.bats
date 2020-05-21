@@ -1,19 +1,19 @@
 #!/usr/bin/env bats
 
 @test "prints usage with -h, and exits 0" {
-    run ./dist/git-split_t -h
+    run $BATS_TEST_DIRNAME/git-split -h
     [[ "$status" -eq 0 ]]
     [[ "$output" = *"Usage:"* ]]
 }
 
 @test "prints usage with --help, and exits 0" {
-    run ./dist/git-split_t --help
+    run $BATS_TEST_DIRNAME/git-split --help
     [[ "$status" -eq 0 ]]
     [[ "$output" = *"Usage:"* ]]
 }
 
 @test "prints usage with help, and exits 0" {
-    run ./dist/git-split_t help
+    run $BATS_TEST_DIRNAME/git-split help
     [[ "$status" -eq 0 ]]
     [[ "$output" = *"Usage:"* ]]
 }
