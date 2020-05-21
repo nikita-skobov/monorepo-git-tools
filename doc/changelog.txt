@@ -1,0 +1,13 @@
+v1.1.0
+- adds option '--output-branch' or '-o' to specify the name of an output branch for both `git split out`, and `git split in`.
+- adds tests
+- adds documentation
+- adds feature to `git split in` from a remote branch instead of just from master
+- fixes functionality for using a `remote_repo` variable in the `repo_file` instead of relying on `https://github.com/$username/$repo_name`
+
+v1.0.1
+- minor minification of git-split
+
+v1.0.0
+- adds feature: `git split out`. Takes a local repository and splits out portions of it into a new branch and rewrites history as if those portions are the only thing in the repository.
+- adds feature: `git split in`. Takes a remote repository and adds it to your local repository as a new branch. Then rewrites the history on that branch to rename portions of the remote repository to match your local one.
