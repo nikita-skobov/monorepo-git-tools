@@ -1,3 +1,5 @@
+#!/usr/bin/env bats
+
 function setup() {
     source ./lib/helpers.bsc
 }
