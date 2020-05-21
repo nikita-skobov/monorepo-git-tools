@@ -53,7 +53,7 @@ The usage for each command can be found in `doc/<command_name>.md`
 
 I created these tools with the intention of defining `repo_file`s that contain information on how to split out/in local repositories back and forth from remote repositories. A `repo_file` is just a shell script that contains some variables. It is sourced by commands in this repository, and the variables that it sources are used to do the splitting out/in.
 
-An example `repo_file`:
+Here is a commented `repo_file` that explains what every variable does
 
 ```sh
 # used for: git pull $remote_repo when doing
