@@ -47,18 +47,18 @@ split_out() {
     elif [[ ! -f $1 ]]; then
         echo "Failed to find input file: $1"
         echo ""
-        print_usage_and_exit 2
+        print_usage_and_exit $ecf_failed_to_find_input_file
     elif ! source_without_error "$1"; then
         echo "Failed to source input file: $1"
         echo "Is this a shell script file?"
         echo ""
-        print_usage_and_exit 3
+        print_usage_and_exit $ecf_source_failure
     elif ! input_file_valid_out "$1"; then
         echo ""
-        print_usage_and_exit 4
+        print_usage_and_exit $ecf_invalid_input_file
     elif ! cd_into_toplevel_without_error; then
         echo ""
-        print_usage_and_exit 6
+        print_usage_and_exit $ecf_failed_to_find_toplevel
     fi
 
     # this relies on include, include_as, or exclude variables
@@ -76,7 +76,7 @@ split_out() {
         echo "git checkout -b $output_branch_name"
     elif ! make_output_branch_without_error "$output_branch_name"; then
         echo ""
-        print_usage_and_exit 5
+        print_usage_and_exit $ecf_failed_to_make_output_branch
     fi
 
     # Now run the git filter-repo command with the generated arguments:
