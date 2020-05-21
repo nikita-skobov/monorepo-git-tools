@@ -17,6 +17,15 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# prefixed ECS: exit code success
+# or ECF: exit code failure
+ecf_missing_input=1
+ecf_failed_to_find_input_file=2
+ecf_source_failure=3
+ecf_invalid_input_file=4
+ecf_failed_to_find_toplevel=5
+ecf_failed_to_make_output_branch=6
+ecf_failed_to_find_merge_branch=7
 
 # prints the usage and exits
 # takes argument: $1
@@ -24,7 +33,35 @@
 print_usage_and_exit() {
     local exit_code="${1:-"0"}"
     echo "Usage:"
-    echo "git split out <path/to/repo_file>"
+    echo "git split <out|in> <path/to/repo_file> [OPTIONS]"
+    echo ""
+    echo "Global options:"
+    echo " --dry-run"
+    echo "   does not actually modify/do anything. Just"
+    echo "   outputs the commands that it would do without the"
+    echo "   --dry-run option present."
+    echo "   example:"
+    echo "   git split out repo_file.sh --dry-run"
+    echo ""
+    echo " --output-branch <branch_name>"
+    echo "   git split out, and git split in both create new"
+    echo "   branches, that by default get named according"
+    echo "   to the value of the 'repo_name' variable"
+    echo "   providing --output-branch <branch_name> lets you"
+    echo "   specify the name of the branch that will be created"
+    echo "   if you don't want it to be named based on the 'repo_name'"
+    echo "   example:"
+    echo "   git split in repo_file.sh --output-branch my-branch"
+    echo ""
+    echo "split in options:"
+    echo " --merge-branch <branch_name>"
+    echo "   for git split in, the merge branch option lets you"
+    echo "   split in from a local branch instead of a remote repository"
+    echo "   <branch_name> must be a name of a branch that exists in your"
+    echo "   local repository"
+    echo "   example:"
+    echo "   git split in repo_file.sh --merge-branch my-branch"
+    echo ""
     exit $exit_code
 }
 
@@ -91,8 +128,8 @@ make_orphan_branch_without_error() {
 make_output_branch_without_error() {
     if branch_exists "$1"; then
         echo "The branch $1 already exists."
-        echo "Please use a different output repo name via an environment variable:"
-        echo "OUTPUT_BRANCH_NAME=\"some_new_branch\" git split"
+        echo "Please use a different output repo name via the option:"
+        echo "--output-branch \"some_new_branch\""
         echo "Or delete the branch and run this again."
         return 1
     fi
@@ -122,31 +159,9 @@ cd_into_toplevel_without_error() {
     return $?
 }
 
-# generates the repo_split_include array
-# from the previously defined include variable
-generate_repo_split_include() {
-    if [[ ! -z $include ]] && is_array "include"; then
-        for i in ${include[@]}; do
-            repo_split_include+=($i)
-        done
-    elif [[ ! -z $include ]]; then
-        # its a single string
-        repo_split_include+=($include)
-    fi
-}
-
-# generates the repo_split_exclude array
-# from the previously defined exclude variable
-generate_repo_split_exclude() {
-    if [[ ! -z $exclude ]] && is_array "exclude"; then
-        # its an array
-        for i in ${exclude[@]}; do
-            repo_split_exclude+=($i)
-        done
-    elif [[ ! -z $exclude ]]; then
-        # its a single string
-        repo_split_exclude+=($exclude)
-    fi
+# echoes out the current branch name
+get_current_branch_name() {
+    echo "$(git rev-parse --abbrev-ref HEAD)"
 }
 # if compiling this file individually, use:
 # import ./helpers.bsc
@@ -180,62 +195,7 @@ input_file_valid_out() {
     return 0
 }
 
-# creates 3 repo split variables:
-# repo_split_exclude, repo_split_include, and
-# repo_split_include_as. Then iterates over
-# the user defined include, or include_as, or
-# exclude variables, and fills in
-# the repo_split_* arrays as needed.
-generate_repo_split_args_out() {
-    repo_split_exclude=()
-    repo_split_include=()
-    repo_split_include_as=()
 
-    generate_repo_split_include
-    generate_repo_split_exclude
-
-    if [[ ! -z $include_as ]] && is_array "include_as"; then
-        include_as_len=${#include_as[@]}
-        include_as_index=0
-        previous_i=""
-        while [[ $include_as_index -lt $include_as_len ]]; do
-            i=${include_as[include_as_index]}
-            if [[ $((include_as_index%2)) -eq 0 ]]; then
-                # even
-                previous_i="$i"
-                repo_split_include+=($i)
-            else
-                repo_split_include_as+=("$previous_i:$i")
-            fi
-            ((include_as_index+=1))
-        done
-    fi
-
-}
-
-# using the previously defined arrays:
-# repo_split_include, repo_split_include_as,
-# repo_split_exclude.
-# creates the variables: exclude_path_str
-# include_path_str, include_as_path_str
-# which are used in the call(s) to git-filter-repo
-generate_repo_split_strings_out() {
-    exclude_path_str=""
-    include_path_str=""
-    include_as_path_str=""
-    for i in ${repo_split_include[@]}; do
-        if [[ -z $dry_run ]]; then echo "INCLUDING: $i"; fi
-        include_path_str="$include_path_str--path $i "
-    done
-    for i in ${repo_split_include_as[@]}; do
-        if [[ -z $dry_run ]]; then echo "INCLUDING AS: $i"; fi
-        include_as_path_str="$include_as_path_str--path-rename $i "
-    done
-    for i in ${repo_split_exclude[@]}; do
-        if [[ -z $dry_run ]]; then echo "EXCLUDING: $i"; fi
-        exclude_path_str="$exclude_path_str--path $i "
-    done
-}
 
 # sources an input file that contains
 # variables needed for splitting out
@@ -245,25 +205,26 @@ generate_repo_split_strings_out() {
 # If dry_run is defined, it will simply
 # print out the commands instead of running them.
 split_out() {
+    get_arg output_branch,o "$@"
     if [[ -z $1 ]]; then
         echo "Missing required input file"
         echo ""
-        print_usage_and_exit 1
+        print_usage_and_exit $ecf_missing_input
     elif [[ ! -f $1 ]]; then
         echo "Failed to find input file: $1"
         echo ""
-        print_usage_and_exit 2
+        print_usage_and_exit $ecf_failed_to_find_input_file
     elif ! source_without_error "$1"; then
         echo "Failed to source input file: $1"
         echo "Is this a shell script file?"
         echo ""
-        print_usage_and_exit 3
+        print_usage_and_exit $ecf_source_failure
     elif ! input_file_valid_out "$1"; then
         echo ""
-        print_usage_and_exit 4
+        print_usage_and_exit $ecf_invalid_input_file
     elif ! cd_into_toplevel_without_error; then
         echo ""
-        print_usage_and_exit 6
+        print_usage_and_exit $ecf_failed_to_find_toplevel
     fi
 
     # this relies on include, include_as, or exclude variables
@@ -274,14 +235,12 @@ split_out() {
     # and then creates include_path_str, exclude_path_str, include_as_path_str
     generate_repo_split_strings_out
 
-    # TODO: allow user to use an option --output-branch
-    # instead of an env var
-    local output_branch_name=${OUTPUT_BRANCH_NAME:-"$repo_name"}
+    local output_branch_name=${output_branch:-"$repo_name"}
     if [[ ! -z $dry_run ]]; then
         echo "git checkout -b $output_branch_name"
     elif ! make_output_branch_without_error "$output_branch_name"; then
         echo ""
-        print_usage_and_exit 5
+        print_usage_and_exit $ecf_failed_to_make_output_branch
     fi
 
     # Now run the git filter-repo command with the generated arguments:
@@ -410,10 +369,142 @@ populate_empty_branch_with_remote_commits() {
         fi
     else
         if [[ ! -z $dry_run ]]; then
-            echo "git pull https://github.com/$username/$repo_name"
+            echo "git pull $@"
         else
-            git pull "https://github.com/$username/$repo_name"
+            echo "git pull $@"
+            git pull $@
         fi
+    fi
+}
+
+
+# sources an input file that contains
+# variables needed for splitting in
+# a remote repository and (optionally) changing paths.
+# back into this local repository.
+# it uses previously defined variables:
+# dry_run.
+# If dry_run is defined, it will simply
+# print out the commands instead of running them.
+split_in() {
+    # get a --merge-branch option if the user supplied it
+    get_arg merge_branch,m "$@"
+    get_arg verbose "$@"
+    get_arg output_branch,o "$@"
+
+    if [[ -z $1 ]]; then
+        echo "Missing required input file"
+        echo ""
+        print_usage_and_exit $ecf_missing_input
+    elif [[ ! -f $1 ]]; then
+        echo "Failed to find input file: $1"
+        echo ""
+        print_usage_and_exit $ecf_failed_to_find_input_file
+    elif ! source_without_error "$1"; then
+        echo "Failed to source input file: $1"
+        echo "Is this a shell script file?"
+        echo ""
+        print_usage_and_exit $ecf_source_failure
+    elif ! input_file_valid_in "$1"; then
+        echo ""
+        print_usage_and_exit $ecf_invalid_input_file
+    elif ! cd_into_toplevel_without_error; then
+        echo ""
+        print_usage_and_exit $ecf_failed_to_find_toplevel
+    elif [[ ! -z $merge_branch ]] && ! branch_exists "$merge_branch"; then
+        echo "You provided a merge branch: $merge_branch"
+        echo "That does not exist."
+        echo ""
+        print_usage_and_exit $ecf_failed_to_find_merge_branch
+    fi
+
+    local output_branch_name=${output_branch:-"$repo_name-reverse"}
+    if [[ ! -z $dry_run ]]; then
+        echo "git checkout --orphan $output_branch_name"
+        echo "git rm -rf . > /dev/null"
+    elif ! make_orphan_branch_without_error "$output_branch_name"; then
+        echo ""
+        print_usage_and_exit $ecf_failed_to_make_output_branch
+    fi
+
+    local remote_uri="https://github.com/$username/$repo_name"
+    if [[ ! -z $remote_repo ]]; then
+        remote_uri="$remote_repo"
+    fi
+    if [[ ! -z $remote_branch ]]; then
+        remote_uri="$remote_uri $remote_branch"
+    fi
+    populate_empty_branch_with_remote_commits $remote_uri
+    generate_repo_split_args_in
+    generate_repo_split_strings_in
+
+    if [[ ! -z $include_as_path_str ]]; then
+        echo "git filter-repo --force --refs $output_branch_name $include_as_path_str"
+        if [[ -z $dry_run ]]; then
+            git filter-repo --force --refs $output_branch_name $include_as_path_str
+        fi
+    fi
+}
+# These are helper functions
+# that specifically apply to using
+# git-filter-repo
+
+# generates the repo_split_include array
+# from the previously defined include variable
+generate_repo_split_include() {
+    if [[ ! -z $include ]] && is_array "include"; then
+        for i in ${include[@]}; do
+            repo_split_include+=($i)
+        done
+    elif [[ ! -z $include ]]; then
+        # its a single string
+        repo_split_include+=($include)
+    fi
+}
+
+# generates the repo_split_exclude array
+# from the previously defined exclude variable
+generate_repo_split_exclude() {
+    if [[ ! -z $exclude ]] && is_array "exclude"; then
+        # its an array
+        for i in ${exclude[@]}; do
+            repo_split_exclude+=($i)
+        done
+    elif [[ ! -z $exclude ]]; then
+        # its a single string
+        repo_split_exclude+=($exclude)
+    fi
+}
+
+# creates 3 repo split variables:
+# repo_split_exclude, repo_split_include, and
+# repo_split_include_as. Then iterates over
+# the user defined include, or include_as, or
+# exclude variables, and fills in
+# the repo_split_* arrays as needed.
+generate_repo_split_args_out() {
+    repo_split_exclude=()
+    repo_split_include=()
+    repo_split_include_as=()
+
+    generate_repo_split_include
+    generate_repo_split_exclude
+
+    if [[ ! -z $include_as ]] && is_array "include_as"; then
+        include_as_len=${#include_as[@]}
+        include_as_index=0
+        previous_i=""
+        while [[ $include_as_index -lt $include_as_len ]]; do
+            i=${include_as[include_as_index]}
+            if [[ $((include_as_index%2)) -eq 0 ]]; then
+                # even
+                previous_i="$i"
+                repo_split_include+=($i)
+            else
+                repo_split_include_as+=("$previous_i:$i")
+            fi
+            ((include_as_index+=1))
+        done
     fi
 }
 
@@ -429,7 +520,7 @@ generate_repo_split_args_in() {
 
     # generate the repo_split_include array:
     generate_repo_split_include
-    
+
     # generate the repo_split_include_as array:
     if [[ ! -z $include_as ]] && is_array "include_as"; then
         include_as_len=${#include_as[@]}
@@ -517,70 +608,39 @@ generate_repo_split_args_in() {
     fi
 }
 
-# sources an input file that contains
-# variables needed for splitting in
-# a remote repository and (optionally) changing paths.
-# back into this local repository.
-# it uses previously defined variables:
-# dry_run.
-# If dry_run is defined, it will simply
-# print out the commands instead of running them.
-split_in() {
-    # get a --merge-branch option if the user supplied it
-    get_arg merge_branch,m "$@"
-    get_arg verbose "$@"
 
-    if [[ -z $1 ]]; then
-        echo "Missing required input file"
-        echo ""
-        print_usage_and_exit 1
-    elif [[ ! -f $1 ]]; then
-        echo "Failed to find input file: $1"
-        echo ""
-        print_usage_and_exit 2
-    elif ! source_without_error "$1"; then
-        echo "Failed to source input file: $1"
-        echo "Is this a shell script file?"
-        echo ""
-        print_usage_and_exit 3
-    elif ! input_file_valid_in "$1"; then
-        echo ""
-        print_usage_and_exit 4
-    elif ! cd_into_toplevel_without_error; then
-        echo ""
-        print_usage_and_exit 6
-    elif [[ ! -z $merge_branch ]] && ! branch_exists "$merge_branch"; then
-        echo "You provided a merge branch: $merge_branch"
-        echo "That does not exist."
-        echo ""
-        print_usage_and_exit 7
-    fi
+# using the previously defined arrays:
+# repo_split_include, repo_split_include_as,
+# repo_split_exclude.
+# creates the variables: exclude_path_str
+# include_path_str, include_as_path_str
+# which are used in the call(s) to git-filter-repo
+generate_repo_split_strings_out() {
+    exclude_path_str=""
+    include_path_str=""
+    include_as_path_str=""
+    for i in ${repo_split_include[@]}; do
+        if [[ -z $dry_run ]]; then echo "INCLUDING: $i"; fi
+        include_path_str="$include_path_str--path $i "
+    done
+    for i in ${repo_split_include_as[@]}; do
+        if [[ -z $dry_run ]]; then echo "INCLUDING AS: $i"; fi
+        include_as_path_str="$include_as_path_str--path-rename $i "
+    done
+    for i in ${repo_split_exclude[@]}; do
+        if [[ -z $dry_run ]]; then echo "EXCLUDING: $i"; fi
+        exclude_path_str="$exclude_path_str--path $i "
+    done
+}
 
-    # TODO: allow user to use an option --output-branch
-    # instead of an env var
-    local output_branch_name=${OUTPUT_BRANCH_NAME:-"$repo_name-reverse"}
-    if [[ ! -z $dry_run ]]; then
-        echo "git checkout --orphan $output_branch_name"
-        echo "git rm -rf . > /dev/null"
-    elif ! make_orphan_branch_without_error "$output_branch_name"; then
-        echo ""
-        print_usage_and_exit 5
-    fi
-
-    populate_empty_branch_with_remote_commits
-    generate_repo_split_args_in
-
+# using the previously defined array: repo_split_include_as,
+# creates the variable: include_as_path_str
+# which is used in the call(s) to git-filter-repo
+generate_repo_split_strings_in() {
     include_as_path_str=""
     for i in ${repo_split_include_as[@]}; do
         include_as_path_str="$include_as_path_str--path-rename $i "
     done
-
-    if [[ ! -z $include_as_path_str ]]; then
-        echo "git filter-repo --force --refs $output_branch_name $include_as_path_str"
-        if [[ -z $dry_run ]]; then
-            git filter-repo --force --refs $output_branch_name $include_as_path_str
-        fi
-    fi
 }
 
 # usage
@@ -656,7 +716,7 @@ subcommand="$1"
 get_arg dry_run "$@"
 
 if [[ -z $subcommand ]]; then
-    print_usage_and_exit 1
+    print_usage_and_exit $ecf_missing_input
 elif [[
     $subcommand == "help" || \
     $subcommand == "-h" || \
