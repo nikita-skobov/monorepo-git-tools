@@ -43,7 +43,7 @@ split_out() {
     if [[ -z $1 ]]; then
         echo "Missing required input file"
         echo ""
-        print_usage_and_exit $error_missing_input
+        print_usage_and_exit $ecf_missing_input
     elif [[ ! -f $1 ]]; then
         echo "Failed to find input file: $1"
         echo ""
