@@ -4,5 +4,8 @@ to run tests, make sure you are in the root of the repository
 and run:
 
 ```sh
-bats test/
+./test/run_tests.sh
 ```
+
+which will compile the current library into dist/
+and then run tests on the compiled library
