@@ -29,7 +29,7 @@ function teardown() {
 }
 
 
-@test 'can split in a remote github repo via username and repo_name into a subfolder of current repo' {
+@test 'can split in a remote github repo via username and repo_name' {
     # https://github.com/nikita-skobov/github-actions-tutorial
     repo_file_contents="
     repo_name=\"github-actions-tutorial\"
@@ -55,7 +55,7 @@ function teardown() {
     [[ -f this/path/will/be/created/README.md ]]
 }
 
-@test 'can split in a remote github repo via username and repo_name AND branch name into a subfolder of current repo' {
+@test 'can split in a remote github repo via username and repo_name from a specific remote_branch' {
     # https://github.com/nikita-skobov/github-actions-tutorial
     repo_file_contents="
     repo_name=\"github-actions-tutorial\"
@@ -85,7 +85,7 @@ function teardown() {
     [[ -f this/path/will/be/created/test-branch-file.txt ]]
 }
 
-@test 'can split in a local branch into a subfolder of current repo' {
+@test 'can split in a local branch' {
     repo_file_contents="
     repo_name=\"doesnt_matter\"
     include_as=(
@@ -115,7 +115,7 @@ function teardown() {
     [[ -f this/path/will/be/created/lib/file.txt ]]
 }
 
-@test 'can split in a remote_repo into a subfolder of current repo' {
+@test 'can split in a remote_repo uri' {
     repo_file_contents="
     repo_name=\"doesnt_matter\"
     remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
@@ -139,7 +139,7 @@ function teardown() {
     [[ -f this/path/will/be/created/test_remote_repo2.txt ]]
 }
 
-@test 'can split in a remote_repo AND branch name into a subfolder of current repo' {
+@test 'can split in a remote_repo with a specific remote_branch' {
     repo_file_contents="
     repo_name=\"doesnt_matter\"
     remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
@@ -171,5 +171,5 @@ function teardown() {
     # is created:
     [[ -d this/path/will/be/created ]]
     [[ -f this/path/will/be/created/test_remote_repo2.txt ]]
-    [[ -f this/path/will/be/created/lib/test-branch-fie.txt ]]
+    [[ -f this/path/will/be/created/lib/test-branch-file.txt ]]
 }
