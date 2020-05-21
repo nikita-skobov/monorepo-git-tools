@@ -1,0 +1,3 @@
+# prefixed ECS: exit code success
+# or ECF: exit code failure
+ecf_missing_input=1
