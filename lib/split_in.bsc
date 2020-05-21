@@ -160,6 +160,9 @@ split_in() {
     if [[ ! -z $remote_repo ]]; then
         remote_uri="$remote_repo"
     fi
+    if [[ ! -z $remote_branch ]]; then
+        remote_uri="$remote_uri $remote_branch"
+    fi
     populate_empty_branch_with_remote_commits $remote_uri
     generate_repo_split_args_in
     generate_repo_split_strings_in

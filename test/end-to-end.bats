@@ -55,6 +55,36 @@ function teardown() {
     [[ -f this/path/will/be/created/README.md ]]
 }
 
+@test 'can split in a remote github repo via username and repo_name AND branch name into a subfolder of current repo' {
+    # https://github.com/nikita-skobov/github-actions-tutorial
+    repo_file_contents="
+    repo_name=\"github-actions-tutorial\"
+    remote_branch=\"test-branch\"
+    username=\"nikita-skobov\"
+    include_as=(
+        \"this/path/will/be/created/\" \"\"
+    )
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+
+    # a directory called this should not exist at first
+    [[ ! -d this ]]
+
+    run $BATS_TEST_DIRNAME/git-split in repo_file.sh
+    echo "$output"
+    # now it should exist:
+    [[ -d this ]]
+
+    # and just to be safe, check that the whole path to the files
+    # is created:
+    [[ -d this/path/will/be/created ]]
+    [[ -f this/path/will/be/created/LICENSE ]]
+    [[ -f this/path/will/be/created/README.md ]]
+    # this file only exists in the test-branch:
+    [[ -f this/path/will/be/created/test-branch-file.txt ]]
+}
+
 @test 'can split in a local branch into a subfolder of current repo' {
     repo_file_contents="
     repo_name=\"doesnt_matter\"
@@ -107,4 +137,39 @@ function teardown() {
     # is created:
     [[ -d this/path/will/be/created ]]
     [[ -f this/path/will/be/created/test_remote_repo2.txt ]]
+}
+
+@test 'can split in a remote_repo AND branch name into a subfolder of current repo' {
+    repo_file_contents="
+    repo_name=\"doesnt_matter\"
+    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_branch=\"test-branch\"
+    include_as=(
+        \"this/path/will/be/created/\" \"\"
+    )
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+
+    # a directory called this should not exist at first
+    [[ ! -d this ]]
+
+    cd $BATS_TMPDIR/test_remote_repo2
+    git checkout -b test-branch
+    mkdir -p lib
+    echo "libfiletext" > lib/test-branch-file.txt
+    git add lib/
+    git commit -m "lib commit"
+    git checkout master
+    cd -
+
+    run $BATS_TEST_DIRNAME/git-split in repo_file.sh
+    # now it should exist:
+    [[ -d this ]]
+
+    # and just to be safe, check that the whole path to the files
+    # is created:
+    [[ -d this/path/will/be/created ]]
+    [[ -f this/path/will/be/created/test_remote_repo2.txt ]]
+    [[ -f this/path/will/be/created/lib/test-branch-fie.txt ]]
 }
