@@ -7,3 +7,27 @@ ecf_invalid_input_file=4
 ecf_failed_to_find_toplevel=5
 ecf_failed_to_make_output_branch=6
 ecf_failed_to_find_merge_branch=7
+
+# variables related to documentation
+# used in the print_usage function
+doc_program_name="git-split"
+doc_synopsis=(
+    "out <repo_file> [OPTIONS]"
+    "in  <repo_file> [OPTIONS]"
+)
+doc_commands=(
+    "out"
+    "this is the indented block for out git merge"
+    "in"
+    "this is block for in!"
+)
+doc_global_options=(
+    "-h, --help"
+    "print help and exit"
+    "--dry-run"
+    "does not actually modify/do anything. Just outputs the commands that it would do without the --dry-run option present."
+    "--output-branch <branch_name>"
+    "the name of the branch that will be created"
+)
+doc_author="Nikita Skobov"
+doc_author_email="skobo002@umn.edu"
