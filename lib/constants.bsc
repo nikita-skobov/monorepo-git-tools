@@ -31,3 +31,18 @@ doc_global_options=(
 )
 doc_author="Nikita Skobov"
 doc_author_email="skobo002@umn.edu"
+doc_split_in_option_merge_branch='for'\
+' git split in, the merge branch option lets you split in'\
+'from a local branch instead of a remote repository'\
+'<branch_name> must be a name of a branch that exists in your'\
+'local repository'
+doc_split_in_options=(
+    "Options for split in:"
+    "--merge-branch <branch_name>"
+    "$doc_split_in_option_merge_branch"
+    "--other-thinbg"
+    "dsadas"
+)
+doc_custom_sections=(
+    "doc_split_in_options"
+)
