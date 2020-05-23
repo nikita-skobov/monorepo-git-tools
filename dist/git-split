@@ -6,8 +6,7 @@
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+# the Free Software Foundation, specifically version 3.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -30,6 +29,19 @@ ecf_failed_to_find_merge_branch=7
 # variables related to documentation
 # used in the print_usage function
 doc_program_name="git split"
+doc_author="Nikita Skobov"
+doc_author_email="skobo002@umn.edu"
+doc_version="1.1.1"
+doc_last_updated="2020-05-23"
+doc_copyright="Copyright (C) 2020 $doc_author
+
+$doc_program_name is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under the terms of the
+GNU Affero General Public License as published by
+the Free Software Foundation, version 3, and no later.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>."
 doc_synopsis=(
     "out <repo_file> [OPTIONS]"
     "in  <repo_file> [OPTIONS]"
@@ -53,8 +65,6 @@ doc_global_options=(
     "--output-branch <branch_name>"
     "the name of the branch that will be created"
 )
-doc_author="Nikita Skobov"
-doc_author_email="skobo002@umn.edu"
 doc_split_in_option_merge_branch='the '\
 'merge branch option lets you split in '\
 'from a local branch instead of a remote repository. '\
@@ -92,7 +102,7 @@ rfv_remote_branch=(
 rfv_repo_name=(
     "string"
     "required"
-    "The name of the repo. If running 'git split out', this is simply the name of the output branch created by default. For 'git split out', this is used for running 'git pull https://github.com/<username>/<repo_name>' if 'remote_repo' is not provided. Also for 'git split out', the output branch by default will be '<repo_name>-reverse'"
+    "The name of the repo. If running 'git split out', this is simply the name of the output branch created by default. For 'git split out', this is used for running 'git pull https://github.com/<username>/<repo_name>' if 'remote_repo' is not provided. Also for 'git split in', the output branch by default will be '<repo_name>-reverse'"
 )
 rfv_username=(
     "string"
@@ -829,6 +839,13 @@ echo ""
 
 subcommand="$1"
 get_arg dry_run "$@"
+get_arg version "$@"
+
+if [[ ! -z $version ]]; then
+    echo "$doc_program_name version $doc_version ($doc_last_updated)"
+    echo "$doc_copyright"
+    exit 0
+fi
 
 if [[ -z $subcommand ]]; then
     print_usage_and_exit $ecf_missing_input
