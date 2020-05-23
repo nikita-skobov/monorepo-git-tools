@@ -1,0 +1,254 @@
+<!-- Creator     : groff version 1.22.4 -->
+<!-- CreationDate: Sat May 23 01:07:00 2020 -->
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta name="generator" content="groff -Thtml, see www.gnu.org">
+<meta http-equiv="Content-Type" content="text/html; charset=US-ASCII">
+<meta name="Content-Style" content="text/css">
+<style type="text/css">
+       p       { margin-top: 0; margin-bottom: 0; vertical-align: top }
+       pre     { margin-top: 0; margin-bottom: 0; vertical-align: top }
+       table   { margin-top: 0; margin-bottom: 0; vertical-align: top }
+       h1      { text-align: center }
+</style>
+<title>GIT SPLIT</title>
+
+</head>
+<body>
+
+<h1 align="center">GIT SPLIT</h1>
+
+<a href="#NAME">NAME</a><br>
+<a href="#SYNOPSIS">SYNOPSIS</a><br>
+<a href="#COMMANDS">COMMANDS</a><br>
+<a href="#GLOBAL OPTIONS:">GLOBAL OPTIONS:</a><br>
+<a href="#OPTIONS FOR SPLIT IN:">OPTIONS FOR SPLIT IN:</a><br>
+<a href="#ABOUT THE REPO FILE">ABOUT THE REPO FILE</a><br>
+<a href="#AUTHOR">AUTHOR</a><br>
+
+<hr>
+
+
+<h2>NAME
+<a name="NAME"></a>
+</h2>
+
+
+<p style="margin-left:11%; margin-top: 1em">git split
+&minus; manual page for git split</p>
+
+<h2>SYNOPSIS
+<a name="SYNOPSIS"></a>
+</h2>
+
+
+<p style="margin-left:11%; margin-top: 1em"><b><big>git
+split</big></b> <big>out &lt;repo_file&gt; [OPTIONS] <b><br>
+git split</b> in &lt;repo_file&gt; [OPTIONS]</big></p>
+
+<h2>COMMANDS
+<a name="COMMANDS"></a>
+</h2>
+
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>out</big></p>
+
+<p style="margin-left:17%;"><big>Given a repo_file that
+defines how a repository should be split, git split out will
+take all paths defined in the repo_file and rewrite the
+repository&rsquo;s history into a new branch. This new
+branch will only include the history for the files specified
+in the repo_file.</big></p>
+
+<p style="margin-left:17%; margin-top: 1em"><big>You will
+then be left with a branch that can be considered as its own
+seperate repository (because it most likely doesn&rsquo;t
+share any common ancestor commits with your previous
+branch).</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>in</big></p>
+
+<p style="margin-left:17%;"><big>Given a repo_file that
+defines how a repository should be split, git split in will
+take the remote_repo (or github.com/$username/$repo_name if
+remote_repo is not provided), and create a new empty branch
+based on the remote_repo. Then it will take all of the
+include and include_as paths defined in the repo_file and
+rewrite the repository&rsquo;s history on the branch that it
+just created. This new branch will only include the history
+for the files specified in the repo_file.</big></p>
+
+<p style="margin-left:17%; margin-top: 1em"><big>You will
+then be left with a branch that can be considered as its own
+seperate repository (because it most likely doesn&rsquo;t
+share any common ancestor commits with your previous
+branch).</big></p>
+
+<h2>GLOBAL OPTIONS:
+<a name="GLOBAL OPTIONS:"></a>
+</h2>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>-h,
+--help</big></p>
+
+<p style="margin-left:17%;"><big>print help and
+exit</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>--dry-run</big></p>
+
+<p style="margin-left:17%;"><big>does not actually
+modify/do anything. Just outputs the commands that it would
+do without the --dry-run option present.</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>--output-branch
+&lt;branch_name&gt;</big></p>
+
+<p style="margin-left:17%;"><big>the name of the branch
+that will be created</big></p>
+
+<h2>OPTIONS FOR SPLIT IN:
+<a name="OPTIONS FOR SPLIT IN:"></a>
+</h2>
+
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>--merge-branch
+&lt;branch_name&gt;</big></p>
+
+<p style="margin-left:17%;"><big>the merge branch option
+lets you split in from a local branch instead of a remote
+repository. &lt;branch_name&gt; must be a name of a branch
+that exists in your local repository.</big></p>
+
+<h2>ABOUT THE REPO FILE
+<a name="ABOUT THE REPO FILE"></a>
+</h2>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>I created
+these tools with the intention of defining repo_files that
+contain information on how to split out/in local
+repositories back and forth from remote repositories. A
+repo_file is just a shell script that contains some
+variables. It is sourced by commands in this repository, and
+the variables that it sources are used to do the splitting
+out/in.</big></p>
+
+<p style="margin-left:11%; margin-top: 1em"><big>The
+following is a list of all valid variables you can use in
+your repo file.</big></p>
+
+<p style="margin-left:11%; margin-top: 1em"><big>The format
+is: &lt;variable_name&gt; - (type) -
+[required|optional|conditional]</big></p>
+
+<p style="margin-left:11%; margin-top: 1em"><big>If the
+requiredness is &rsquo;conditional&rsquo;, read the
+paragraph under that variable name for an
+explanation</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big><i>remote_repo</i>
+&minus; (string) &minus; optional</big></p>
+
+<p style="margin-left:17%;"><big>A valid git repo uri. Can
+be a local file location, remote url, ssh url, etc. Only
+used for &rsquo;git split in&rsquo;. It is used as the value
+of &rsquo;git pull &lt;remote_repo&gt;&rsquo;. It is
+optional because by default, &rsquo;git split in&rsquo; will
+use
+&rsquo;https://github.com/&lt;username&gt;/&lt;repo_name&gt;&rsquo;</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big><i>remote_branch</i>
+&minus; (string) &minus; optional</big></p>
+
+<p style="margin-left:17%;"><big>A valid remote branch
+name. Only used for &rsquo;git split in&rsquo;. If provided,
+&rsquo;git split in&rsquo; will pull from this remote branch
+instead of from master.</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big><i>repo_name</i>
+&minus; (string) &minus; required</big></p>
+
+<p style="margin-left:17%;"><big>The name of the repo. If
+running &rsquo;git split out&rsquo;, this is simply the name
+of the output branch created by default. For &rsquo;git
+split out&rsquo;, this is used for running &rsquo;git pull
+https://github.com/&lt;username&gt;/&lt;repo_name&gt;&rsquo;
+if &rsquo;remote_repo&rsquo; is not provided. Also for
+&rsquo;git split out&rsquo;, the output branch by default
+will be &rsquo;&lt;repo_name&gt;-reverse&rsquo;</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big><i>username</i>
+&minus; (string) &minus; conditional</big></p>
+
+<p style="margin-left:17%;"><big>GitHub username. Only
+required for &rsquo;git split in&rsquo; and if
+&lt;remote_repo&gt; is not provided. Used for the running
+&rsquo;git pull
+https://github.com/&lt;username&gt;/&lt;repo_name&rsquo;</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big><i>include</i>
+&minus; (array|string) &minus; conditional</big></p>
+
+<p style="margin-left:17%;"><big>Includes the source
+repository files/directories exactly as is, without changing
+the paths. Specify a single include path as a string,
+otherwise multiple paths as an array of strings. Only used
+for &rsquo;git split out&rsquo;. Only required if using
+&rsquo;git split out&rsquo; and &lt;include_as&gt; is not
+provided. &rsquo;git split out&rsquo; will take all of the
+include paths and rewrite the history as if those paths were
+the only thing in the repository.</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big><i>include_as</i>
+&minus; (array) &minus; conditional</big></p>
+
+<p style="margin-left:17%;"><big>An array of file paths,
+where every even path is a source path, and every odd path
+is a destination path. Includes the source repository paths
+as the destination paths. Only required if &lt;include&gt;
+is not provided. For &rsquo;git split out&rsquo; the source
+paths are the paths relative to the root of your current
+branch, and the destination paths are what the source paths
+will be renamed to in the output branch. For &rsquo;git
+split in&rsquo;, it is the reverse. ie: the destination
+paths are the paths of the remote repository, and they will
+be renamed as the paths of the local repository.</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big><i>exclude</i>
+&minus; (array|string) &minus; optional</big></p>
+
+<p style="margin-left:17%;"><big>Exclude the source
+repository paths from being present in the destination. Only
+used for &rsquo;git split out&rsquo;. Specify a single
+exclude path as a string, otherwise multiple paths as an
+array of strings. Note that the exclude paths get applied
+after the include paths. So you would first include the
+paths you want, and if there are sub-paths within the
+included path, you can explicitly exclude those that you do
+not wish to be present.</big></p>
+
+<h2>AUTHOR
+<a name="AUTHOR"></a>
+</h2>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>Written by
+Nikita Skobov &lt;skobo002@umn.edu&gt;</big></p>
+<hr>
+</body>
+</html>
