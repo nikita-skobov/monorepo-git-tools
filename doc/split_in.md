@@ -1,3 +1,5 @@
+# THIS FILE IS OUTDATED
+
 # git split in <repo_file> [OPTIONS]
 
 ## Options:

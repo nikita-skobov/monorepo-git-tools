@@ -6,8 +6,7 @@
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
+# the Free Software Foundation, specifically version 3.
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -27,41 +26,169 @@ ecf_failed_to_find_toplevel=5
 ecf_failed_to_make_output_branch=6
 ecf_failed_to_find_merge_branch=7
 
+# variables related to documentation
+# used in the print_usage function
+doc_program_name="git split"
+doc_author="Nikita Skobov"
+doc_author_email="skobo002@umn.edu"
+doc_version="1.1.1"
+doc_last_updated="2020-05-23"
+doc_copyright="Copyright (C) 2020 $doc_author
+
+$doc_program_name is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under the terms of the
+GNU Affero General Public License as published by
+the Free Software Foundation, version 3, and no later.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>."
+doc_synopsis=(
+    "out <repo_file> [OPTIONS]"
+    "in  <repo_file> [OPTIONS]"
+)
+doc_commands=(
+    "out"
+"Given a repo_file that defines how a repository should be split, git split out will take all paths defined in the repo_file and rewrite the repository's history into a new branch. This new branch will only include the history for the files specified in the repo_file.
+.sp
+You will then be left with a branch that can be considered as its own seperate repository (because it most likely doesn't share any common ancestor commits with your previous branch)."
+
+    "in"
+"Given a repo_file that defines how a repository should be split, git split in will take the remote_repo (or github.com/\$username/\$repo_name if remote_repo is not provided), and create a new empty branch based on the remote_repo. Then it will take all of the include and include_as paths defined in the repo_file and rewrite the repository's history on the branch that it just created. This new branch will only include the history for the files specified in the repo_file.
+.sp
+You will then be left with a branch that can be considered as its own seperate repository (because it most likely doesn't share any common ancestor commits with your previous branch)."
+)
+doc_global_options=(
+    "-h, --help"
+    "print help and exit"
+    "--version"
+    "print the version and exit"
+    "--dry-run"
+    "does not actually modify/do anything. Just outputs the commands that it would do without the --dry-run option present."
+    "--output-branch <branch_name>"
+    "the name of the branch that will be created"
+)
+doc_split_in_option_merge_branch='the '\
+'merge branch option lets you split in '\
+'from a local branch instead of a remote repository. '\
+'<branch_name> must be a name of a branch that exists in your '\
+'local repository.'
+doc_split_in_options=(
+    "Options for split in:"
+    "--merge-branch <branch_name>"
+    "$doc_split_in_option_merge_branch"
+)
+doc_custom_sections=(
+    "doc_split_in_options"
+)
+
+# rfv: Repo File Variables
+rfv_valid_variable_names=(
+    "remote_repo"
+    "remote_branch"
+    "repo_name"
+    "username"
+    "include"
+    "include_as"
+    "exclude"
+)
+rfv_remote_repo=(
+    "string"
+    "optional"
+    "A valid git repo uri. Can be a local file location, remote url, ssh url, etc. Only used for 'git split in'. It is used as the value of 'git pull <remote_repo>'. It is optional because by default, 'git split in' will use 'https://github.com/<username>/<repo_name>'"
+)
+rfv_remote_branch=(
+    "string"
+    "optional"
+    "A valid remote branch name. Only used for 'git split in'. If provided, 'git split in' will pull from this remote branch instead of from master."
+)
+rfv_repo_name=(
+    "string"
+    "required"
+    "The name of the repo. If running 'git split out', this is simply the name of the output branch created by default. For 'git split out', this is used for running 'git pull https://github.com/<username>/<repo_name>' if 'remote_repo' is not provided. Also for 'git split in', the output branch by default will be '<repo_name>-reverse'"
+)
+rfv_username=(
+    "string"
+    "conditional"
+    "GitHub username. Only required for 'git split in' and if <remote_repo> is not provided. Used for the running 'git pull https://github.com/<username>/<repo_name'"
+)
+rfv_include=(
+    "array|string"
+    "conditional"
+    "Includes the source repository files/directories exactly as is, without changing the paths. Specify a single include path as a string, otherwise multiple paths as an array of strings. Only used for 'git split out'. Only required if using 'git split out' and <include_as> is not provided. 'git split out' will take all of the include paths and rewrite the history as if those paths were the only thing in the repository."
+)
+rfv_include_as=(
+    "array"
+    "conditional"
+    "An array of file paths, where every even path is a source path, and every odd path is a destination path. Includes the source repository paths as the destination paths. Only required if <include> is not provided. For 'git split out' the source paths are the paths relative to the root of your current branch, and the destination paths are what the source paths will be renamed to in the output branch. For 'git split in', it is the reverse. ie: the destination paths are the paths of the remote repository, and they will be renamed as the paths of the local repository."
+)
+rfv_exclude=(
+    "array|string"
+    "optional"
+    "Exclude the source repository paths from being present in the destination. Only used for 'git split out'. Specify a single exclude path as a string, otherwise multiple paths as an array of strings. Note that the exclude paths get applied after the include paths. So you would first include the paths you want, and if there are sub-paths within the included path, you can explicitly exclude those that you do not wish to be present."
+)
+
 # prints the usage and exits
 # takes argument: $1
 # the exit code
 print_usage_and_exit() {
     local exit_code="${1:-"0"}"
-    echo "Usage:"
-    echo "git split <out|in> <path/to/repo_file> [OPTIONS]"
-    echo ""
-    echo "Global options:"
-    echo " --dry-run"
-    echo "   does not actually modify/do anything. Just"
-    echo "   outputs the commands that it would do without the"
-    echo "   --dry-run option present."
-    echo "   example:"
-    echo "   git split out repo_file.sh --dry-run"
-    echo ""
-    echo " --output-branch <branch_name>"
-    echo "   git split out, and git split in both create new"
-    echo "   branches, that by default get named according"
-    echo "   to the value of the 'repo_name' variable"
-    echo "   providing --output-branch <branch_name> lets you"
-    echo "   specify the name of the branch that will be created"
-    echo "   if you don't want it to be named based on the 'repo_name'"
-    echo "   example:"
-    echo "   git split in repo_file.sh --output-branch my-branch"
-    echo ""
-    echo "split in options:"
-    echo " --merge-branch <branch_name>"
-    echo "   for git split in, the merge branch option lets you"
-    echo "   split in from a local branch instead of a remote repository"
-    echo "   <branch_name> must be a name of a branch that exists in your"
-    echo "   local repository"
-    echo "   example:"
-    echo "   git split in repo_file.sh --merge-branch my-branch"
-    echo ""
+    local usage_string="$doc_program_name"
+    local synopsis=""
+    local global_options=""
+    local extra_sections=""
+    local ind=0
+
+# needs to be indented poorly
+# so that newlines work properly in strings:
+for i in "${doc_synopsis[@]}"; do
+if [[ $ind -eq 0 ]]; then
+synopsis="${synopsis}usage: $doc_program_name $i
+"
+else
+synopsis="$synopsis   or: $doc_program_name $i
+"
+fi
+((ind+=1))
+done
+ind=0
+for i in "${doc_global_options[@]}"; do
+if [[ $ind -eq 0 ]]; then
+global_options="$global_options
+$i"
+ind=1
+else
+global_options="$global_options
+\t$i
+"
+ind=0
+fi
+done
+for i in "${doc_custom_sections[@]}"; do
+local -n array="$i"
+extra_sections="$extra_sections
+${array[0]}
+"
+ind=1
+while [[ $ind -lt ${#array[@]} ]]; do
+
+if [[ $((ind%2)) -eq 1 ]]; then
+extra_sections="$extra_sections
+${array[ind]}"
+else
+extra_sections="$extra_sections
+\t${array[ind]}
+"
+fi
+((ind+=1))
+done
+done
+
+local usage_string="$synopsis
+Global Options:
+$global_options
+$extra_sections"
+
+    echo -e "$usage_string"
     exit $exit_code
 }
 
@@ -714,6 +841,13 @@ echo ""
 
 subcommand="$1"
 get_arg dry_run "$@"
+get_arg version "$@"
+
+if [[ ! -z $version ]]; then
+    echo "$doc_program_name version $doc_version ($doc_last_updated)"
+    echo "$doc_copyright"
+    exit 0
+fi
 
 if [[ -z $subcommand ]]; then
     print_usage_and_exit $ecf_missing_input

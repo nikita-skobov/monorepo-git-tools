@@ -5,9 +5,8 @@
 ## Table of contents
 
 * [Prerequisites](#prerequisites)
-* [List of commands](#list-of-commands)
+* [What does it do?](#what-does-it-do)
 * [Installation](#installation)
-* [Usage](#usage)
 * [What is a "repo file"?](#what-is-a-repo-file)
 * [Development](#development)
 
@@ -17,10 +16,14 @@ These git commands are just "porcelain" commands built on top of the real "plumb
 
 You must have `git-filter-repo` available on your path prior to using the tools in this repository.
 
-## List of commands
+## What does it do?
 
-- **`git split out <repo_file>`** splits out and optionally renames portions of your local repository according to a repo file.
-- **`git split in <repo_file>`** takes a remote repository and brings in portions of it into your local repository.
+The main tool provided in this project is `git split out`, which can split out a portion of your repository into a new branch, and it rewrites that branches history, only including certain paths that you define in a `repo_file`. In that regard it is similar to `git subtree`, but `git subtree split` can only take a single path prefix, whereas `git split` can take multiple paths, files, exclude others, and it can rename them, as needed.
+
+`git split` can also split in a remote repository into your local repository, while preserving the history, and renaming the remote repository paths to match your code structure. A good use case for `git split in` is to take a remote repository, and rename the paths such that it places that repository in a subfolder of your local repository.
+
+For a more in-depth explanation, the full manual can be found [here](https://htmlpreview.github.io/?https://github.com/nikita-skobov/git-monorepo-tools/blob/master/dist/git-split.html)
+
 
 ## Installation
 
@@ -36,24 +39,17 @@ cd git-monorepo-tools
 
 # replace /usr/lib/git-core with whatever the
 # output of 'git --exec-path' is on your system
-sudo cp dist/* /usr/lib/git-core
+sudo cp dist/*.sh /usr/lib/git-core
+
+# to install the man pages:
+sudo cp dist/*.gz /usr/share/man/man1
 ```
-
-Or, if you only want some of the commands, then copy them individually:
-
-```sh
-sudo cp dist/git-split /usr/lib/git-core
-```
-
-## Usage
-
-The usage for each command can be found in `doc/<command_name>.md`
 
 ## What is a "repo file"?
 
 I created these tools with the intention of defining `repo_file`s that contain information on how to split out/in local repositories back and forth from remote repositories. A `repo_file` is just a shell script that contains some variables. It is sourced by commands in this repository, and the variables that it sources are used to do the splitting out/in.
 
-Here is a commented `repo_file` that explains what every variable does
+Here is a commented `repo_file` that explains what some of the common variables do. For a full explanation, see the [repo file explanation section of the manual](https://htmlpreview.github.io/?https://github.com/nikita-skobov/git-monorepo-tools/blob/master/dist/git-split.html#ABOUT%20THE%20REPO%20FILE)
 
 ```sh
 # used for: git pull $remote_repo when doing
@@ -129,4 +125,20 @@ Or, to compile and run in place:
 
 ```sh
 run_source_combine git-split.bsc --any-args-you-want
+```
+
+To run the tests:
+
+```sh
+# make sure you are in the root of the repository
+# you need bats installed, see test/README.md
+./test/run_tests.sh
+```
+
+To generate up to date man pages:
+
+```sh
+# make sure you are in the root of the repository
+# you need groff, and gzip installed
+./doc/run_docs.sh
 ```

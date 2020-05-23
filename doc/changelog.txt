@@ -1,3 +1,9 @@
+v1.1.1
+- adds built manpage to dist/
+- adds documentation building scripts
+- refactors print_usage_and_exit to use variables
+- adds --version command to print the version
+
 v1.1.0
 - adds option '--output-branch' or '-o' to specify the name of an output branch for both `git split out`, and `git split in`.
 - adds tests
