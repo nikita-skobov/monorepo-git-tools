@@ -21,8 +21,14 @@
 # )
 # doc_author="Nikita Skobov"
 # doc_author_email="skobo002@umn.edu"
-
-
+# doc_split_in_options=(
+#     "Options for split in:"
+#     "--merge-branch <branch_name>"
+#     "explanation for merge-branch"
+# )
+# doc_custom_sections=(
+#     "doc_split_in_options"
+# )
 
 
 
@@ -34,6 +40,28 @@ synopsis_str="$synopsis_str
     fi
 synopsis_str="$synopsis_str.B $doc_program_name
 $1"
+}
+append_section () {
+local -n array="$1"
+local section_name="${array[0]}"
+extra_sections_block="$extra_sections_block
+.SH ${section_name^^}"
+
+ind=1
+while [[ $ind -lt ${#array[@]} ]]; do
+
+if [[ $((ind%2)) -eq 1 ]]; then
+extra_sections_block="$extra_sections_block
+.PP
+${array[ind]}"
+else
+extra_sections_block="$extra_sections_block
+.RS 4
+${array[ind]}
+.RE"
+fi
+((ind+=1))
+done
 }
 
 program_name_upper="${doc_program_name^^}"
@@ -76,16 +104,22 @@ synopsis_str=".SH SYNOPSIS
 $synopsis_str"
 fi
 
+extra_sections_block=""
+for i in "${doc_custom_sections[@]}"; do
+    append_section "$i"
+done
+
 
 
 echo "
 .TH \"$program_name_upper\" \"1\" \"$month_year\" \"$doc_program_name \" \"User Commands\"
-.LG
 .SH NAME
+\s9
 $doc_program_name \- $short_description
 $synopsis_str
 $description_block
 $command_block
+$extra_sections_block
 .SH AUTHOR
 .PP
 Written by $doc_author <$doc_author_email>
