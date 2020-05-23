@@ -17,9 +17,14 @@ doc_synopsis=(
 )
 doc_commands=(
     "out"
-    "this is the indented block for out git merge"
+"Given a repo_file that defines how a repository should be split, git split out will take all paths defined in the repo_file and rewrite the repository's history into a new branch. This new branch will only include the history for the files specified in the repo_file.
+.sp
+You will then be left with a branch that can be considered as its own seperate repository (because it most likely doesn't share any common ancestor commits with your previous branch)."
+
     "in"
-    "this is block for in!"
+"Given a repo_file that defines how a repository should be split, git split in will take the remote_repo (or github.com/\$username/\$repo_name if remote_repo is not provided), and create a new empty branch based on the remote_repo. Then it will take all of the include and include_as paths defined in the repo_file and rewrite the repository's history on the branch that it just created. This new branch will only include the history for the files specified in the repo_file.
+.sp
+You will then be left with a branch that can be considered as its own seperate repository (because it most likely doesn't share any common ancestor commits with your previous branch)."
 )
 doc_global_options=(
     "-h, --help"
@@ -31,17 +36,15 @@ doc_global_options=(
 )
 doc_author="Nikita Skobov"
 doc_author_email="skobo002@umn.edu"
-doc_split_in_option_merge_branch='for'\
-' git split in, the merge branch option lets you split in'\
-'from a local branch instead of a remote repository'\
-'<branch_name> must be a name of a branch that exists in your'\
-'local repository'
+doc_split_in_option_merge_branch='the '\
+'merge branch option lets you split in '\
+'from a local branch instead of a remote repository. '\
+'<branch_name> must be a name of a branch that exists in your '\
+'local repository.'
 doc_split_in_options=(
     "Options for split in:"
     "--merge-branch <branch_name>"
     "$doc_split_in_option_merge_branch"
-    "--other-thinbg"
-    "dsadas"
 )
 doc_custom_sections=(
     "doc_split_in_options"
