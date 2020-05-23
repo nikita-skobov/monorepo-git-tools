@@ -73,7 +73,7 @@ rfv_remote_branch=(
 rfv_repo_name=(
     "string"
     "required"
-    "The name of the repo. If running 'git split out', this is simply the name of the output branch created by default. For 'git split out', this is used for running 'git pull https://github.com/<username>/<repo_name>' if 'remote_repo' is not provided. Also for 'git split out', the output branch by default will be '<repo_name>-reverse'"
+    "The name of the repo. If running 'git split out', this is simply the name of the output branch created by default. For 'git split out', this is used for running 'git pull https://github.com/<username>/<repo_name>' if 'remote_repo' is not provided. Also for 'git split in', the output branch by default will be '<repo_name>-reverse'"
 )
 rfv_username=(
     "string"
