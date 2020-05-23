@@ -11,6 +11,19 @@ ecf_failed_to_find_merge_branch=7
 # variables related to documentation
 # used in the print_usage function
 doc_program_name="git split"
+doc_author="Nikita Skobov"
+doc_author_email="skobo002@umn.edu"
+doc_version="1.1.1"
+doc_last_updated="2020-05-23"
+doc_copyright="Copyright (C) 2020 $doc_author
+
+$doc_program_name is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under the terms of the
+GNU Affero General Public License as published by
+the Free Software Foundation, version 3, and no later.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>."
 doc_synopsis=(
     "out <repo_file> [OPTIONS]"
     "in  <repo_file> [OPTIONS]"
@@ -34,8 +47,6 @@ doc_global_options=(
     "--output-branch <branch_name>"
     "the name of the branch that will be created"
 )
-doc_author="Nikita Skobov"
-doc_author_email="skobo002@umn.edu"
 doc_split_in_option_merge_branch='the '\
 'merge branch option lets you split in '\
 'from a local branch instead of a remote repository. '\
