@@ -42,6 +42,8 @@ You will then be left with a branch that can be considered as its own seperate r
 doc_global_options=(
     "-h, --help"
     "print help and exit"
+    "--version"
+    "print the version and exit"
     "--dry-run"
     "does not actually modify/do anything. Just outputs the commands that it would do without the --dry-run option present."
     "--output-branch <branch_name>"
