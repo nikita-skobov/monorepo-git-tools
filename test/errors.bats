@@ -16,12 +16,12 @@ function setup() {
     [[ "$status" -eq $ecf_missing_input ]]
 }
 
-@test 'can detect if input file does not exist' {
+@test 'can detect if input file DNE/cant be sourced' {
     run $BATS_TEST_DIRNAME/git-split out nonexistantfile.txt
-    [[ "$status" -eq $ecf_failed_to_find_input_file ]]
+    [[ "$status" -eq $ecf_source_failure ]]
 
     run $BATS_TEST_DIRNAME/git-split in nonexistantfile.txt
-    [[ "$status" -eq $ecf_failed_to_find_input_file ]]
+    [[ "$status" -eq $ecf_source_failure ]]
 }
 
 @test 'can detect if failed to source' {

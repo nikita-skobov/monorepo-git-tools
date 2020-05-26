@@ -106,6 +106,14 @@ populate_empty_branch_with_remote_commits() {
 }
 
 
+# args: $1 the first arg
+# passed to the program. Sets a global
+# remote_repo argument if it can parse the repo uri
+# otherwise, returns false if failure.
+get_remote_repo_from_args() {
+    
+}
+
 # sources an input file that contains
 # variables needed for splitting in
 # a remote repository and (optionally) changing paths.
@@ -121,18 +129,19 @@ split_in() {
     get_arg output_branch,o "$@"
 
     if [[ -z $1 ]]; then
-        echo "Missing required input file"
+        echo "Missing required input."
         echo ""
         print_usage_and_exit $ecf_missing_input
-    elif [[ ! -f $1 ]]; then
-        echo "Failed to find input file: $1"
-        echo ""
-        print_usage_and_exit $ecf_failed_to_find_input_file
-    elif ! source_without_error "$1"; then
+    elif [[ -f $1 ]] && ! source_without_error "$1"; then
         echo "Failed to source input file: $1"
-        echo "Is this a shell script file?"
+        echo "Does it exist? Is this a shell script file?"
         echo ""
         print_usage_and_exit $ecf_source_failure
+    elif [[ ! -f $1 ]] && ! get_remote_repo_from_args "$1"; then
+        echo "Failed to parse remote repo from $1"
+        echo "Is this supposed to be a repo_file instead?"
+        echo ""
+        print_usage_and_exit $ecf_failed_to_find_input_file
     elif ! input_file_valid_in "$1"; then
         echo ""
         print_usage_and_exit $ecf_invalid_input_file
