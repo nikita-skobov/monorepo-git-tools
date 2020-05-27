@@ -106,14 +106,6 @@ populate_empty_branch_with_remote_commits() {
 }
 
 
-# args: $1 the first arg
-# passed to the program. Sets a global
-# remote_repo argument if it can parse the repo uri
-# otherwise, returns false if failure.
-get_remote_repo_from_args() {
-    
-}
-
 # sources an input file that contains
 # variables needed for splitting in
 # a remote repository and (optionally) changing paths.
@@ -141,7 +133,7 @@ split_in() {
         echo "Failed to parse remote repo from $1"
         echo "Is this supposed to be a repo_file instead?"
         echo ""
-        print_usage_and_exit $ecf_failed_to_find_input_file
+        print_usage_and_exit $ecf_invalid_repo_uri
     elif ! input_file_valid_in "$1"; then
         echo ""
         print_usage_and_exit $ecf_invalid_input_file

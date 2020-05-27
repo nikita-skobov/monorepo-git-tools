@@ -16,14 +16,6 @@ function setup() {
     [[ "$status" -eq $ecf_missing_input ]]
 }
 
-@test 'can detect if input file DNE/cant be sourced' {
-    run $BATS_TEST_DIRNAME/git-split out nonexistantfile.txt
-    [[ "$status" -eq $ecf_source_failure ]]
-
-    run $BATS_TEST_DIRNAME/git-split in nonexistantfile.txt
-    [[ "$status" -eq $ecf_source_failure ]]
-}
-
 @test 'can detect if failed to source' {
     echo "nonexistant_command_" > bad_source_file.txt
 
@@ -34,4 +26,15 @@ function setup() {
     [[ "$status" -eq $ecf_source_failure ]]
 
     rm bad_source_file.txt
+}
+
+@test 'can detect if input is an invalid repo uri or nonexistant file' {
+    run $BATS_TEST_DIRNAME/git-split in http:/badrepo.uri/path
+    [[ "$status" -eq $ecf_invalid_repo_uri ]]
+
+    run $BATS_TEST_DIRNAME/git-split out ssh:/badhost/path
+    [[ "$status" -eq $ecf_invalid_repo_uri ]]
+
+    run $BATS_TEST_DIRNAME/git-split out nonexistant.txt
+    [[ "$status" -eq $ecf_invalid_repo_uri ]]
 }

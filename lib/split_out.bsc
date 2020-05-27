@@ -50,6 +50,11 @@ split_out() {
         echo "Does it exist? Is this a shell script file?"
         echo ""
         print_usage_and_exit $ecf_source_failure
+    elif [[ ! -f $1 ]] && ! get_remote_repo_from_args "$1"; then
+        echo "Failed to parse remote repo from $1"
+        echo "Is this supposed to be a repo_file instead?"
+        echo ""
+        print_usage_and_exit $ecf_invalid_repo_uri
     elif ! input_file_valid_out "$1"; then
         echo ""
         print_usage_and_exit $ecf_invalid_input_file
