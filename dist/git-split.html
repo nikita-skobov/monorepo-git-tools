@@ -1,5 +1,5 @@
 <!-- Creator     : groff version 1.22.4 -->
-<!-- CreationDate: Sat May 23 12:29:11 2020 -->
+<!-- CreationDate: Wed May 27 14:09:25 2020 -->
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
 "http://www.w3.org/TR/html4/loose.dtd">
 <html>
@@ -46,7 +46,9 @@
 
 <p style="margin-left:11%; margin-top: 1em"><b><big>git
 split</big></b> <big>out &lt;repo_file&gt; [OPTIONS] <b><br>
-git split</b> in &lt;repo_file&gt; [OPTIONS]</big></p>
+git split</b> in &lt;repo_file&gt; [OPTIONS] <b><br>
+git split</b> in &lt;git_repo_uri&gt; --as
+&lt;subdirectory&gt;</big></p>
 
 <h2>COMMANDS
 <a name="COMMANDS"></a>
@@ -87,6 +89,10 @@ then be left with a branch that can be considered as its own
 seperate repository (because it most likely doesn&rsquo;t
 share any common ancestor commits with your previous
 branch).</big></p>
+
+<p style="margin-left:17%; margin-top: 1em"><big>You can
+also split in using a remote git uri instead of a repo_file.
+In this usage, you must specify a --as option.</big></p>
 
 <h2>GLOBAL OPTIONS:
 <a name="GLOBAL OPTIONS:"></a>
@@ -132,6 +138,18 @@ that will be created</big></p>
 lets you split in from a local branch instead of a remote
 repository. &lt;branch_name&gt; must be a name of a branch
 that exists in your local repository.</big></p>
+
+<p style="margin-left:11%; margin-top: 1em"><big>--as
+&lt;subdirectory&gt;</big></p>
+
+<p style="margin-left:17%;"><big>the as option must be
+provided if you are running &quot;git split in
+&lt;git_repo_uri&gt;&quot;. git split in will then take the
+entire contents of the &lt;git_repo_uri&gt; and place it
+into the &lt;subdirectory&gt; specified by --as
+&lt;subdirectory&gt;. The same functionality can be attained
+with a repo_file, but running this through the command line
+can be useful for one-time splits.</big></p>
 
 <h2>ABOUT THE REPO FILE
 <a name="ABOUT THE REPO FILE"></a>
@@ -183,16 +201,20 @@ instead of from master.</big></p>
 
 
 <p style="margin-left:11%; margin-top: 1em"><big><i>repo_name</i>
-&minus; (string) &minus; required</big></p>
+&minus; (string) &minus; conditional</big></p>
 
 <p style="margin-left:17%;"><big>The name of the repo. If
-running &rsquo;git split out&rsquo;, this is simply the name
-of the output branch created by default. For &rsquo;git
-split out&rsquo;, this is used for running &rsquo;git pull
+&lt;remote_repo&gt; is specified, then the &lt;repo_name&gt;
+will be created from the last part of &lt;remote_repo&gt;.
+&lt;repo_name&gt; is required only if &lt;remote_repo&gt; is
+not specified. If running &rsquo;git split out&rsquo;, this
+is simply the name of the output branch created by default.
+For &rsquo;git split in&rsquo;, this is used for running
+&rsquo;git pull
 https://github.com/&lt;username&gt;/&lt;repo_name&gt;&rsquo;
-if &rsquo;remote_repo&rsquo; is not provided. Also for
-&rsquo;git split in&rsquo;, the output branch by default
-will be &rsquo;&lt;repo_name&gt;-reverse&rsquo;</big></p>
+if &lt;remote_repo&gt; is not provided. Also for &rsquo;git
+split in&rsquo;, the output branch by default will be
+&rsquo;&lt;repo_name&gt;-reverse&rsquo;</big></p>
 
 
 <p style="margin-left:11%; margin-top: 1em"><big><i>username</i>

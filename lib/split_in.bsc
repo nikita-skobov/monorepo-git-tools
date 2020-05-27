@@ -7,7 +7,11 @@
 # takes arg: $1 = the name of the file that was sourced.
 # echoes out error message and returns false if invalid.
 # otherwise returns true
-input_file_valid_in() {
+input_valid_in() {
+    if [[ ! -z $remote_repo ]]; then
+        get_repo_name_from_remote_repo "$remote_repo"
+    fi
+
     if [[ -z $repo_name ]]; then
         echo "The file: $1 does not include a 'repo_name' variable"
         echo "To split in a subrepo, it must include a repo name"
@@ -119,21 +123,27 @@ split_in() {
     get_arg merge_branch,m "$@"
     get_arg verbose "$@"
     get_arg output_branch,o "$@"
+    get_arg as "$@"
+
+    if [[ ! -z $as ]]; then
+        include_as=("$as" "")
+    fi
 
     if [[ -z $1 ]]; then
-        echo "Missing required input file"
+        echo "Missing required input."
         echo ""
         print_usage_and_exit $ecf_missing_input
-    elif [[ ! -f $1 ]]; then
-        echo "Failed to find input file: $1"
-        echo ""
-        print_usage_and_exit $ecf_failed_to_find_input_file
-    elif ! source_without_error "$1"; then
+    elif [[ -f $1 ]] && ! source_without_error "$1"; then
         echo "Failed to source input file: $1"
-        echo "Is this a shell script file?"
+        echo "Does it exist? Is this a shell script file?"
         echo ""
         print_usage_and_exit $ecf_source_failure
-    elif ! input_file_valid_in "$1"; then
+    elif [[ ! -f $1 ]] && ! get_remote_repo_from_args "$1"; then
+        echo "Failed to parse remote repo from $1"
+        echo "Is this supposed to be a repo_file instead?"
+        echo ""
+        print_usage_and_exit $ecf_invalid_repo_uri
+    elif ! input_valid_in "$1"; then
         echo ""
         print_usage_and_exit $ecf_invalid_input_file
     elif ! cd_into_toplevel_without_error; then

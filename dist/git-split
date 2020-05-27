@@ -19,7 +19,7 @@
 # prefixed ECS: exit code success
 # or ECF: exit code failure
 ecf_missing_input=1
-ecf_failed_to_find_input_file=2
+ecf_invalid_repo_uri=2
 ecf_source_failure=3
 ecf_invalid_input_file=4
 ecf_failed_to_find_toplevel=5
@@ -43,8 +43,9 @@ the Free Software Foundation, version 3, and no later.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>."
 doc_synopsis=(
-    "out <repo_file> [OPTIONS]"
-    "in  <repo_file> [OPTIONS]"
+    "out <repo_file>    [OPTIONS]"
+    "in  <repo_file>    [OPTIONS]"
+    "in  <git_repo_uri> --as <subdirectory>"
 )
 doc_commands=(
     "out"
@@ -55,7 +56,9 @@ You will then be left with a branch that can be considered as its own seperate r
     "in"
 "Given a repo_file that defines how a repository should be split, git split in will take the remote_repo (or github.com/\$username/\$repo_name if remote_repo is not provided), and create a new empty branch based on the remote_repo. Then it will take all of the include and include_as paths defined in the repo_file and rewrite the repository's history on the branch that it just created. This new branch will only include the history for the files specified in the repo_file.
 .sp
-You will then be left with a branch that can be considered as its own seperate repository (because it most likely doesn't share any common ancestor commits with your previous branch)."
+You will then be left with a branch that can be considered as its own seperate repository (because it most likely doesn't share any common ancestor commits with your previous branch).
+.sp
+You can also split in using a remote git uri instead of a repo_file. In this usage, you must specify a --as option."
 )
 doc_global_options=(
     "-h, --help"
@@ -72,10 +75,18 @@ doc_split_in_option_merge_branch='the '\
 'from a local branch instead of a remote repository. '\
 '<branch_name> must be a name of a branch that exists in your '\
 'local repository.'
+doc_split_in_option_as='the '\
+'as option must be provided if you are running "git split in <git_repo_uri>". '\
+'git split in will then take the entire contents of the <git_repo_uri> and place it into '\
+'the <subdirectory> specified by --as <subdirectory>. The same functionality '\
+'can be attained with a repo_file, but running this through the command line can be useful '\
+'for one-time splits.'
 doc_split_in_options=(
     "Options for split in:"
     "--merge-branch <branch_name>"
     "$doc_split_in_option_merge_branch"
+    "--as <subdirectory>"
+    "$doc_split_in_option_as"
 )
 doc_custom_sections=(
     "doc_split_in_options"
@@ -103,8 +114,8 @@ rfv_remote_branch=(
 )
 rfv_repo_name=(
     "string"
-    "required"
-    "The name of the repo. If running 'git split out', this is simply the name of the output branch created by default. For 'git split out', this is used for running 'git pull https://github.com/<username>/<repo_name>' if 'remote_repo' is not provided. Also for 'git split in', the output branch by default will be '<repo_name>-reverse'"
+    "conditional"
+    "The name of the repo. If <remote_repo> is specified, then the <repo_name> will be created from the last part of <remote_repo>. <repo_name> is required only if <remote_repo> is not specified. If running 'git split out', this is simply the name of the output branch created by default. For 'git split in', this is used for running 'git pull https://github.com/<username>/<repo_name>' if <remote_repo> is not provided. Also for 'git split in', the output branch by default will be '<repo_name>-reverse'"
 )
 rfv_username=(
     "string"
@@ -135,7 +146,7 @@ print_usage_and_exit() {
     local usage_string="$doc_program_name"
     local synopsis=""
     local global_options=""
-    local extra_sections=""
+    local extra_sections="\nFor the full help, see the manpage."
     local ind=0
 
 # needs to be indented poorly
@@ -162,25 +173,6 @@ global_options="$global_options
 "
 ind=0
 fi
-done
-for i in "${doc_custom_sections[@]}"; do
-local -n array="$i"
-extra_sections="$extra_sections
-${array[0]}
-"
-ind=1
-while [[ $ind -lt ${#array[@]} ]]; do
-
-if [[ $((ind%2)) -eq 1 ]]; then
-extra_sections="$extra_sections
-${array[ind]}"
-else
-extra_sections="$extra_sections
-\t${array[ind]}
-"
-fi
-((ind+=1))
-done
 done
 
 local usage_string="$synopsis
@@ -290,6 +282,51 @@ cd_into_toplevel_without_error() {
 get_current_branch_name() {
     echo "$(git rev-parse --abbrev-ref HEAD)"
 }
+
+# args: $1 the remote_repo uri.
+# sets the repo_name global variable
+# with everything after the last slash
+# and before the last dot.
+get_repo_name_from_remote_repo() {
+    local reponame="$1"
+    # remove trailing slash if present:
+    if [[ $reponame == *"/" ]]; then
+        reponame=${reponame%?}
+    fi
+
+    # remove everything before last slash
+    reponame="${reponame##*/}"
+    # remove everything after the dot
+    reponame="${reponame%.*}"
+    repo_name="$reponame"
+    return 0
+}
+
+
+# args: $1 the first arg
+# passed to the program. Sets a global
+# remote_repo, and repo_name arguments
+# if it can parse the repo uri
+# otherwise, returns false if failure.
+get_remote_repo_from_args() {
+    if \
+    [[ $1 == "ssh://"* ]] || \
+    [[ $1 == "git://"* ]] || \
+    [[ $1 == "http://"* ]] || \
+    [[ $1 == "https://"* ]] || \
+    [[ $1 == "ftp://"* ]] || \
+    [[ $1 == "ftps://"* ]] || \
+    [[ $1 == "file://"* ]] || \
+    [[ $1 =~ (.*)@(.*)\.(.*) ]]; then
+        # set remote_repo, and repo_name variables and return success
+        get_repo_name_from_remote_repo "$1"
+        remote_repo="$1"
+        return 0
+    fi
+    # the arg $1 is not a valid
+    # remote uri, return false
+    return 1
+}
 # if compiling this file individually, use:
 # import ./helpers.bsc
 # otherwise helpers.bsc already included from git-split.bsc
@@ -299,7 +336,11 @@ get_current_branch_name() {
 # takes arg: $1 = the name of the file that was sourced.
 # echoes out error message and returns false if invalid.
 # otherwise returns true
-input_file_valid_out() {
+input_valid_out() {
+    if [[ ! -z $remote_repo ]]; then
+        get_repo_name_from_remote_repo "$remote_repo"
+    fi
+
     if [[ -z $repo_name ]]; then
         echo "The file: $1 does not include a 'repo_name' variable"
         echo "To split out a subrepo, it must include a repo name"
@@ -334,19 +375,20 @@ input_file_valid_out() {
 split_out() {
     get_arg output_branch,o "$@"
     if [[ -z $1 ]]; then
-        echo "Missing required input file"
+        echo "Missing required input"
         echo ""
         print_usage_and_exit $ecf_missing_input
-    elif [[ ! -f $1 ]]; then
-        echo "Failed to find input file: $1"
-        echo ""
-        print_usage_and_exit $ecf_failed_to_find_input_file
-    elif ! source_without_error "$1"; then
+    elif [[ -f $1 ]] && ! source_without_error "$1"; then
         echo "Failed to source input file: $1"
-        echo "Is this a shell script file?"
+        echo "Does it exist? Is this a shell script file?"
         echo ""
         print_usage_and_exit $ecf_source_failure
-    elif ! input_file_valid_out "$1"; then
+    elif [[ ! -f $1 ]] && ! get_remote_repo_from_args "$1"; then
+        echo "Failed to parse remote repo from $1"
+        echo "Is this supposed to be a repo_file instead?"
+        echo ""
+        print_usage_and_exit $ecf_invalid_repo_uri
+    elif ! input_valid_out "$1"; then
         echo ""
         print_usage_and_exit $ecf_invalid_input_file
     elif ! cd_into_toplevel_without_error; then
@@ -406,7 +448,11 @@ split_out() {
 # takes arg: $1 = the name of the file that was sourced.
 # echoes out error message and returns false if invalid.
 # otherwise returns true
-input_file_valid_in() {
+input_valid_in() {
+    if [[ ! -z $remote_repo ]]; then
+        get_repo_name_from_remote_repo "$remote_repo"
+    fi
+
     if [[ -z $repo_name ]]; then
         echo "The file: $1 does not include a 'repo_name' variable"
         echo "To split in a subrepo, it must include a repo name"
@@ -518,21 +564,27 @@ split_in() {
     get_arg merge_branch,m "$@"
     get_arg verbose "$@"
     get_arg output_branch,o "$@"
+    get_arg as "$@"
+
+    if [[ ! -z $as ]]; then
+        include_as=("$as" "")
+    fi
 
     if [[ -z $1 ]]; then
-        echo "Missing required input file"
+        echo "Missing required input."
         echo ""
         print_usage_and_exit $ecf_missing_input
-    elif [[ ! -f $1 ]]; then
-        echo "Failed to find input file: $1"
-        echo ""
-        print_usage_and_exit $ecf_failed_to_find_input_file
-    elif ! source_without_error "$1"; then
+    elif [[ -f $1 ]] && ! source_without_error "$1"; then
         echo "Failed to source input file: $1"
-        echo "Is this a shell script file?"
+        echo "Does it exist? Is this a shell script file?"
         echo ""
         print_usage_and_exit $ecf_source_failure
-    elif ! input_file_valid_in "$1"; then
+    elif [[ ! -f $1 ]] && ! get_remote_repo_from_args "$1"; then
+        echo "Failed to parse remote repo from $1"
+        echo "Is this supposed to be a repo_file instead?"
+        echo ""
+        print_usage_and_exit $ecf_invalid_repo_uri
+    elif ! input_valid_in "$1"; then
         echo ""
         print_usage_and_exit $ecf_invalid_input_file
     elif ! cd_into_toplevel_without_error; then

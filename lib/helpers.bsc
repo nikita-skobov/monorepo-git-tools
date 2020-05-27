@@ -7,7 +7,7 @@ print_usage_and_exit() {
     local usage_string="$doc_program_name"
     local synopsis=""
     local global_options=""
-    local extra_sections=""
+    local extra_sections="\nFor the full help, see the manpage."
     local ind=0
 
 # needs to be indented poorly
@@ -34,25 +34,6 @@ global_options="$global_options
 "
 ind=0
 fi
-done
-for i in "${doc_custom_sections[@]}"; do
-local -n array="$i"
-extra_sections="$extra_sections
-${array[0]}
-"
-ind=1
-while [[ $ind -lt ${#array[@]} ]]; do
-
-if [[ $((ind%2)) -eq 1 ]]; then
-extra_sections="$extra_sections
-${array[ind]}"
-else
-extra_sections="$extra_sections
-\t${array[ind]}
-"
-fi
-((ind+=1))
-done
 done
 
 local usage_string="$synopsis
@@ -161,4 +142,49 @@ cd_into_toplevel_without_error() {
 # echoes out the current branch name
 get_current_branch_name() {
     echo "$(git rev-parse --abbrev-ref HEAD)"
+}
+
+# args: $1 the remote_repo uri.
+# sets the repo_name global variable
+# with everything after the last slash
+# and before the last dot.
+get_repo_name_from_remote_repo() {
+    local reponame="$1"
+    # remove trailing slash if present:
+    if [[ $reponame == *"/" ]]; then
+        reponame=${reponame%?}
+    fi
+
+    # remove everything before last slash
+    reponame="${reponame##*/}"
+    # remove everything after the dot
+    reponame="${reponame%.*}"
+    repo_name="$reponame"
+    return 0
+}
+
+
+# args: $1 the first arg
+# passed to the program. Sets a global
+# remote_repo, and repo_name arguments
+# if it can parse the repo uri
+# otherwise, returns false if failure.
+get_remote_repo_from_args() {
+    if \
+    [[ $1 == "ssh://"* ]] || \
+    [[ $1 == "git://"* ]] || \
+    [[ $1 == "http://"* ]] || \
+    [[ $1 == "https://"* ]] || \
+    [[ $1 == "ftp://"* ]] || \
+    [[ $1 == "ftps://"* ]] || \
+    [[ $1 == "file://"* ]] || \
+    [[ $1 =~ (.*)@(.*)\.(.*) ]]; then
+        # set remote_repo, and repo_name variables and return success
+        get_repo_name_from_remote_repo "$1"
+        remote_repo="$1"
+        return 0
+    fi
+    # the arg $1 is not a valid
+    # remote uri, return false
+    return 1
 }

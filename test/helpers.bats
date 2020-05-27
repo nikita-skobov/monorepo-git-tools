@@ -29,3 +29,45 @@ function setup() {
     run branch_exists test-test-test-xyz-test
     [[ "$status" -eq 1 ]]
 }
+
+@test 'get_remote_repo_from_args can detect valid git urls' {
+    run get_remote_repo_from_args "ssh://user@host.net/repo/path"
+    [[ $status -eq 0 ]]
+    run get_remote_repo_from_args "git://host.net/repo/path"
+    [[ $status -eq 0 ]]
+    run get_remote_repo_from_args "https://host.net/repo/path"
+    [[ $status -eq 0 ]]
+    run get_remote_repo_from_args "ftp://host.net:port/repo/path"
+    [[ $status -eq 0 ]]
+    run get_remote_repo_from_args "user@host.net:/repo/path"
+    [[ $status -eq 0 ]]
+    run get_remote_repo_from_args "https://host.net/repo/path.git"
+    [[ $status -eq 0 ]]
+
+    run get_remote_repo_from_args "https//host.net/repo/path.git"
+    [[ $status -eq 1 ]]
+}
+
+@test 'get_remote_repo_from_args sets remote_repo variable' {
+    get_remote_repo_from_args "ssh://user@host.net/repo/path1"
+    [[ $remote_repo == "ssh://user@host.net/repo/path1" ]]
+    get_remote_repo_from_args "https://host.net/repo/path7/"
+    [[ $remote_repo == "https://host.net/repo/path7/" ]]
+}
+
+@test 'get_repo_name_from_remote_repo sets repo_name correctly' {
+    get_repo_name_from_remote_repo "ssh://user@host.net/repo/path1"
+    [[ $repo_name == "path1" ]]
+    get_repo_name_from_remote_repo "git://host.net/repo/path2"
+    [[ $repo_name == "path2" ]]
+    get_repo_name_from_remote_repo "https://host.net/repo/path3"
+    [[ $repo_name == "path3" ]]
+    get_repo_name_from_remote_repo "ftp://host.net:port/repo/path4"
+    [[ $repo_name == "path4" ]]
+    get_repo_name_from_remote_repo "user@host.net:/repo/path5"
+    [[ $repo_name == "path5" ]]
+    get_repo_name_from_remote_repo "https://host.net/repo/path6.git"
+    [[ $repo_name == "path6" ]]
+    get_repo_name_from_remote_repo "https://host.net/repo/path7/"
+    [[ $repo_name == "path7" ]]
+}

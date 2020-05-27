@@ -29,63 +29,6 @@ function teardown() {
     fi
 }
 
-
-@test 'can split in a remote github repo via username and repo_name' {
-    # https://github.com/nikita-skobov/github-actions-tutorial
-    repo_file_contents="
-    repo_name=\"github-actions-tutorial\"
-    username=\"nikita-skobov\"
-    include_as=(
-        \"this/path/will/be/created/\" \"\"
-    )
-    "
-
-    echo "$repo_file_contents" > repo_file.sh
-
-    # a directory called this should not exist at first
-    [[ ! -d this ]]
-
-    run $BATS_TEST_DIRNAME/git-split in repo_file.sh
-    # now it should exist:
-    [[ -d this ]]
-
-    # and just to be safe, check that the whole path to the files
-    # is created:
-    [[ -d this/path/will/be/created ]]
-    [[ -f this/path/will/be/created/LICENSE ]]
-    [[ -f this/path/will/be/created/README.md ]]
-}
-
-@test 'can split in a remote github repo via username and repo_name from a specific remote_branch' {
-    # https://github.com/nikita-skobov/github-actions-tutorial
-    repo_file_contents="
-    repo_name=\"github-actions-tutorial\"
-    remote_branch=\"test-branch\"
-    username=\"nikita-skobov\"
-    include_as=(
-        \"this/path/will/be/created/\" \"\"
-    )
-    "
-
-    echo "$repo_file_contents" > repo_file.sh
-
-    # a directory called this should not exist at first
-    [[ ! -d this ]]
-
-    run $BATS_TEST_DIRNAME/git-split in repo_file.sh
-    echo "$output"
-    # now it should exist:
-    [[ -d this ]]
-
-    # and just to be safe, check that the whole path to the files
-    # is created:
-    [[ -d this/path/will/be/created ]]
-    [[ -f this/path/will/be/created/LICENSE ]]
-    [[ -f this/path/will/be/created/README.md ]]
-    # this file only exists in the test-branch:
-    [[ -f this/path/will/be/created/test-branch-file.txt ]]
-}
-
 @test 'can split in a local branch' {
     repo_file_contents="
     repo_name=\"doesnt_matter\"
@@ -227,3 +170,87 @@ function teardown() {
     run get_current_branch_name
     [[ $output == "some-output-branch" ]]
 }
+
+
+@test 'dont need a repo_name if providing a remote_repo uri (in)' {
+    repo_file_contents="
+    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    include_as=(
+        \"this/path/will/be/created/\" \"\"
+    )
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+
+    # a directory called this should not exist at first
+    [[ ! -d this ]]
+
+    run $BATS_TEST_DIRNAME/git-split in repo_file.sh
+
+    echo "$output"
+
+    [[ $status -eq 0 ]]
+    # now it should exist:
+    [[ -d this ]]
+
+    # and just to be safe, check that the whole path to the files
+    # is created:
+    [[ -d this/path/will/be/created ]]
+    [[ -f this/path/will/be/created/test_remote_repo2.txt ]]
+
+    # test that it makes the output branch name from
+    # the remote_repo:
+    run git rev-parse --abbrev-ref HEAD
+    [[ $output == "test_remote_repo2-reverse" ]]
+}
+
+@test 'dont need a repo_name if providing a remote_repo uri (out)' {
+    # from test_remote_repo, we split out the file test_remote_repo.txt
+    # and into a repo called test_remote_repo2:
+    repo_file_contents="
+    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    include=\"test_remote_repo.txt\"
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+
+    run $BATS_TEST_DIRNAME/git-split out repo_file.sh
+
+    echo "$output"
+
+    [[ $status -eq 0 ]]
+
+    # test that it makes the output branch name from
+    # the remote_repo:
+    run git rev-parse --abbrev-ref HEAD
+    [[ $output == "test_remote_repo2" ]]
+}
+
+@test 'can do a simple split in without using repo_file' {
+    # we run git split in onto a remote_repo uri
+    # instead of a repo file
+
+    # a directory called this should not exist at first
+    [[ ! -d this ]]
+
+    run $BATS_TEST_DIRNAME/git-split in \
+        file://$BATS_TMPDIR/test_remote_repo2 \
+        --as this/path/will/be/created/
+
+    echo "$output"
+    [[ $status -eq 0 ]]
+
+    # now it should exist:
+    [[ -d this ]]
+
+    # and just to be safe, check that the whole path to the files
+    # is created:
+    [[ -d this/path/will/be/created ]]
+    [[ -f this/path/will/be/created/test_remote_repo2.txt ]]
+
+    # test that it makes the output branch name from
+    # the remote_repo:
+    run git rev-parse --abbrev-ref HEAD
+    [[ $output == "test_remote_repo2-reverse" ]]
+}
+
