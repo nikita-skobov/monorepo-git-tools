@@ -8,6 +8,10 @@
 # echoes out error message and returns false if invalid.
 # otherwise returns true
 input_valid_out() {
+    if [[ ! -z $remote_repo ]]; then
+        get_repo_name_from_remote_repo "$remote_repo"
+    fi
+
     if [[ -z $repo_name ]]; then
         echo "The file: $1 does not include a 'repo_name' variable"
         echo "To split out a subrepo, it must include a repo name"
