@@ -123,6 +123,11 @@ split_in() {
     get_arg merge_branch,m "$@"
     get_arg verbose "$@"
     get_arg output_branch,o "$@"
+    get_arg as "$@"
+
+    if [[ ! -z $as ]]; then
+        include_as=("$as" "")
+    fi
 
     if [[ -z $1 ]]; then
         echo "Missing required input."

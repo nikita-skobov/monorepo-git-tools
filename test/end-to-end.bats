@@ -225,3 +225,32 @@ function teardown() {
     run git rev-parse --abbrev-ref HEAD
     [[ $output == "test_remote_repo2" ]]
 }
+
+@test 'can do a simple split in without using repo_file' {
+    # we run git split in onto a remote_repo uri
+    # instead of a repo file
+
+    # a directory called this should not exist at first
+    [[ ! -d this ]]
+
+    run $BATS_TEST_DIRNAME/git-split in \
+        file://$BATS_TMPDIR/test_remote_repo2 \
+        --as this/path/will/be/created/
+
+    echo "$output"
+    [[ $status -eq 0 ]]
+
+    # now it should exist:
+    [[ -d this ]]
+
+    # and just to be safe, check that the whole path to the files
+    # is created:
+    [[ -d this/path/will/be/created ]]
+    [[ -f this/path/will/be/created/test_remote_repo2.txt ]]
+
+    # test that it makes the output branch name from
+    # the remote_repo:
+    run git rev-parse --abbrev-ref HEAD
+    [[ $output == "test_remote_repo2-reverse" ]]
+}
+
