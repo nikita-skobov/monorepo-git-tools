@@ -44,7 +44,9 @@ input_valid_out() {
 # If dry_run is defined, it will simply
 # print out the commands instead of running them.
 split_out() {
+    # get user options:
     get_arg output_branch,o "$@"
+
     if [[ -z $1 ]]; then
         echo "Missing required input"
         echo ""

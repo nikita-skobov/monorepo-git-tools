@@ -119,7 +119,7 @@ populate_empty_branch_with_remote_commits() {
 # If dry_run is defined, it will simply
 # print out the commands instead of running them.
 split_in() {
-    # get a --merge-branch option if the user supplied it
+    # get user options if supplied:
     get_arg merge_branch,m "$@"
     get_arg verbose "$@"
     get_arg output_branch,o "$@"
