@@ -1,3 +1,8 @@
+v1.2.0
+- changes `repo_name` to only be required if `remote_repo` is not provided. If `remote_repo` is provided, then `repo_name` is created from the name of the `remote_repo`
+- makes the `-h` help option shorter
+- adds feature to split in a git repo uri instead of using a repo file
+
 v1.1.1
 - adds built manpage to dist/
 - adds documentation building scripts
