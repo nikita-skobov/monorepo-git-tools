@@ -7,7 +7,7 @@
 # takes arg: $1 = the name of the file that was sourced.
 # echoes out error message and returns false if invalid.
 # otherwise returns true
-input_file_valid_out() {
+input_valid_out() {
     if [[ -z $repo_name ]]; then
         echo "The file: $1 does not include a 'repo_name' variable"
         echo "To split out a subrepo, it must include a repo name"
@@ -55,7 +55,7 @@ split_out() {
         echo "Is this supposed to be a repo_file instead?"
         echo ""
         print_usage_and_exit $ecf_invalid_repo_uri
-    elif ! input_file_valid_out "$1"; then
+    elif ! input_valid_out "$1"; then
         echo ""
         print_usage_and_exit $ecf_invalid_input_file
     elif ! cd_into_toplevel_without_error; then
