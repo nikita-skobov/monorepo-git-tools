@@ -7,7 +7,7 @@ print_usage_and_exit() {
     local usage_string="$doc_program_name"
     local synopsis=""
     local global_options=""
-    local extra_sections=""
+    local extra_sections="\nFor the full help, see the manpage."
     local ind=0
 
 # needs to be indented poorly
@@ -34,25 +34,6 @@ global_options="$global_options
 "
 ind=0
 fi
-done
-for i in "${doc_custom_sections[@]}"; do
-local -n array="$i"
-extra_sections="$extra_sections
-${array[0]}
-"
-ind=1
-while [[ $ind -lt ${#array[@]} ]]; do
-
-if [[ $((ind%2)) -eq 1 ]]; then
-extra_sections="$extra_sections
-${array[ind]}"
-else
-extra_sections="$extra_sections
-\t${array[ind]}
-"
-fi
-((ind+=1))
-done
 done
 
 local usage_string="$synopsis
