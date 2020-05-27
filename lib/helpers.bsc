@@ -163,6 +163,25 @@ get_current_branch_name() {
     echo "$(git rev-parse --abbrev-ref HEAD)"
 }
 
+# args: $1 the remote_repo uri.
+# sets the repo_name global variable
+# with everything after the last slash
+# and before the last dot.
+get_repo_name_from_remote_repo() {
+    local reponame="$1"
+    # remove trailing slash if present:
+    if [[ $reponame == *"/" ]]; then
+        reponame=${reponame%?}
+    fi
+
+    # remove everything before last slash
+    reponame="${reponame##*/}"
+    # remove everything after the dot
+    reponame="${reponame%.*}"
+    repo_name="$reponame"
+    return 0
+}
+
 
 # args: $1 the first arg
 # passed to the program. Sets a global
@@ -179,19 +198,9 @@ get_remote_repo_from_args() {
     [[ $1 == "ftps://"* ]] || \
     [[ $1 == "file://"* ]] || \
     [[ $1 =~ (.*)@(.*)\.(.*) ]]; then
-        local reponame="$1"
-        # remove trailing slash if present:
-        if [[ $reponame == *"/" ]]; then
-            reponame=${reponame%?}
-        fi
-
-        # remove everything before last slash
-        reponame="${reponame##*/}"
-        # remove everything after the dot
-        reponame="${reponame%.*}"
         # set remote_repo, and repo_name variables and return success
+        get_repo_name_from_remote_repo "$1"
         remote_repo="$1"
-        repo_name="$reponame"
         return 0
     fi
     # the arg $1 is not a valid
