@@ -47,17 +47,19 @@ function setup() {
 
 @test 'get_remote_repo_from_args sets remote_repo variable' {
     get_remote_repo_from_args "ssh://user@host.net/repo/path1"
-    [[ $remote_repo == "path1" ]]
+    [[ $remote_repo == "ssh://user@host.net/repo/path1" ]]
+    [[ $repo_name == "path1" ]]
     get_remote_repo_from_args "git://host.net/repo/path2"
-    [[ $remote_repo == "path2" ]]
+    [[ $repo_name == "path2" ]]
     get_remote_repo_from_args "https://host.net/repo/path3"
-    [[ $remote_repo == "path3" ]]
+    [[ $repo_name == "path3" ]]
     get_remote_repo_from_args "ftp://host.net:port/repo/path4"
-    [[ $remote_repo == "path4" ]]
+    [[ $repo_name == "path4" ]]
     get_remote_repo_from_args "user@host.net:/repo/path5"
-    [[ $remote_repo == "path5" ]]
+    [[ $repo_name == "path5" ]]
     get_remote_repo_from_args "https://host.net/repo/path6.git"
-    [[ $remote_repo == "path6" ]]
+    [[ $repo_name == "path6" ]]
     get_remote_repo_from_args "https://host.net/repo/path7/"
-    [[ $remote_repo == "path7" ]]
+    [[ $repo_name == "path7" ]]
+    [[ $remote_repo == "https://host.net/repo/path7/" ]]
 }

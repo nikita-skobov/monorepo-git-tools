@@ -166,7 +166,8 @@ get_current_branch_name() {
 
 # args: $1 the first arg
 # passed to the program. Sets a global
-# remote_repo argument if it can parse the repo uri
+# remote_repo, and repo_name arguments
+# if it can parse the repo uri
 # otherwise, returns false if failure.
 get_remote_repo_from_args() {
     if \
@@ -188,8 +189,9 @@ get_remote_repo_from_args() {
         reponame="${reponame##*/}"
         # remove everything after the dot
         reponame="${reponame%.*}"
-        # set remote_repo variable and return success
-        remote_repo="$reponame"
+        # set remote_repo, and repo_name variables and return success
+        remote_repo="$1"
+        repo_name="$reponame"
         return 0
     fi
     # the arg $1 is not a valid
