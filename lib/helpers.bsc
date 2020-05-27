@@ -162,3 +162,37 @@ cd_into_toplevel_without_error() {
 get_current_branch_name() {
     echo "$(git rev-parse --abbrev-ref HEAD)"
 }
+
+
+# args: $1 the first arg
+# passed to the program. Sets a global
+# remote_repo argument if it can parse the repo uri
+# otherwise, returns false if failure.
+get_remote_repo_from_args() {
+    if \
+    [[ $1 == "ssh://"* ]] || \
+    [[ $1 == "git://"* ]] || \
+    [[ $1 == "http://"* ]] || \
+    [[ $1 == "https://"* ]] || \
+    [[ $1 == "ftp://"* ]] || \
+    [[ $1 == "ftps://"* ]] || \
+    [[ $1 == "file://"* ]] || \
+    [[ $1 =~ (.*)@(.*)\.(.*) ]]; then
+        local reponame="$1"
+        # remove trailing slash if present:
+        if [[ $reponame == *"/" ]]; then
+            reponame=${reponame%?}
+        fi
+
+        # remove everything before last slash
+        reponame="${reponame##*/}"
+        # remove everything after the dot
+        reponame="${reponame%.*}"
+        # set remote_repo variable and return success
+        remote_repo="$reponame"
+        return 0
+    fi
+    # the arg $1 is not a valid
+    # remote uri, return false
+    return 1
+}
