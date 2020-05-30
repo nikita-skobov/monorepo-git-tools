@@ -8,7 +8,8 @@
 # man ./dist/git-split.1.gz
 # or <browser> ./dist/git-split.html
 output_man_file() {
-    source ./lib/constants.bsc
+    source ./lib/constants/git_split.bsc
+    source ./lib/constants/repo_file.bsc
 
     # prepend the arrays defined in constants
     # because the man page is slightly

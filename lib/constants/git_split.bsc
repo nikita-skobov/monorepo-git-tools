@@ -1,0 +1,65 @@
+# variables related to documentation
+# used in the print_usage function
+doc_program_name="git split"
+doc_author="Nikita Skobov"
+doc_author_email="skobo002@umn.edu"
+doc_version="1.2.0"
+doc_last_updated="2020-05-23"
+doc_copyright="Copyright (C) 2020 $doc_author
+
+$doc_program_name is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under the terms of the
+GNU Affero General Public License as published by
+the Free Software Foundation, version 3, and no later.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>."
+doc_synopsis=(
+    "out <repo_file>    [OPTIONS]"
+    "in  <repo_file>    [OPTIONS]"
+    "in  <git_repo_uri> --as <subdirectory>"
+)
+doc_commands=(
+    "out"
+"Given a repo_file that defines how a repository should be split, git split out will take all paths defined in the repo_file and rewrite the repository's history into a new branch. This new branch will only include the history for the files specified in the repo_file.
+.sp
+You will then be left with a branch that can be considered as its own seperate repository (because it most likely doesn't share any common ancestor commits with your previous branch)."
+
+    "in"
+"Given a repo_file that defines how a repository should be split, git split in will take the remote_repo (or github.com/\$username/\$repo_name if remote_repo is not provided), and create a new empty branch based on the remote_repo. Then it will take all of the include and include_as paths defined in the repo_file and rewrite the repository's history on the branch that it just created. This new branch will only include the history for the files specified in the repo_file.
+.sp
+You will then be left with a branch that can be considered as its own seperate repository (because it most likely doesn't share any common ancestor commits with your previous branch).
+.sp
+You can also split in using a remote git uri instead of a repo_file. In this usage, you must specify a --as option."
+)
+doc_global_options=(
+    "-h, --help"
+    "print help and exit"
+    "--version"
+    "print the version and exit"
+    "--dry-run"
+    "does not actually modify/do anything. Just outputs the commands that it would do without the --dry-run option present."
+    "--output-branch <branch_name>"
+    "the name of the branch that will be created"
+)
+doc_split_in_option_merge_branch='the '\
+'merge branch option lets you split in '\
+'from a local branch instead of a remote repository. '\
+'<branch_name> must be a name of a branch that exists in your '\
+'local repository.'
+doc_split_in_option_as='the '\
+'as option must be provided if you are running "git split in <git_repo_uri>". '\
+'git split in will then take the entire contents of the <git_repo_uri> and place it into '\
+'the <subdirectory> specified by --as <subdirectory>. The same functionality '\
+'can be attained with a repo_file, but running this through the command line can be useful '\
+'for one-time splits.'
+doc_split_in_options=(
+    "Options for split in:"
+    "--merge-branch <branch_name>"
+    "$doc_split_in_option_merge_branch"
+    "--as <subdirectory>"
+    "$doc_split_in_option_as"
+)
+doc_custom_sections=(
+    "doc_split_in_options"
+)

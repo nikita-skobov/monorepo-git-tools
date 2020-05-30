@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 function setup() {
-    source ./lib/constants.bsc
+    source ./lib/constants/exit_codes.bsc
 }
 
 

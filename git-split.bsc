@@ -16,7 +16,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import ./lib/constants/exit_codes.bsc
-import ./lib/constants.bsc
+import ./lib/constants/repo_file.bsc
+import ./lib/constants/git_split.bsc
 
 import {
     print_usage_and_exit
