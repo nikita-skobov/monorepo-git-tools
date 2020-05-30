@@ -25,14 +25,58 @@ ecf_invalid_input_file=4
 ecf_failed_to_find_toplevel=5
 ecf_failed_to_make_output_branch=6
 ecf_failed_to_find_merge_branch=7
-
+# rfv: Repo File Variables
+rfv_valid_variable_names=(
+    "remote_repo"
+    "remote_branch"
+    "repo_name"
+    "username"
+    "include"
+    "include_as"
+    "exclude"
+)
+rfv_remote_repo=(
+    "string"
+    "optional"
+    "A valid git repo uri. Can be a local file location, remote url, ssh url, etc. Only used for 'git split in'. It is used as the value of 'git pull <remote_repo>'. It is optional because by default, 'git split in' will use 'https://github.com/<username>/<repo_name>'"
+)
+rfv_remote_branch=(
+    "string"
+    "optional"
+    "A valid remote branch name. Only used for 'git split in'. If provided, 'git split in' will pull from this remote branch instead of from master."
+)
+rfv_repo_name=(
+    "string"
+    "conditional"
+    "The name of the repo. If <remote_repo> is specified, then the <repo_name> will be created from the last part of <remote_repo>. <repo_name> is required only if <remote_repo> is not specified. If running 'git split out', this is simply the name of the output branch created by default. For 'git split in', this is used for running 'git pull https://github.com/<username>/<repo_name>' if <remote_repo> is not provided. Also for 'git split in', the output branch by default will be '<repo_name>-reverse'"
+)
+rfv_username=(
+    "string"
+    "conditional"
+    "GitHub username. Only required for 'git split in' and if <remote_repo> is not provided. Used for the running 'git pull https://github.com/<username>/<repo_name'"
+)
+rfv_include=(
+    "array|string"
+    "conditional"
+    "Includes the source repository files/directories exactly as is, without changing the paths. Specify a single include path as a string, otherwise multiple paths as an array of strings. Only used for 'git split out'. Only required if using 'git split out' and <include_as> is not provided. 'git split out' will take all of the include paths and rewrite the history as if those paths were the only thing in the repository."
+)
+rfv_include_as=(
+    "array"
+    "conditional"
+    "An array of file paths, where every even path is a source path, and every odd path is a destination path. Includes the source repository paths as the destination paths. Only required if <include> is not provided. For 'git split out' the source paths are the paths relative to the root of your current branch, and the destination paths are what the source paths will be renamed to in the output branch. For 'git split in', it is the reverse. ie: the destination paths are the paths of the remote repository, and they will be renamed as the paths of the local repository."
+)
+rfv_exclude=(
+    "array|string"
+    "optional"
+    "Exclude the source repository paths from being present in the destination. Only used for 'git split out'. Specify a single exclude path as a string, otherwise multiple paths as an array of strings. Note that the exclude paths get applied after the include paths. So you would first include the paths you want, and if there are sub-paths within the included path, you can explicitly exclude those that you do not wish to be present."
+)
 # variables related to documentation
 # used in the print_usage function
 doc_program_name="git split"
 doc_author="Nikita Skobov"
 doc_author_email="skobo002@umn.edu"
-doc_version="1.1.1"
-doc_last_updated="2020-05-23"
+doc_version="1.2.1"
+doc_last_updated="2020-05-30"
 doc_copyright="Copyright (C) 2020 $doc_author
 
 $doc_program_name is free software and comes with ABSOLUTELY NO WARRANTY.
@@ -92,244 +136,275 @@ doc_custom_sections=(
     "doc_split_in_options"
 )
 
-# rfv: Repo File Variables
-rfv_valid_variable_names=(
-    "remote_repo"
-    "remote_branch"
-    "repo_name"
-    "username"
-    "include"
-    "include_as"
-    "exclude"
-)
-rfv_remote_repo=(
-    "string"
-    "optional"
-    "A valid git repo uri. Can be a local file location, remote url, ssh url, etc. Only used for 'git split in'. It is used as the value of 'git pull <remote_repo>'. It is optional because by default, 'git split in' will use 'https://github.com/<username>/<repo_name>'"
-)
-rfv_remote_branch=(
-    "string"
-    "optional"
-    "A valid remote branch name. Only used for 'git split in'. If provided, 'git split in' will pull from this remote branch instead of from master."
-)
-rfv_repo_name=(
-    "string"
-    "conditional"
-    "The name of the repo. If <remote_repo> is specified, then the <repo_name> will be created from the last part of <remote_repo>. <repo_name> is required only if <remote_repo> is not specified. If running 'git split out', this is simply the name of the output branch created by default. For 'git split in', this is used for running 'git pull https://github.com/<username>/<repo_name>' if <remote_repo> is not provided. Also for 'git split in', the output branch by default will be '<repo_name>-reverse'"
-)
-rfv_username=(
-    "string"
-    "conditional"
-    "GitHub username. Only required for 'git split in' and if <remote_repo> is not provided. Used for the running 'git pull https://github.com/<username>/<repo_name'"
-)
-rfv_include=(
-    "array|string"
-    "conditional"
-    "Includes the source repository files/directories exactly as is, without changing the paths. Specify a single include path as a string, otherwise multiple paths as an array of strings. Only used for 'git split out'. Only required if using 'git split out' and <include_as> is not provided. 'git split out' will take all of the include paths and rewrite the history as if those paths were the only thing in the repository."
-)
-rfv_include_as=(
-    "array"
-    "conditional"
-    "An array of file paths, where every even path is a source path, and every odd path is a destination path. Includes the source repository paths as the destination paths. Only required if <include> is not provided. For 'git split out' the source paths are the paths relative to the root of your current branch, and the destination paths are what the source paths will be renamed to in the output branch. For 'git split in', it is the reverse. ie: the destination paths are the paths of the remote repository, and they will be renamed as the paths of the local repository."
-)
-rfv_exclude=(
-    "array|string"
-    "optional"
-    "Exclude the source repository paths from being present in the destination. Only used for 'git split out'. Specify a single exclude path as a string, otherwise multiple paths as an array of strings. Note that the exclude paths get applied after the include paths. So you would first include the paths you want, and if there are sub-paths within the included path, you can explicitly exclude those that you do not wish to be present."
-)
 
 # prints the usage and exits
 # takes argument: $1
 # the exit code
-print_usage_and_exit() {
-    local exit_code="${1:-"0"}"
-    local usage_string="$doc_program_name"
-    local synopsis=""
-    local global_options=""
-    local extra_sections="\nFor the full help, see the manpage."
-    local ind=0
 
-# needs to be indented poorly
-# so that newlines work properly in strings:
-for i in "${doc_synopsis[@]}"; do
-if [[ $ind -eq 0 ]]; then
-synopsis="${synopsis}usage: $doc_program_name $i
-"
-else
-synopsis="$synopsis   or: $doc_program_name $i
-"
-fi
-((ind+=1))
-done
-ind=0
-for i in "${doc_global_options[@]}"; do
-if [[ $ind -eq 0 ]]; then
-global_options="$global_options
-$i"
-ind=1
-else
-global_options="$global_options
-\t$i
-"
-ind=0
-fi
-done
-
-local usage_string="$synopsis
+print_usage_and_exit () 
+{ 
+    local exit_code="${1:-"0"}";
+    local usage_string="$doc_program_name";
+    local synopsis="";
+    local global_options="";
+    local extra_sections="
+For the full help, see the manpage.";
+    local ind=0;
+    for i in "${doc_synopsis[@]}";
+    do
+        if [[ $ind -eq 0 ]]; then
+            synopsis="${synopsis}usage: $doc_program_name $i
+";
+        else
+            synopsis="$synopsis   or: $doc_program_name $i
+";
+        fi;
+        ((ind+=1));
+    done;
+    ind=0;
+    for i in "${doc_global_options[@]}";
+    do
+        if [[ $ind -eq 0 ]]; then
+            global_options="$global_options
+$i";
+            ind=1;
+        else
+            global_options="$global_options
+	$i
+";
+            ind=0;
+        fi;
+    done;
+    local usage_string="$synopsis
 Global Options:
 $global_options
-$extra_sections"
-
-    echo -e "$usage_string"
+$extra_sections";
+    echo -e "$usage_string";
     exit $exit_code
 }
 
-# args: $1 = the file to source.
-# tries to source the file and
-# returns whether or not the source
-# was successful
-source_without_error() {
-    source "$1" > /dev/null 2>&1
+
+# prints the usage and exits
+# takes argument: $1
+# the exit code
+
+source_without_error () 
+{ 
+    source "$1" > /dev/null 2>&1;
     return $?
 }
 
-# args: $1 the name of the variable to check.
-# returns true if variable is an array
-# false otherwise
-is_array() {
+is_array () 
+{ 
     if [[ "$(declare -p $1)" =~ "declare -a" ]]; then
-        return 0
-    fi
+        return 0;
+    fi;
     return 1
 }
 
-# args: $1 the name of the branch to check
-# returns true if the branch exists, false otherwise
-branch_exists() {
-    local it_exists=$(git branch --list $1 2>&1)
-    if [[ ! -z $it_exists ]]; then
-        return 0
-    fi
-    return 1
-}
-
-make_orphan_branch_without_error() {
-    # create a new empty branch
-    git checkout --orphan "$1" 2>&1
-    if [[ $? != "0" ]]; then
-        echo "Error creating an orphan branch: $1"
-        return 1
-    fi
-
-    # woah this looks scary right?
-    # normally yes, but we are on an orphan branch
-    # which means that we still have the files from our
-    # previous branch, and git is saying that we are
-    # ready to commit them, but we dont want to commit because
-    # we want to be on an empty branch. We can safely rm everything from
-    # our git directory because we will get them back when we checkout
-    # back to our previous branch.
-    # NOTE THIS ONLY REMOVES FILES/FOLDERS THAT WERE COMMITED
-    # THIS DOES NOT REMOVE UNCOMMITED FILES/FOLDERS.
-    git rm -rf . > /dev/null 2>&1
-    if [[ $? != "0" ]]; then
-        echo "Error clearing out the orphan branch: $1"
-        return 1
-    fi
-
-    return 0
-}
-
-# Checks if output branch of $1
-# exists. If it already exists returns false.
-# Otherwise, it creates the branch and returns
-# true if there was no error.
-make_output_branch_without_error() {
+make_output_branch_without_error () 
+{ 
     if branch_exists "$1"; then
-        echo "The branch $1 already exists."
-        echo "Please use a different output repo name via the option:"
-        echo "--output-branch \"some_new_branch\""
-        echo "Or delete the branch and run this again."
-        return 1
-    fi
-    echo "MAKING BRANCH: $1"
-    git checkout -b "$1"
+        echo "The branch $1 already exists.";
+        echo "Please use a different output repo name via the option:";
+        echo "--output-branch \"some_new_branch\"";
+        echo "Or delete the branch and run this again.";
+        return 1;
+    fi;
+    echo "MAKING BRANCH: $1";
+    git checkout -b "$1";
     if [[ $? != "0" ]]; then
-        echo "Failed to create output branch: $1"
-        return 1
-    fi
+        echo "Failed to create output branch: $1";
+        return 1;
+    fi;
     return 0
 }
 
-# Changes to the git repo's root directory.
-# returns true if there was no error,
-# false otherwise.
-cd_into_toplevel_without_error() {
-    repo_absolute_path=$(git rev-parse --show-toplevel 2>&1)
+cd_into_toplevel_without_error () 
+{ 
+    repo_absolute_path=$(git rev-parse --show-toplevel 2>&1);
     if [[ $repo_absolute_path == *"fatal: not a git repo"* ]]; then
-        echo "Failed to find git toplevel directory"
-        echo "This script must be ran from within a git repository"
-        return 1
-    fi
-
-    # TODO: should we do printouts?
-    # echo "Changing to repo: $repo_absolute_path"
-    cd "$repo_absolute_path" > /dev/null 2>&1
+        echo "Failed to find git toplevel directory";
+        echo "This script must be ran from within a git repository";
+        return 1;
+    fi;
+    cd "$repo_absolute_path" > /dev/null 2>&1;
     return $?
 }
 
-# echoes out the current branch name
-get_current_branch_name() {
-    echo "$(git rev-parse --abbrev-ref HEAD)"
-}
-
-# args: $1 the remote_repo uri.
-# sets the repo_name global variable
-# with everything after the last slash
-# and before the last dot.
-get_repo_name_from_remote_repo() {
-    local reponame="$1"
-    # remove trailing slash if present:
+get_repo_name_from_remote_repo () 
+{ 
+    local reponame="$1";
     if [[ $reponame == *"/" ]]; then
-        reponame=${reponame%?}
-    fi
-
-    # remove everything before last slash
-    reponame="${reponame##*/}"
-    # remove everything after the dot
-    reponame="${reponame%.*}"
-    repo_name="$reponame"
+        reponame=${reponame%?};
+    fi;
+    reponame="${reponame##*/}";
+    reponame="${reponame%.*}";
+    repo_name="$reponame";
     return 0
 }
 
-
-# args: $1 the first arg
-# passed to the program. Sets a global
-# remote_repo, and repo_name arguments
-# if it can parse the repo uri
-# otherwise, returns false if failure.
-get_remote_repo_from_args() {
-    if \
-    [[ $1 == "ssh://"* ]] || \
-    [[ $1 == "git://"* ]] || \
-    [[ $1 == "http://"* ]] || \
-    [[ $1 == "https://"* ]] || \
-    [[ $1 == "ftp://"* ]] || \
-    [[ $1 == "ftps://"* ]] || \
-    [[ $1 == "file://"* ]] || \
-    [[ $1 =~ (.*)@(.*)\.(.*) ]]; then
-        # set remote_repo, and repo_name variables and return success
-        get_repo_name_from_remote_repo "$1"
-        remote_repo="$1"
-        return 0
-    fi
-    # the arg $1 is not a valid
-    # remote uri, return false
+get_remote_repo_from_args () 
+{ 
+    if [[ $1 == "ssh://"* || $1 == "git://"* || $1 == "http://"* || $1 == "https://"* || $1 == "ftp://"* || $1 == "ftps://"* || $1 == "file://"* || $1 =~ (.*)@(.*)\.(.*) ]]; then
+        get_repo_name_from_remote_repo "$1";
+        remote_repo="$1";
+        return 0;
+    fi;
     return 1
 }
-# if compiling this file individually, use:
-# import ./helpers.bsc
-# otherwise helpers.bsc already included from git-split.bsc
+
+branch_exists () 
+{ 
+    local it_exists=$(git branch --list $1 2>&1);
+    if [[ ! -z $it_exists ]]; then
+        return 0;
+    fi;
+    return 1
+}
+
+# These are helper functions
+# that specifically apply to using
+# git-filter-repo
+
+# generates the repo_split_include array
+# from the previously defined include variable
+
+generate_repo_split_args_out () 
+{ 
+    repo_split_exclude=();
+    repo_split_include=();
+    repo_split_include_as=();
+    generate_repo_split_include;
+    generate_repo_split_exclude;
+    if [[ ! -z $include_as ]] && is_array "include_as"; then
+        include_as_len=${#include_as[@]};
+        include_as_index=0;
+        previous_i="";
+        while [[ $include_as_index -lt $include_as_len ]]; do
+            i=${include_as[include_as_index]};
+            if [[ $((include_as_index%2)) -eq 0 ]]; then
+                previous_i="$i";
+                repo_split_include+=($i);
+            else
+                repo_split_include_as+=("$previous_i:$i");
+            fi;
+            ((include_as_index+=1));
+        done;
+    fi
+}
+
+generate_repo_split_strings_out () 
+{ 
+    exclude_path_str="";
+    include_path_str="";
+    include_as_path_str="";
+    for i in ${repo_split_include[@]};
+    do
+        if [[ -z $dry_run ]]; then
+            echo "INCLUDING: $i";
+        fi;
+        include_path_str="$include_path_str--path $i ";
+    done;
+    for i in ${repo_split_include_as[@]};
+    do
+        if [[ -z $dry_run ]]; then
+            echo "INCLUDING AS: $i";
+        fi;
+        include_as_path_str="$include_as_path_str--path-rename $i ";
+    done;
+    for i in ${repo_split_exclude[@]};
+    do
+        if [[ -z $dry_run ]]; then
+            echo "EXCLUDING: $i";
+        fi;
+        exclude_path_str="$exclude_path_str--path $i ";
+    done
+}
+
+generate_repo_split_include () 
+{ 
+    if [[ ! -z $include ]] && is_array "include"; then
+        for i in ${include[@]};
+        do
+            repo_split_include+=($i);
+        done;
+    else
+        if [[ ! -z $include ]]; then
+            repo_split_include+=($include);
+        fi;
+    fi
+}
+
+generate_repo_split_exclude () 
+{ 
+    if [[ ! -z $exclude ]] && is_array "exclude"; then
+        for i in ${exclude[@]};
+        do
+            repo_split_exclude+=($i);
+        done;
+    else
+        if [[ ! -z $exclude ]]; then
+            repo_split_exclude+=($exclude);
+        fi;
+    fi
+}
+
+
+# usage
+# get_arg file_extension,e "$@"
+# matches: "--file-extension <value>" or "-e <value>"
+# to use the output:
+# echo "what is my file extension? $file_extension"
+# note in the usage, the long form will be the variable
+# name, so short form must come after long form, if at all
+
+get_arg () 
+{ 
+    local looking_for=();
+    IFS=',' read -ra looking_for <<< "$1";
+    shift;
+    local -n outvar=${looking_for[0]};
+    while (( "$#" )); do
+        case "$1" in 
+            -* | --*=)
+                local opt_value="$2";
+                local opt_name="${1,,}";
+                local stripped_name="${opt_name//-/_}";
+                local strip_underscores="_";
+                stripped_name="${stripped_name/$strip_underscores}";
+                if [[ $stripped_name == "_"* ]]; then
+                    stripped_name="${stripped_name/$strip_underscores}";
+                fi;
+                local found_match=false;
+                for match in ${looking_for[@]};
+                do
+                    if [[ $stripped_name == $match ]]; then
+                        if [[ -z $opt_value || $opt_value == "-"* ]]; then
+                            outvar=true;
+                        else
+                            outvar="$opt_value";
+                        fi;
+                        found_match=true;
+                        break;
+                    fi;
+                done;
+                if [[ $found_match == true ]]; then
+                    break;
+                fi;
+                if [[ $opt_value == "-"* ]]; then
+                    shift;
+                else
+                    shift;
+                    shift;
+                fi
+            ;;
+            *)
+                shift
+            ;;
+        esac;
+    done
+}
 
 # assumes that the input file has been sourced
 # validates the variables that the input file has set.
@@ -373,7 +448,9 @@ input_valid_out() {
 # If dry_run is defined, it will simply
 # print out the commands instead of running them.
 split_out() {
+    # get user options:
     get_arg output_branch,o "$@"
+
     if [[ -z $1 ]]; then
         echo "Missing required input"
         echo ""
@@ -439,9 +516,115 @@ split_out() {
         fi
     fi
 }
-# if compiling this file individually, use:
-# import ./helpers.bsc
-# otherwise helpers.bsc already included from git-split.bsc
+
+# prints the usage and exits
+# takes argument: $1
+# the exit code
+
+make_orphan_branch_without_error () 
+{ 
+    git checkout --orphan "$1" 2>&1;
+    if [[ $? != "0" ]]; then
+        echo "Error creating an orphan branch: $1";
+        return 1;
+    fi;
+    git rm -rf . > /dev/null 2>&1;
+    if [[ $? != "0" ]]; then
+        echo "Error clearing out the orphan branch: $1";
+        return 1;
+    fi;
+    return 0
+}
+
+# These are helper functions
+# that specifically apply to using
+# git-filter-repo
+
+# generates the repo_split_include array
+# from the previously defined include variable
+
+generate_repo_split_args_in () 
+{ 
+    repo_split_include=();
+    repo_split_include_as=();
+    generate_repo_split_include;
+    if [[ ! -z $include_as ]] && is_array "include_as"; then
+        include_as_len=${#include_as[@]};
+        include_as_index=0;
+        previous_i="";
+        include_key_index=0;
+        valid_include_keys=();
+        while [[ $include_key_index -lt $include_as_len ]]; do
+            if [[ $((include_key_index%2)) -eq 1 ]]; then
+                if [[ ${include_as[include_key_index]} != "$i" ]]; then
+                    valid_include_keys+=("${include_as[include_key_index]}");
+                fi;
+            fi;
+            ((include_key_index+=1));
+        done;
+        while [[ $include_as_index -lt $include_as_len ]]; do
+            i=${include_as[include_as_index]};
+            if [[ $((include_as_index%2)) -eq 0 ]]; then
+                previous_i="$i";
+            else
+                if [[ $i == "" || $i == " " ]]; then
+                    i="./";
+                fi;
+                if [[ -d $i ]]; then
+                    echo "INCLUDING EVERYTHING IN DIRECTORY $i AS $previous_i";
+                    for item in "${i%*/}"/* "${i%*/}"/.[^.]*;
+                    do
+                        remove_common=true;
+                        if [[ $item == "./"* ]]; then
+                            item="${item:2}";
+                            remove_common=false;
+                        fi;
+                        if [[ $item == ".git" ]]; then
+                            continue;
+                        fi;
+                        all_files=$(get_all_files_from "$item");
+                        for file in $all_files;
+                        do
+                            if ! does_item_match_any_of "$file" "${repo_split_include[@]}"; then
+                                if ! does_item_match_any_of "$file" "${valid_include_keys[@]}"; then
+                                    input_file="$file";
+                                    if [[ $remove_common == true ]]; then
+                                        file="${file#*/}";
+                                    fi;
+                                    if [[ "${previous_i: -1}" == "/" ]]; then
+                                        if [[ ! -z $verbose ]]; then
+                                            echo "$previous_i$file";
+                                        fi;
+                                        repo_split_include_as+=("$input_file:$previous_i$file");
+                                    else
+                                        if [[ ! -z $verbose ]]; then
+                                            echo "$previous_i/$file";
+                                        fi;
+                                        repo_split_include_as+=("$input_file:$previous_i/$file");
+                                    fi;
+                                fi;
+                            fi;
+                        done;
+                    done;
+                else
+                    echo "INCLUDING $i AS $previous_i";
+                    repo_split_include_as+=("$i:$previous_i");
+                fi;
+            fi;
+            ((include_as_index+=1));
+        done;
+    fi
+}
+
+generate_repo_split_strings_in () 
+{ 
+    include_as_path_str="";
+    for i in ${repo_split_include_as[@]};
+    do
+        include_as_path_str="$include_as_path_str--path-rename $i ";
+    done
+}
+
 
 # assumes that the input file has been sourced
 # validates the variables that the input file has set.
@@ -560,7 +743,7 @@ populate_empty_branch_with_remote_commits() {
 # If dry_run is defined, it will simply
 # print out the commands instead of running them.
 split_in() {
-    # get a --merge-branch option if the user supplied it
+    # get user options if supplied:
     get_arg merge_branch,m "$@"
     get_arg verbose "$@"
     get_arg output_branch,o "$@"
@@ -623,258 +806,6 @@ split_in() {
             git filter-repo --force --refs $output_branch_name $include_as_path_str
         fi
     fi
-}
-# These are helper functions
-# that specifically apply to using
-# git-filter-repo
-
-# generates the repo_split_include array
-# from the previously defined include variable
-generate_repo_split_include() {
-    if [[ ! -z $include ]] && is_array "include"; then
-        for i in ${include[@]}; do
-            repo_split_include+=($i)
-        done
-    elif [[ ! -z $include ]]; then
-        # its a single string
-        repo_split_include+=($include)
-    fi
-}
-
-# generates the repo_split_exclude array
-# from the previously defined exclude variable
-generate_repo_split_exclude() {
-    if [[ ! -z $exclude ]] && is_array "exclude"; then
-        # its an array
-        for i in ${exclude[@]}; do
-            repo_split_exclude+=($i)
-        done
-    elif [[ ! -z $exclude ]]; then
-        # its a single string
-        repo_split_exclude+=($exclude)
-    fi
-}
-
-# creates 3 repo split variables:
-# repo_split_exclude, repo_split_include, and
-# repo_split_include_as. Then iterates over
-# the user defined include, or include_as, or
-# exclude variables, and fills in
-# the repo_split_* arrays as needed.
-generate_repo_split_args_out() {
-    repo_split_exclude=()
-    repo_split_include=()
-    repo_split_include_as=()
-
-    generate_repo_split_include
-    generate_repo_split_exclude
-
-    if [[ ! -z $include_as ]] && is_array "include_as"; then
-        include_as_len=${#include_as[@]}
-        include_as_index=0
-        previous_i=""
-        while [[ $include_as_index -lt $include_as_len ]]; do
-            i=${include_as[include_as_index]}
-            if [[ $((include_as_index%2)) -eq 0 ]]; then
-                # even
-                previous_i="$i"
-                repo_split_include+=($i)
-            else
-                repo_split_include_as+=("$previous_i:$i")
-            fi
-            ((include_as_index+=1))
-        done
-    fi
-}
-
-# creates 2 repo split variables:
-# repo_split_include, and
-# repo_split_include_as. Then iterates over
-# the user defined include, or include_as, or
-# variables, and fills in
-# the repo_split_* arrays as needed.
-generate_repo_split_args_in() {
-    repo_split_include=()
-    repo_split_include_as=()
-
-    # generate the repo_split_include array:
-    generate_repo_split_include
-
-    # generate the repo_split_include_as array:
-    if [[ ! -z $include_as ]] && is_array "include_as"; then
-        include_as_len=${#include_as[@]}
-        include_as_index=0
-        previous_i=""
-        include_key_index=0
-        valid_include_keys=()
-
-        # get all keys of the include_as odd indices
-        # these must be excluded from the directory part
-        # of the next iteration
-        while [[ $include_key_index -lt $include_as_len ]]; do
-            if [[ $((include_key_index%2)) -eq 1 ]]; then
-                if [[ ${include_as[include_key_index]} != "$i" ]]; then
-                    valid_include_keys+=("${include_as[include_key_index]}")
-                fi
-            fi
-            ((include_key_index+=1))
-        done
-
-        while [[ $include_as_index -lt $include_as_len ]]; do
-            i=${include_as[include_as_index]}
-
-            if [[ $((include_as_index%2)) -eq 0 ]]; then
-                # even, this will be used on the next iteration
-                previous_i="$i"
-            else
-                if [[ $i == "" || $i == " " ]]; then
-                    i="./"
-                fi
-                if [[ -d $i ]]; then
-                    echo "INCLUDING EVERYTHING IN DIRECTORY $i AS $previous_i"
-                    # iterate all files in i, including files that start with dot
-                    for item in "${i%*/}"/* "${i%*/}"/.[^.]*; do
-                        # remove the common prefix/suffic
-                        # so the paths line up properly
-                        remove_common=true
-                        if [[ $item == "./"* ]]; then
-                            item="${item:2}"
-                            remove_common=false
-                        fi
-                        if [[ $item == ".git" ]]; then
-                            # no need to iterate over the .git directory
-                            continue
-                        fi
-                        all_files=$(get_all_files_from "$item")
-                        for file in $all_files; do
-                            if ! does_item_match_any_of "$file" "${repo_split_include[@]}" ; then
-                                # it does not match any of the include=() strings
-                                # so we will add a repo split arg:
-                                # but we also need to check if this is one of the
-                                # other include_as=() strings
-                                # if it is, then it will be included 
-                                if ! does_item_match_any_of "$file" "${valid_include_keys[@]}" ; then
-                                    # echo "REPO SPLIT ARG: --path-rename $file:$previous_i/$file"
-                                    # echo "previous i: $previous_i, file: $file"
-                                    input_file="$file"
-                                    if [[ $remove_common == true ]]; then
-                                        file="${file#*/}"
-                                    fi
-
-                                    if [[ "${previous_i: -1}" == "/" ]]; then
-                                        if [[ ! -z $verbose ]]; then echo "$previous_i$file" ; fi
-                                        # echo "including $input_file as $previous_i$file"
-                                        # no need to add a slash, it already has one
-                                        repo_split_include_as+=("$input_file:$previous_i$file")
-                                    else
-                                        if [[ ! -z $verbose ]]; then echo "$previous_i/$file" ; fi
-                                        # echo "including $input_file as $previous_i/$file"
-                                        repo_split_include_as+=("$input_file:$previous_i/$file")
-                                    fi
-                                fi
-                            fi
-                        done
-                    done
-                else
-                    echo "INCLUDING $i AS $previous_i"
-                    # echo "$i is a file, adding $i:$previous_i"
-                    # echo "LOCAL $i IS A FILE, ADD REPO SPLIT ARGS AS IS:"
-                    repo_split_include_as+=("$i:$previous_i")
-                fi
-            fi
-            ((include_as_index+=1))
-        done
-    fi
-}
-
-
-# using the previously defined arrays:
-# repo_split_include, repo_split_include_as,
-# repo_split_exclude.
-# creates the variables: exclude_path_str
-# include_path_str, include_as_path_str
-# which are used in the call(s) to git-filter-repo
-generate_repo_split_strings_out() {
-    exclude_path_str=""
-    include_path_str=""
-    include_as_path_str=""
-    for i in ${repo_split_include[@]}; do
-        if [[ -z $dry_run ]]; then echo "INCLUDING: $i"; fi
-        include_path_str="$include_path_str--path $i "
-    done
-    for i in ${repo_split_include_as[@]}; do
-        if [[ -z $dry_run ]]; then echo "INCLUDING AS: $i"; fi
-        include_as_path_str="$include_as_path_str--path-rename $i "
-    done
-    for i in ${repo_split_exclude[@]}; do
-        if [[ -z $dry_run ]]; then echo "EXCLUDING: $i"; fi
-        exclude_path_str="$exclude_path_str--path $i "
-    done
-}
-
-# using the previously defined array: repo_split_include_as,
-# creates the variable: include_as_path_str
-# which is used in the call(s) to git-filter-repo
-generate_repo_split_strings_in() {
-    include_as_path_str=""
-    for i in ${repo_split_include_as[@]}; do
-        include_as_path_str="$include_as_path_str--path-rename $i "
-    done
-}
-
-# usage
-# get_arg file_extension,e "$@"
-# matches: "--file-extension <value>" or "-e <value>"
-# to use the output:
-# echo "what is my file extension? $file_extension"
-# note in the usage, the long form will be the variable
-# name, so short form must come after long form, if at all
-
-get_arg () 
-{ 
-    local looking_for=();
-    IFS=',' read -ra looking_for <<< "$1";
-    shift;
-    local -n outvar=${looking_for[0]};
-    while (( "$#" )); do
-        case "$1" in 
-            -* | --*=)
-                local opt_value="$2";
-                local opt_name="${1,,}";
-                local stripped_name="${opt_name//-/_}";
-                local strip_underscores="_";
-                stripped_name="${stripped_name/$strip_underscores}";
-                if [[ $stripped_name == "_"* ]]; then
-                    stripped_name="${stripped_name/$strip_underscores}";
-                fi;
-                local found_match=false;
-                for match in ${looking_for[@]};
-                do
-                    if [[ $stripped_name == $match ]]; then
-                        if [[ -z $opt_value || $opt_value == "-"* ]]; then
-                            outvar=true;
-                        else
-                            outvar="$opt_value";
-                        fi;
-                        found_match=true;
-                        break;
-                    fi;
-                done;
-                if [[ $found_match == true ]]; then
-                    break;
-                fi;
-                if [[ $opt_value == "-"* ]]; then
-                    shift;
-                else
-                    shift;
-                    shift;
-                fi
-            ;;
-            *)
-                shift
-            ;;
-        esac;
-    done
 }
 
 # I like a nice little space between the command

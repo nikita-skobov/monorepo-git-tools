@@ -1,3 +1,6 @@
+v1.2.1
+- minor change to code structure, uses specific imports instead of importing whole files
+
 v1.2.0
 - changes `repo_name` to only be required if `remote_repo` is not provided. If `remote_repo` is provided, then `repo_name` is created from the name of the `remote_repo`
 - makes the `-h` help option shorter
