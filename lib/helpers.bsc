@@ -170,15 +170,7 @@ get_repo_name_from_remote_repo() {
 # if it can parse the repo uri
 # otherwise, returns false if failure.
 get_remote_repo_from_args() {
-    if \
-    [[ $1 == "ssh://"* ]] || \
-    [[ $1 == "git://"* ]] || \
-    [[ $1 == "http://"* ]] || \
-    [[ $1 == "https://"* ]] || \
-    [[ $1 == "ftp://"* ]] || \
-    [[ $1 == "ftps://"* ]] || \
-    [[ $1 == "file://"* ]] || \
-    [[ $1 =~ (.*)@(.*)\.(.*) ]]; then
+    if [[ $1 == "ssh://"* || $1 == "git://"* || $1 == "http://"* || $1 == "https://"* || $1 == "ftp://"* || $1 == "ftps://"* || $1 == "file://"* || $1 =~ (.*)@(.*)\.(.*) ]]; then
         # set remote_repo, and repo_name variables and return success
         get_repo_name_from_remote_repo "$1"
         remote_repo="$1"
