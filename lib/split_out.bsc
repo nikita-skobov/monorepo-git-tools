@@ -1,6 +1,22 @@
-# if compiling this file individually, use:
-# import ./helpers.bsc
-# otherwise helpers.bsc already included from git-split.bsc
+import {
+    print_usage_and_exit
+    source_without_error
+    is_array
+    make_output_branch_without_error
+    cd_into_toplevel_without_error
+    get_repo_name_from_remote_repo
+    get_remote_repo_from_args
+    branch_exists
+} from ./helpers.bsc
+
+import {
+    generate_repo_split_args_out
+    generate_repo_split_strings_out
+    generate_repo_split_include
+    generate_repo_split_exclude
+} from ./filter_repo.bsc
+
+import get_arg from ./get_arg.bsc
 
 # assumes that the input file has been sourced
 # validates the variables that the input file has set.
