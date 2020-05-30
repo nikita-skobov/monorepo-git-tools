@@ -15,11 +15,16 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import ./lib/constants.bsc
-import ./lib/helpers.bsc
+import ./lib/constants/exit_codes.bsc
+import ./lib/constants/repo_file.bsc
+import ./lib/constants/git_split.bsc
+
+import {
+    print_usage_and_exit
+} from ./lib/helpers.bsc
+
 import ./lib/split_out.bsc
 import ./lib/split_in.bsc
-import ./lib/filter_repo.bsc
 import get_arg from ./lib/get_arg.bsc
 
 # I like a nice little space between the command
