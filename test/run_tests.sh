@@ -5,12 +5,20 @@ source_combine git-topbase.bsc > test/topbase/git-topbase
 chmod +x test/split/git-split
 chmod +x test/topbase/git-topbase
 
+run_all_tests() {
+    echo "GIT SPLIT:"
+    bats test/split
+    echo ""
+    echo "GIT TOPBASE:"
+    bats test/topbase
+    echo ""
+}
+
 # prevent running tests that involve remote access:
 if [[ $1 == "-l" || $1 == "--local-only" ]]; then
     mv test/split/end-to-end-remote.bats test/tmpe2e.txt
-    bats test/split
+    run_all_tests
     mv test/tmpe2e.txt test/split/end-to-end-remote.bats
 else
-    bats test/split
+    run_all_tests
 fi
-
