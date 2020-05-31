@@ -146,6 +146,8 @@ topbase() {
         exit $ecf_success
     fi
 
+    echo "Rebasing the top $top_index commits from $top onto $bottom"
+    echo ""
     git branch $top-topbased $top > /dev/null 2>&1
     top="$top-topbased"
     rebase_command="echo \"$rebase_data\""
