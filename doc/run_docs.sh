@@ -8,7 +8,7 @@
 # man ./dist/git-split.1.gz
 # or <browser> ./dist/git-split.html
 output_man_file() {
-    source ./lib/constants/git_split.bsc
+    source ./lib/constants/$1.bsc
     source ./lib/constants/repo_file.bsc
 
     # prepend the arrays defined in constants
@@ -58,8 +58,15 @@ output_man_file() {
     source ./doc/build_manpages.sh
 }
 
-man_file_text=$(output_man_file)
+programs=(
+    "git_split"
+)
 
-echo "$man_file_text" > ./dist/git-split.1
-cat ./dist/git-split.1 | groff -mandoc -Thtml > ./dist/git-split.html
-gzip ./dist/git-split.1 -f
+for _name in ${programs[@]}; do
+    man_file_text=$(output_man_file $_name)
+    name_with_dash="${_name//_/-}"
+
+    echo "$man_file_text" > ./dist/$name_with_dash.1
+    cat ./dist/$name_with_dash.1 | groff -mandoc -Thtml > ./dist/$name_with_dash.html
+    gzip ./dist/$name_with_dash.1 -f
+done
