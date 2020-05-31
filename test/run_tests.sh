@@ -6,6 +6,9 @@ chmod +x test/split/git-split
 chmod +x test/topbase/git-topbase
 
 run_all_tests() {
+    echo "HELPER FUNCTIONS:"
+    bats test/helpers
+    echo ""
     echo "GIT SPLIT:"
     bats test/split
     echo ""
