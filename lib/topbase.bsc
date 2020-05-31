@@ -1,11 +1,92 @@
 import {
     print_usage_and_exit
+    get_log_no_merges_with_format
 } from ./helpers.bsc
 
 import {
     branch_exists
 } from ./helpers.bsc
 
+# uses the globally defined top_commit_* arrays
+# to get the next commit information. Increments top_index
+# every time it is called.
+get_next_top_commit() {
+    top_commit_time="${top_commit_times[top_index]}"
+    top_commit_msg="${top_commit_msgs[top_index]}"
+    top_commit_hash="${top_commit_hashes[top_index]}"
+    ((top_index += 1))
+}
+
+# args $1: the name of the bottom branch.
+# Function will get git log for that branch, and
+# fill the arrays bottom_commit_msgs, and bottom_commit_times
+get_bottom_commits() {
+    local output=$(get_log_no_merges_with_format "$1" "%s")
+
+    IFS=$'\n'
+    for i in $output ; do
+        bottom_commit_msgs+=("$i")
+    done
+
+    local output=$(get_log_no_merges_with_format "$1" "%at")
+    for i in $output ; do
+        bottom_commit_times+=("$i")
+    done
+}
+
+# args $1: the name of the top branch.
+# Function will get git log for that branch, and
+# fill the arrays top_commit_msgs, top_commit_hashes,
+# and top_commit_times.
+get_top_commits() {
+    local output=$(get_log_no_merges_with_format "$1" "%h")
+    for i in $output ; do
+        top_commit_hashes+=("$i")
+    done
+
+    local output=$(get_log_no_merges_with_format "$1" "%s")
+
+    IFS=$'\n'
+    for i in $output ; do
+        top_commit_msgs+=("$i")
+    done
+
+    local output=$(get_log_no_merges_with_format "$1" "%at")
+    for i in $output ; do
+        top_commit_times+=("$i")
+    done
+}
+
+# iterate over the bottom commit arrays (they should all be
+# the same length) and if the current top commit does
+# NOT EXIST in the bottom branch, then add it to the
+# rebase_data global variable. if the commit DOES EXIST
+# then return true.
+top_commit_exists_in_bottom() {
+    local ind=0
+    while [[ $ind -lt ${#bottom_commit_times[@]} ]]; do
+        local bottom_commit_msg="${bottom_commit_msgs[ind]}"
+        local bottom_commit_time="${bottom_commit_times[ind]}"
+        # the criteria we use for whether or not a top commit exists
+        # in the bottom branch is if its author time and commit
+        # messages match. TODO: figure out how to calculate diffs
+        # on the actual contents changes, because maybe the user
+        # modified commit messages/author times?
+        if [[
+            $bottom_commit_time == $top_commit_time && \
+            $bottom_commit_msg == $top_commit_msg
+        ]]; then
+            return 0
+        fi
+        ((ind += 1))
+    done
+
+# needs to be not indented to format string properly:
+rebase_data="pick $top_commit_hash $top_commit_msg
+$rebase_data"
+
+    return 1
+}
 
 topbase() {
     top="$1"
@@ -19,5 +100,42 @@ topbase() {
         echo "Failed to find branch: $bottom"
         echo ""
         print_usage_and_exit $ecf_invalid_branch
+    fi
+
+    bottom_commit_msgs=()
+    bottom_commit_times=()
+    top_commit_times=()
+    top_commit_msgs=()
+    top_commit_hashes=()
+    top_index=0
+    pick="pick"
+    rebase_data=""
+
+    get_top_commits "$top"
+    get_bottom_commits "$bottom"
+
+    # iterate from the top commits
+    # of the top branch
+    # as soon as you find a commit that exists in bottom
+    # break out
+    while [[ $top_index -lt ${#top_commit_times[@]} ]]; do
+        get_next_top_commit
+        if top_commit_exists_in_bottom; then
+            ((top_index -= 1))
+            break
+        fi
+    done
+
+    if [[ $top_index == 0 ]]; then
+        echo "There are no commits on top of $top that $bottom does not have"
+        exit $ecf_success
+    fi
+
+    if [[ ! -z $dry_run ]]; then
+        echo "rebase_data=\"$rebase_data\""
+        echo ""
+        echo "rebase_command=\"echo \$rebase_data\""
+        echo "GIT_SEQUENCE_EDITOR=\"\$rebase_command >\" git rebase -i --onto $bottom $top~$top_index $top"
+        exit $ecf_success
     fi
 }
