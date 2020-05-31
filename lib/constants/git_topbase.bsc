@@ -1,0 +1,39 @@
+# variables related to documentation
+# used in the print_usage function
+doc_program_name="git topbase"
+doc_author="Nikita Skobov"
+doc_author_email="skobo002@umn.edu"
+doc_version="1.2.1"
+doc_last_updated="2020-05-30"
+doc_copyright="Copyright (C) 2020 $doc_author
+
+$doc_program_name is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under the terms of the
+GNU Affero General Public License as published by
+the Free Software Foundation, version 3, and no later.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>."
+doc_synopsis=(
+    "<top_branch> <bottom_branch>    [OPTIONS]"
+    "<top_branch> <bottom_branch>    [OPTIONS]"
+)
+doc_commands=(
+    "None"
+)
+doc_global_options=(
+    "-h, --help"
+    "print help and exit"
+    "--version"
+    "print the version and exit"
+    "--dry-run"
+    "does not actually modify/do anything. Just outputs the commands that it would do without the --dry-run option present."
+)
+doc_options_1=(
+    "Options:"
+    "--temp"
+    "placeholder description"
+)
+doc_custom_sections=(
+    "doc_options_1"
+)

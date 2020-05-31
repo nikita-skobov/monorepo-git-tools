@@ -60,6 +60,7 @@ output_man_file() {
 
 programs=(
     "git_split"
+    "git_topbase"
 )
 
 for _name in ${programs[@]}; do

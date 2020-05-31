@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
 source_combine git-split.bsc > test/git-split
+source_combine git-topbase.bsc > test/git-topbase
+chmod +x test/git-topbase
 chmod +x test/git-split
 
 # prevent running tests that involve remote access:
