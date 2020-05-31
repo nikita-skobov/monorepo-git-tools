@@ -180,3 +180,10 @@ get_remote_repo_from_args() {
     # remote uri, return false
     return 1
 }
+
+# args $1: the branch name, $2 the log format string.
+# calls git log on the branch with --no-merges, and
+# --pretty=format:$2. returns output on standard out.
+get_log_no_merges_with_format() {
+    git log "$1" --no-merges --pretty=format:"$2"
+}
