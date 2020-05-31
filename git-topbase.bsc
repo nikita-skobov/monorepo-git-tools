@@ -22,6 +22,7 @@ import {
     print_usage_and_exit
 } from ./lib/helpers.bsc
 
+import ./lib/topbase.bsc
 import get_arg from ./lib/get_arg.bsc
 
 echo ""
@@ -39,4 +40,6 @@ fi
 
 if [[ -z $top || -z $bottom ]]; then
     print_usage_and_exit $ecf_missing_input
+else
+    topbase "$@"
 fi

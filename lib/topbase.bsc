@@ -1,0 +1,23 @@
+import {
+    print_usage_and_exit
+} from ./helpers.bsc
+
+import {
+    branch_exists
+} from ./helpers.bsc
+
+
+topbase() {
+    top="$1"
+    bottom="$2"
+
+    if ! branch_exists "$top"; then
+        echo "Failed to find branch: $top"
+        echo ""
+        print_usage_and_exit $ecf_invalid_branch
+    elif ! branch_exists "$bottom"; then
+        echo "Failed to find branch: $bottom"
+        echo ""
+        print_usage_and_exit $ecf_invalid_branch
+    fi
+}
