@@ -104,3 +104,8 @@ function teardown() {
     run git log --oneline
     [[ $output != *"Merge branch 'tmp1' into new_branch"* ]]
 }
+
+# TODO:
+# @test "using output from --dry-run yields same result as running without --dry-run" {
+
+# }
