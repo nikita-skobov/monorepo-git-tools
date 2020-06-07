@@ -16,7 +16,11 @@ function make_commit() {
     if [[ -d .git ]]; then
         echo "extra line" >> $1
         git add $1
-        git commit -m "added extra line to $1"
+        if [[ ! -z $2 ]]; then
+            git commit -m "commit $2"
+        else
+            git commit -m "added extra line to $1"
+        fi
     fi
 }
 
@@ -65,4 +69,38 @@ function teardown() {
     # would have been if you FF-ed.
     master_branch_latest_commits="$(get_last_n_commits $number_commits_to_make)"
     [[ $new_branch_latest_commits == $master_branch_latest_commits ]]
+}
+
+
+@test "will skip merge commits" {
+    git checkout -b new_branch
+    number_commits_to_make=4
+    for ((j = 0; j < number_commits_to_make; j += 1)); do
+        make_commit "tr1.txt" $j
+    done
+
+    git checkout -b tmp1
+    make_commit "tr2.txt" "$j"
+
+    # force a merge commit from tmp1 into new_branch
+    git checkout new_branch
+    git merge --no-edit --no-ff tmp1
+    git branch -D tmp1
+
+    # make a commit on top of the merge commit
+    ((j+=1))
+    make_commit "tr3.txt" "$j"
+
+    # at this point new_branch has
+    # a merge commit, and then another commit on top
+    # first check to make sure it has a merge commit
+    run git log --oneline
+    [[ $output == *"Merge branch 'tmp1' into new_branch"* ]]
+
+    $BATS_TEST_DIRNAME/git-topbase new_branch master
+
+    # then, after topbasing, newbranch
+    # should NOT have that merge commit
+    run git log --oneline
+    [[ $output != *"Merge branch 'tmp1' into new_branch"* ]]
 }
