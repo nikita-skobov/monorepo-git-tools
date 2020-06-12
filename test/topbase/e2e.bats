@@ -159,3 +159,33 @@ function teardown() {
     master_has_commits="$(git log master --oneline | wc -l)"
     [[ $master_has_commits == $master_commits ]]
 }
+
+@test "should apply commits to the top branch by default" {
+    master_commits=1
+    git checkout -b new_branch
+    number_commits_to_make=4
+    for ((j = 0; j < number_commits_to_make; j += 1)); do
+        make_commit "tr1.txt" $j
+    done
+    # get the last n commits from newbranch
+    new_branch_latest_commits="$(get_last_n_commits $number_commits_to_make)"
+
+    # verify those werent applied to master
+    current_master_commits="$(git log master --oneline | wc -l)"
+    [[ $current_master_commits == 1 ]]
+
+    # verify current branch has $number_commits_to_make commits:
+    current_branch_commits="$(git log --oneline | wc -l)"
+    [[ $current_branch_commits == "$((number_commits_to_make + 1))" ]]
+
+    git checkout master
+    make_commit "tr2.txt" "$j"
+    # master now has 2 commits
+    ((master_commits+=1))
+
+    $BATS_TEST_DIRNAME/git-topbase new_branch master
+
+    # verify the new_branch branch is the one that had the commits applied:    
+    current_branch_commits="$(git log new_branch --oneline | wc -l)"
+    [[ $current_branch_commits == "$((number_commits_to_make + master_commits))" ]]
+}
