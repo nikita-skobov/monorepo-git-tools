@@ -141,7 +141,7 @@ topbase() {
     if [[ ! -z $dry_run ]]; then
         echo "rebase_data=\"$rebase_data\""
         echo ""
-        echo "rebase_command=\"echo \"\$rebase_data\"\""
+        echo "rebase_command=\"echo \\\"\$rebase_data\\\"\""
         echo "GIT_SEQUENCE_EDITOR=\"\$rebase_command >\" git rebase -i --onto $bottom $top~$top_index $top"
         exit $ecf_success
     fi
