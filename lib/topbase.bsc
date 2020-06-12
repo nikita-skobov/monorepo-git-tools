@@ -102,12 +102,15 @@ topbase() {
         print_usage_and_exit $ecf_invalid_branch
     fi
 
-    if [[ -z $dry_run ]] && branch_exists "$top-topbased"; then
-        echo "Temporary branch: $top-topbased already exists"
-        echo "Please delete this branch before continuing"
-        echo ""
-        print_usage_and_exit $ecf_invalid_branch
-    fi
+    ## TODO: add option to create a new branch from $top
+    ## and then if that option is present, check if that new branch
+    ## name exists:
+    # if [[ -z $dry_run ]] && branch_exists "$top-topbased"; then
+    #     echo "Temporary branch: $top-topbased already exists"
+    #     echo "Please delete this branch before continuing"
+    #     echo ""
+    #     print_usage_and_exit $ecf_invalid_branch
+    # fi
 
     bottom_commit_msgs=()
     bottom_commit_times=()
@@ -148,8 +151,6 @@ topbase() {
 
     echo "Rebasing the top $top_index commits from $top onto $bottom"
     echo ""
-    git branch $top-topbased $top > /dev/null 2>&1
-    top="$top-topbased"
     rebase_command="echo \"$rebase_data\""
     GIT_SEQUENCE_EDITOR="$rebase_command >" git rebase -i --onto $bottom $top~$top_index $top
 }
