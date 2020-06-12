@@ -105,7 +105,57 @@ function teardown() {
     [[ $output != *"Merge branch 'tmp1' into new_branch"* ]]
 }
 
-# TODO:
-# @test "using output from --dry-run yields same result as running without --dry-run" {
+@test "running output of --dry-run yields same result as running without --dry-run" {
+    git checkout -b new_branch
+    number_commits_to_make=4
+    for ((j = 0; j < number_commits_to_make; j += 1)); do
+        make_commit "tr1.txt" $j
+    done
+    # get the last n commits from newbranch
+    new_branch_latest_commits="$(get_last_n_commits $number_commits_to_make)"
 
-# }
+    # verify those werent applied to master
+    current_master_commits="$(git log master --oneline | wc -l)"
+    [[ $current_master_commits == 1 ]]
+
+    git checkout master
+    make_commit "tr2.txt" "$j"
+    # master now has 2 commits
+    master_commits=2
+
+    # this branch will receive the
+    # eval of the dry-run
+    git branch new_branch_dry_run_eval new_branch
+    git checkout new_branch_dry_run_eval
+
+    # do the dry run:
+    run $BATS_TEST_DIRNAME/git-topbase new_branch_dry_run_eval master --dry-run
+    eval "$output"
+
+    # verify that the commits were applied onto new_branch_dry_run_eval:
+    current_branch_commits="$(git log --oneline | wc -l)"
+    dry_run_log="$(git log --oneline)"
+    [[ $current_branch_commits == "$((number_commits_to_make + master_commits))" ]]
+
+    # go back to new_branch and run without --dry-run
+    git checkout new_branch
+
+    # verify that new_branch was not changed:
+    current_branch_commits="$(git log --oneline | wc -l)"
+    [[ $current_branch_commits != "$((number_commits_to_make + master_commits))" ]]
+
+    # run it regularly:
+    $BATS_TEST_DIRNAME/git-topbase new_branch master
+
+    # verify that the commits were applied:
+    current_branch_commits="$(git log --oneline | wc -l)"
+    [[ $current_branch_commits == "$((number_commits_to_make + master_commits))" ]]
+
+    # verify that the logs match:
+    regular_run_log="$(git log --oneline)"
+    [[ $regular_run_log == $dry_run_log ]]
+
+    # verify master still has $master_commits commits
+    master_has_commits="$(git log master --oneline | wc -l)"
+    [[ $master_has_commits == $master_commits ]]
+}
