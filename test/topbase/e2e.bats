@@ -61,14 +61,14 @@ function teardown() {
     # do the topbase:
     $BATS_TEST_DIRNAME/git-topbase new_branch master
 
-    # verify that master has n+1 commits
-    current_master_commits="$(git log --oneline | wc -l)"
-    [[ $current_master_commits == "$((number_commits_to_make+1))" ]]
+    # verify that new_branch now has n+1 commits
+    current_branch_commits="$(git log --oneline | wc -l)"
+    [[ $current_branch_commits == "$((number_commits_to_make+1))" ]]
 
     # verify that the new n commits have the same hashes as what it
     # would have been if you FF-ed.
-    master_branch_latest_commits="$(get_last_n_commits $number_commits_to_make)"
-    [[ $new_branch_latest_commits == $master_branch_latest_commits ]]
+    new_branch_latest_commits="$(get_last_n_commits $number_commits_to_make)"
+    [[ $new_branch_latest_commits == $new_branch_latest_commits ]]
 }
 
 
