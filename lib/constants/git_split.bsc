@@ -19,6 +19,14 @@ doc_synopsis=(
     "in  <repo_file>    [OPTIONS]"
     "in  <git_repo_uri> --as <subdirectory>"
 )
+doc_description='git split is '\
+'a git command that can rewrite the history of a repository '\
+'as if it only includes certain folders, and files. '\
+'In this regard it is similar to git subtree. However, '\
+'it differs from git subtree because git subtree only allows you to '\
+'split a repository to a specific subfolder, whereas git split allows '\
+'you to split a repository according to multiple paths, and '\
+'allows you to exclude, as well as rename certain files, and folders.'
 doc_commands=(
     "out"
 "Given a repo_file that defines how a repository should be split, git split out will take all paths defined in the repo_file and rewrite the repository's history into a new branch. This new branch will only include the history for the files specified in the repo_file.
