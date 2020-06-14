@@ -39,7 +39,11 @@ cd git-monorepo-tools
 
 # replace /usr/lib/git-core with whatever the
 # output of 'git --exec-path' is on your system
-sudo cp dist/*.sh /usr/lib/git-core
+# !(*.*) will match all files without an extension
+sudo cp dist/!(*.*) /usr/lib/git-core
+# OR you can just manually copy them:
+# sudo cp dist/git-split /usr/lib/git-core
+# sudo cp dist/git-topbase /usr/lib/git-core
 
 # to install the man pages:
 sudo cp dist/*.gz /usr/share/man/man1
