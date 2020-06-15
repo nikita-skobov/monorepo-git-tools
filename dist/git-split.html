@@ -1,5 +1,5 @@
 <!-- Creator     : groff version 1.22.4 -->
-<!-- CreationDate: Sat May 30 18:47:19 2020 -->
+<!-- CreationDate: Sun Jun 14 22:05:00 2020 -->
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
 "http://www.w3.org/TR/html4/loose.dtd">
 <html>
@@ -22,6 +22,7 @@
 
 <a href="#NAME">NAME</a><br>
 <a href="#SYNOPSIS">SYNOPSIS</a><br>
+<a href="#DESCRIPTION">DESCRIPTION</a><br>
 <a href="#COMMANDS">COMMANDS</a><br>
 <a href="#GLOBAL OPTIONS:">GLOBAL OPTIONS:</a><br>
 <a href="#OPTIONS FOR SPLIT IN:">OPTIONS FOR SPLIT IN:</a><br>
@@ -49,6 +50,21 @@ split</big></b> <big>out &lt;repo_file&gt; [OPTIONS] <b><br>
 git split</b> in &lt;repo_file&gt; [OPTIONS] <b><br>
 git split</b> in &lt;git_repo_uri&gt; --as
 &lt;subdirectory&gt;</big></p>
+
+<h2>DESCRIPTION
+<a name="DESCRIPTION"></a>
+</h2>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>git split
+is a git command that can rewrite the history of a
+repository as if it only includes certain folders, and
+files. In this regard it is similar to git subtree. However,
+it differs from git subtree because git subtree only allows
+you to split a repository to a specific subfolder, whereas
+git split allows you to split a repository according to
+multiple paths, and allows you to exclude, as well as rename
+certain files, and folders.</big></p>
 
 <h2>COMMANDS
 <a name="COMMANDS"></a>

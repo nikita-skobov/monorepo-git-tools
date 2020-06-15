@@ -1,2 +1,2 @@
-dist/git-split_t
-test/git-split
+test/split/git-split
+test/topbase/git-topbase

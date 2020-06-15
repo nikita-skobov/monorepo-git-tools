@@ -1,0 +1,215 @@
+<!-- Creator     : groff version 1.22.4 -->
+<!-- CreationDate: Sun Jun 14 22:05:00 2020 -->
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+"http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta name="generator" content="groff -Thtml, see www.gnu.org">
+<meta http-equiv="Content-Type" content="text/html; charset=US-ASCII">
+<meta name="Content-Style" content="text/css">
+<style type="text/css">
+       p       { margin-top: 0; margin-bottom: 0; vertical-align: top }
+       pre     { margin-top: 0; margin-bottom: 0; vertical-align: top }
+       table   { margin-top: 0; margin-bottom: 0; vertical-align: top }
+       h1      { text-align: center }
+</style>
+<title>GIT TOPBASE</title>
+
+</head>
+<body>
+
+<h1 align="center">GIT TOPBASE</h1>
+
+<a href="#NAME">NAME</a><br>
+<a href="#SYNOPSIS">SYNOPSIS</a><br>
+<a href="#DESCRIPTION">DESCRIPTION</a><br>
+<a href="#COMMANDS">COMMANDS</a><br>
+<a href="#GLOBAL OPTIONS:">GLOBAL OPTIONS:</a><br>
+<a href="#OPTIONS:">OPTIONS:</a><br>
+<a href="#AUTHOR">AUTHOR</a><br>
+
+<hr>
+
+
+<h2>NAME
+<a name="NAME"></a>
+</h2>
+
+
+<p style="margin-left:11%; margin-top: 1em">git topbase
+&minus; manual page for git topbase</p>
+
+<h2>SYNOPSIS
+<a name="SYNOPSIS"></a>
+</h2>
+
+
+<p style="margin-left:11%; margin-top: 1em"><b><big>git
+topbase</big></b> <big>&lt;top_branch&gt;
+&lt;bottom_branch&gt; [OPTIONS]</big></p>
+
+<h2>DESCRIPTION
+<a name="DESCRIPTION"></a>
+</h2>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>git
+topbase is a git command that takes two branch names (top,
+and bottom), and finds a branching point based on commit
+message, and author date, and rebases everything from that
+branching point onto the bottom branch. This is useful when
+you try to bring in recent remote changes into your local
+repository, and you only want the changes that have occurred
+since the latest shared commit.</big></p>
+
+<p style="margin-left:11%; margin-top: 1em"><big>For
+example, consider a local repository that has
+history:</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>A---B---C</big></p>
+
+<p style="margin-left:11%; margin-top: 1em"><big>and a
+remote repository that has history:</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>H---I---J---K---L</big></p>
+
+<p style="margin-left:11%; margin-top: 1em"><big>You want
+to bring in the remote repository into your local repository
+so you use git split on that repository, and lets say you do
+not want the full history, so you squash commits H,I,J,K,L
+into one, called X. Then you make changes to their code, and
+you make two commits, and then you split out their
+repository again, and submit your changes to them.</big></p>
+
+<p style="margin-left:11%; margin-top: 1em"><big>Your local
+repository now has history:</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>A---B---C---X---E---F</big></p>
+
+<p style="margin-left:11%; margin-top: 1em"><big>and if you
+split out the changes youve made on their code, you will
+have</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>X---E*---F*</big></p>
+
+<p style="margin-left:11%; margin-top: 1em"><big>which you
+rebase onto their current master, and you will be
+essentially submitting a branch that looks like:</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>H---I---J---K---L---E*---F*</big></p>
+
+<p style="margin-left:11%; margin-top: 1em"><big>Now,
+suppose they accept your changes, and on top of your
+changes, they make 3new commits, so now their master looks
+like:</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>H---I---J---K---L---E*---F*---M---N---O</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>Meanwhile,
+you have also made 1 commit on top of your local branch,
+which now looks like this:</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>A---B---C---X---E---F---G</big></p>
+
+<p style="margin-left:11%; margin-top: 1em"><big>Now,
+consider you split in their current master into a branch of
+your local repository. This split in branch would look
+like:</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>H*---I*---J*---K*---L*---E**---F**---M*---N*---O*</big></p>
+
+<p style="margin-left:11%; margin-top: 1em"><big>Where each
+commit is marked with an extra asterisk because if you split
+in their repository into a subfolder, then the commit hashes
+will change. Now, topbase was created to be able to take the
+latest commits M,N,O, and apply them on top of your latest
+local commit: H. If the split in branch was named remote,
+and your local master was named local, then the command you
+would run would be:</big></p>
+
+<p style="margin-left:11%; margin-top: 1em"><big>git
+topbase remote local</big></p>
+
+<p style="margin-left:11%; margin-top: 1em"><big>which
+would find the closest branching point between remote and
+local. In this case, the branching point would be F, and
+F**. This is why topbase is useful: because a simple git
+rebase would fail to recognize that F, and F** are the same
+commits. git topbase can detect they are the same commits
+because they contain the same commit message, and the same
+author time.</big></p>
+
+<p style="margin-left:11%; margin-top: 1em"><big>The
+topbase command will rebase the 23 top portion of the remote
+branch and apply it on the top of the local branch, and put
+the resulting changes into the remote branch. So the local
+branch is unchanged, but the remote branch will
+become:</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>A---B---C---X---E---F---G---M**---N**---O**</big></p>
+
+<p style="margin-left:11%; margin-top: 1em"><big>Which,
+since your local branch was unchanged, you can then simply
+fast forward merge the newly rebased remote branch back into
+local.</big></p>
+
+<h2>COMMANDS
+<a name="COMMANDS"></a>
+</h2>
+
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>None</big></p>
+
+<h2>GLOBAL OPTIONS:
+<a name="GLOBAL OPTIONS:"></a>
+</h2>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>-h,
+--help</big></p>
+
+<p style="margin-left:17%;"><big>print help and
+exit</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>--version</big></p>
+
+<p style="margin-left:17%;"><big>print the version and
+exit</big></p>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>--dry-run</big></p>
+
+<p style="margin-left:17%;"><big>does not actually
+modify/do anything. Just outputs the commands that it would
+do without the --dry-run option present.</big></p>
+
+<h2>OPTIONS:
+<a name="OPTIONS:"></a>
+</h2>
+
+
+
+<p style="margin-left:17%; margin-top: 1em"><big>None</big></p>
+
+<h2>AUTHOR
+<a name="AUTHOR"></a>
+</h2>
+
+
+<p style="margin-left:11%; margin-top: 1em"><big>Written by
+Nikita Skobov &lt;skobo002@umn.edu&gt;</big></p>
+<hr>
+</body>
+</html>

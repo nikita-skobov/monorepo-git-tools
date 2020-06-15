@@ -8,7 +8,7 @@
 # man ./dist/git-split.1.gz
 # or <browser> ./dist/git-split.html
 output_man_file() {
-    source ./lib/constants/git_split.bsc
+    source ./lib/constants/$1.bsc
     source ./lib/constants/repo_file.bsc
 
     # prepend the arrays defined in constants
@@ -31,35 +31,46 @@ output_man_file() {
         doc_custom_sections+=("$i")
     done
 
-    repo_file_custom_section=(
-        "About the repo file"
-        "I created these tools with the intention of defining repo_files that contain information on how to split out/in local repositories back and forth from remote repositories. A repo_file is just a shell script that contains some variables. It is sourced by commands in this repository, and the variables that it sources are used to do the splitting out/in."
-        ""
-        "The following is a list of all valid variables you can use in your repo file."
-        ""
-        "The format is: <variable_name> - (type) - [required|optional|conditional]"
-        ""
-        "If the requiredness is 'conditional', read the paragraph under that variable name for an explanation"
-        ""
-        ""
-        ""
-    )
-    for i in "${rfv_valid_variable_names[@]}"; do
-        local -n array="rfv_$i"
-        # get a reference to the array
-        # i: variable name
-        # array[0]: type, [1]: opt/reqd, [2]: doc string
-        repo_file_custom_section+=("\fI$i\fR \- (${array[0]}) \- ${array[1]}")
-        repo_file_custom_section+=("${array[2]}")
-    done
-
-    doc_custom_sections+=("repo_file_custom_section")
+    # only render the repo file docs section
+    # for certain tools.
+    if [[ $1 == "git_split" ]]; then
+        repo_file_custom_section=(
+            "About the repo file"
+            "I created these tools with the intention of defining repo_files that contain information on how to split out/in local repositories back and forth from remote repositories. A repo_file is just a shell script that contains some variables. It is sourced by commands in this repository, and the variables that it sources are used to do the splitting out/in."
+            ""
+            "The following is a list of all valid variables you can use in your repo file."
+            ""
+            "The format is: <variable_name> - (type) - [required|optional|conditional]"
+            ""
+            "If the requiredness is 'conditional', read the paragraph under that variable name for an explanation"
+            ""
+            ""
+            ""
+        )
+        for i in "${rfv_valid_variable_names[@]}"; do
+            local -n array="rfv_$i"
+            # get a reference to the array
+            # i: variable name
+            # array[0]: type, [1]: opt/reqd, [2]: doc string
+            repo_file_custom_section+=("\fI$i\fR \- (${array[0]}) \- ${array[1]}")
+            repo_file_custom_section+=("${array[2]}")
+        done
+        doc_custom_sections+=("repo_file_custom_section")
+    fi
 
     source ./doc/build_manpages.sh
 }
 
-man_file_text=$(output_man_file)
+programs=(
+    "git_split"
+    "git_topbase"
+)
 
-echo "$man_file_text" > ./dist/git-split.1
-cat ./dist/git-split.1 | groff -mandoc -Thtml > ./dist/git-split.html
-gzip ./dist/git-split.1 -f
+for _name in ${programs[@]}; do
+    man_file_text=$(output_man_file $_name)
+    name_with_dash="${_name//_/-}"
+
+    echo "$man_file_text" > ./dist/$name_with_dash.1
+    cat ./dist/$name_with_dash.1 | groff -mandoc -Thtml > ./dist/$name_with_dash.html
+    gzip ./dist/$name_with_dash.1 -f
+done

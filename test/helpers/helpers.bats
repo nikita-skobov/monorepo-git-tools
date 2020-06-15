@@ -71,3 +71,21 @@ function setup() {
     get_repo_name_from_remote_repo "https://host.net/repo/path7/"
     [[ $repo_name == "path7" ]]
 }
+
+@test 'get_log_no_merges_with_format works for hashes' {
+    run get_log_no_merges_with_format "master" "%h"
+    for hash in $output; do
+        hash_length="${#hash}"
+        [[ $hash_length == 8 ]]
+        break
+    done
+}
+
+@test 'get_log_no_merges_with_format works for author dates' {
+    run get_log_no_merges_with_format "master" "%at"
+    for author_date in $output; do
+        # check if is a number:
+        [[ $author_date =~ ^[0-9]+$ ]]
+        break
+    done
+}

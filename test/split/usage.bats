@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 function setup() {
-    source $BATS_TEST_DIRNAME/../lib/constants/exit_codes.bsc
+    source $BATS_TEST_DIRNAME/../../lib/constants/exit_codes.bsc
 }
 
 @test "prints usage with -h, and exits 0" {

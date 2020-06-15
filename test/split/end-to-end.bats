@@ -13,7 +13,7 @@ function make_temp_repo() {
 }
 
 function setup() {
-    source $BATS_TEST_DIRNAME/../lib/helpers.bsc
+    source $BATS_TEST_DIRNAME/../../lib/helpers.bsc
     make_temp_repo test_remote_repo
     make_temp_repo test_remote_repo2
     cd $BATS_TMPDIR/test_remote_repo

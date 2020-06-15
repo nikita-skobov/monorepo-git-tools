@@ -7,3 +7,5 @@ ecf_invalid_input_file=4
 ecf_failed_to_find_toplevel=5
 ecf_failed_to_make_output_branch=6
 ecf_failed_to_find_merge_branch=7
+ecf_invalid_branch=8
+ecf_success=0
