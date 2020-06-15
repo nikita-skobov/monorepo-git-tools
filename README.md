@@ -18,12 +18,12 @@ You must have `git-filter-repo` available on your path prior to using the tools 
 
 ## What does it do?
 
-The main tool provided in this project is `git split out`, which can split out a portion of your repository into a new branch, and it rewrites that branches history, only including certain paths that you define in a `repo_file`. In that regard it is similar to `git subtree`, but `git subtree split` can only take a single path prefix, whereas `git split` can take multiple paths, files, exclude others, and it can rename them, as needed.
+The main tool provided in this project is `git split` which can push out your monorepo into smaller subprojects, as well as bring in changes from your subprojects into your monorepo. Along with `git split` is provided `git topbase` which makes it easier to rebase changes from your subprojects back into your monorepo.
 
-`git split` can also split in a remote repository into your local repository, while preserving the history, and renaming the remote repository paths to match your code structure. A good use case for `git split in` is to take a remote repository, and rename the paths such that it places that repository in a subfolder of your local repository.
+For a more in-depth explanation, the full manuals can be found here:
 
-For a more in-depth explanation, the full manual can be found [here](https://htmlpreview.github.io/?https://github.com/nikita-skobov/git-monorepo-tools/blob/master/dist/git-split.html)
-
+- [git-split](https://htmlpreview.github.io/?https://github.com/nikita-skobov/git-monorepo-tools/blob/master/dist/git-split.html)
+- [git-topbase](https://htmlpreview.github.io/?https://github.com/nikita-skobov/git-monorepo-tools/blob/master/dist/git-topbase.html)
 
 ## Installation
 
