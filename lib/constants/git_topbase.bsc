@@ -102,7 +102,7 @@ which would find the closest branching point between remote and local. '\
 'they contain the same commit message, and the same author time.'\
 '
 
-The topbase command will rebase the top portion of the remote branch '\
+The topbase command will rebase the 23 top portion of the remote branch '\
 'and apply it on the top of the local branch, and put the resulting changes '\
 'into the remote branch. So the local branch is unchanged, but the remote '\
 'branch will become: '\
