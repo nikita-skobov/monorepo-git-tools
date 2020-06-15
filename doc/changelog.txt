@@ -1,3 +1,7 @@
+v1.3.0
+- adds git topbase script
+- adds description section to doc manpages
+
 v1.2.1
 - minor change to code structure, uses specific imports instead of importing whole files
 

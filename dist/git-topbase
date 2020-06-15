@@ -1,0 +1,456 @@
+#!/usr/bin/env bash
+# git-topbase
+# a custom git command to rebase all new commits from top branch onto bottom branch
+# 
+# Copyright (C) 2020, Nikita Skobov <nskobov.websites@gmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, specifically version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+# prefixed ECS: exit code success
+# or ECF: exit code failure
+ecf_missing_input=1
+ecf_invalid_repo_uri=2
+ecf_source_failure=3
+ecf_invalid_input_file=4
+ecf_failed_to_find_toplevel=5
+ecf_failed_to_make_output_branch=6
+ecf_failed_to_find_merge_branch=7
+ecf_invalid_branch=8
+ecf_success=0
+# variables related to documentation
+# used in the print_usage function
+doc_program_name="git topbase"
+doc_author="Nikita Skobov"
+doc_author_email="skobo002@umn.edu"
+doc_version="1.2.1"
+doc_last_updated="2020-05-30"
+doc_copyright="Copyright (C) 2020 $doc_author
+
+$doc_program_name is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under the terms of the
+GNU Affero General Public License as published by
+the Free Software Foundation, version 3, and no later.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>."
+doc_synopsis=(
+    "<top_branch> <bottom_branch>    [OPTIONS]"
+)
+doc_description='git topbase '\
+'is a git command that takes two branch names (top, and bottom), and '\
+'finds a branching point based on '\
+'commit message, and author date, and rebases everything from that '\
+'branching point onto the bottom branch. '\
+'This is useful when you try to bring in recent remote changes into '\
+'your local repository, and you only want the changes that have occurred '\
+'since the latest shared commit.
+
+For example, consider a local repository that has history:'\
+'
+
+A---B---C'\
+'
+
+and a remote repository that has history:'\
+'
+
+H---I---J---K---L'\
+'
+
+You want to bring in the remote repository into your local repository '\
+'so you use git split on that repository, and lets say you do not want '\
+'the full history, so you squash commits H,I,J,K,L into one, called X. '\
+'Then you make changes to their code, and you make two commits, and then '\
+'you split out their repository again, and submit your changes to them.'\
+'
+
+Your local repository now has history:'\
+'
+
+A---B---C---X---E---F
+'\
+'
+and if you split out the changes youve made on their code, you will have '\
+'
+
+X---E*---F*'\
+'
+
+which you rebase onto their current master, and you will be essentially '\
+'submitting a branch that looks like: '\
+'
+
+H---I---J---K---L---E*---F*'\
+'
+
+Now, suppose they accept your changes, and on top of your changes, they make 3'\
+'new commits, so now their master looks like:'\
+'
+
+H---I---J---K---L---E*---F*---M---N---O'\
+'
+
+Meanwhile, you have also made 1 commit on top of your local branch, which '\
+'now looks like this: '\
+'
+
+A---B---C---X---E---F---G'\
+'
+
+Now, consider you split in their current master into a branch of your '\
+'local repository. This split in branch would look like: '\
+'
+
+H*---I*---J*---K*---L*---E**---F**---M*---N*---O*'\
+'
+
+Where each commit is marked with an extra asterisk because if you split in their '\
+'repository into a subfolder, then the commit hashes will change. Now, topbase '\
+'was created to be able to take the latest commits M,N,O, and apply them on '\
+'top of your latest local commit: H. If the split in branch was named remote, and '\
+'your local master was named local, then the command you would run would be: '\
+'
+
+git topbase remote local'\
+'
+
+which would find the closest branching point between remote and local. '\
+'In this case, the branching point would be F, and F**. This is why topbase '\
+'is useful: because a simple git rebase would fail to recognize that F, and F** '\
+'are the same commits. git topbase can detect they are the same commits because '\
+'they contain the same commit message, and the same author time.'\
+'
+
+The topbase command will rebase the 23 top portion of the remote branch '\
+'and apply it on the top of the local branch, and put the resulting changes '\
+'into the remote branch. So the local branch is unchanged, but the remote '\
+'branch will become: '\
+'
+
+A---B---C---X---E---F---G---M**---N**---O**'\
+'
+
+Which, since your local branch was unchanged, you can then simply '\
+'fast forward merge the newly rebased remote branch back into local.'
+doc_commands=(
+    "None"
+)
+doc_global_options=(
+    "-h, --help"
+    "print help and exit"
+    "--version"
+    "print the version and exit"
+    "--dry-run"
+    "does not actually modify/do anything. Just outputs the commands that it would do without the --dry-run option present."
+)
+doc_options_1=(
+    "Options:"
+    ""
+    "None"
+)
+doc_custom_sections=(
+    "doc_options_1"
+)
+
+
+# prints the usage and exits
+# takes argument: $1
+# the exit code
+
+print_usage_and_exit () 
+{ 
+    local exit_code="${1:-"0"}";
+    local usage_string="$doc_program_name";
+    local synopsis="";
+    local global_options="";
+    local extra_sections="
+For the full help, see the manpage.";
+    local ind=0;
+    for i in "${doc_synopsis[@]}";
+    do
+        if [[ $ind -eq 0 ]]; then
+            synopsis="${synopsis}usage: $doc_program_name $i
+";
+        else
+            synopsis="$synopsis   or: $doc_program_name $i
+";
+        fi;
+        ((ind+=1));
+    done;
+    ind=0;
+    for i in "${doc_global_options[@]}";
+    do
+        if [[ $ind -eq 0 ]]; then
+            global_options="$global_options
+$i";
+            ind=1;
+        else
+            global_options="$global_options
+	$i
+";
+            ind=0;
+        fi;
+    done;
+    local usage_string="$synopsis
+Global Options:
+$global_options
+$extra_sections";
+    echo -e "$usage_string";
+    exit $exit_code
+}
+
+
+# prints the usage and exits
+# takes argument: $1
+# the exit code
+
+get_log_no_merges_with_format () 
+{ 
+    git log "$1" --no-merges --pretty=format:"$2"
+}
+
+
+# prints the usage and exits
+# takes argument: $1
+# the exit code
+
+branch_exists () 
+{ 
+    local it_exists=$(git branch --list $1 2>&1);
+    if [[ ! -z $it_exists ]]; then
+        return 0;
+    fi;
+    return 1
+}
+
+# uses the globally defined top_commit_* arrays
+# to get the next commit information. Increments top_index
+# every time it is called.
+get_next_top_commit() {
+    top_commit_time="${top_commit_times[top_index]}"
+    top_commit_msg="${top_commit_msgs[top_index]}"
+    top_commit_hash="${top_commit_hashes[top_index]}"
+    ((top_index += 1))
+}
+
+# args $1: the name of the bottom branch.
+# Function will get git log for that branch, and
+# fill the arrays bottom_commit_msgs, and bottom_commit_times
+get_bottom_commits() {
+    local output=$(get_log_no_merges_with_format "$1" "%s")
+
+    IFS=$'\n'
+    for i in $output ; do
+        bottom_commit_msgs+=("$i")
+    done
+
+    local output=$(get_log_no_merges_with_format "$1" "%at")
+    for i in $output ; do
+        bottom_commit_times+=("$i")
+    done
+}
+
+# args $1: the name of the top branch.
+# Function will get git log for that branch, and
+# fill the arrays top_commit_msgs, top_commit_hashes,
+# and top_commit_times.
+get_top_commits() {
+    local output=$(get_log_no_merges_with_format "$1" "%h")
+    for i in $output ; do
+        top_commit_hashes+=("$i")
+    done
+
+    local output=$(get_log_no_merges_with_format "$1" "%s")
+
+    IFS=$'\n'
+    for i in $output ; do
+        top_commit_msgs+=("$i")
+    done
+
+    local output=$(get_log_no_merges_with_format "$1" "%at")
+    for i in $output ; do
+        top_commit_times+=("$i")
+    done
+}
+
+# iterate over the bottom commit arrays (they should all be
+# the same length) and if the current top commit does
+# NOT EXIST in the bottom branch, then add it to the
+# rebase_data global variable. if the commit DOES EXIST
+# then return true.
+top_commit_exists_in_bottom() {
+    local ind=0
+    while [[ $ind -lt ${#bottom_commit_times[@]} ]]; do
+        local bottom_commit_msg="${bottom_commit_msgs[ind]}"
+        local bottom_commit_time="${bottom_commit_times[ind]}"
+        # the criteria we use for whether or not a top commit exists
+        # in the bottom branch is if its author time and commit
+        # messages match. TODO: figure out how to calculate diffs
+        # on the actual contents changes, because maybe the user
+        # modified commit messages/author times?
+        if [[
+            $bottom_commit_time == $top_commit_time && \
+            $bottom_commit_msg == $top_commit_msg
+        ]]; then
+            return 0
+        fi
+        ((ind += 1))
+    done
+
+# needs to be not indented to format string properly:
+rebase_data="pick $top_commit_hash $top_commit_msg
+$rebase_data"
+
+    return 1
+}
+
+topbase() {
+    top="$1"
+    bottom="$2"
+
+    if ! branch_exists "$top"; then
+        echo "Failed to find branch: $top"
+        echo ""
+        print_usage_and_exit $ecf_invalid_branch
+    elif ! branch_exists "$bottom"; then
+        echo "Failed to find branch: $bottom"
+        echo ""
+        print_usage_and_exit $ecf_invalid_branch
+    fi
+
+    ## TODO: add option to create a new branch from $top
+    ## and then if that option is present, check if that new branch
+    ## name exists:
+    # if [[ -z $dry_run ]] && branch_exists "$top-topbased"; then
+    #     echo "Temporary branch: $top-topbased already exists"
+    #     echo "Please delete this branch before continuing"
+    #     echo ""
+    #     print_usage_and_exit $ecf_invalid_branch
+    # fi
+
+    bottom_commit_msgs=()
+    bottom_commit_times=()
+    top_commit_times=()
+    top_commit_msgs=()
+    top_commit_hashes=()
+    top_index=0
+    pick="pick"
+    rebase_data=""
+
+    get_top_commits "$top"
+    get_bottom_commits "$bottom"
+
+    # iterate from the top commits
+    # of the top branch
+    # as soon as you find a commit that exists in bottom
+    # break out
+    while [[ $top_index -lt ${#top_commit_times[@]} ]]; do
+        get_next_top_commit
+        if top_commit_exists_in_bottom; then
+            ((top_index -= 1))
+            break
+        fi
+    done
+
+    if [[ $top_index == 0 ]]; then
+        echo "There are no commits on top of $top that $bottom does not have"
+        exit $ecf_success
+    fi
+
+    if [[ ! -z $dry_run ]]; then
+        echo "rebase_data=\"$rebase_data\""
+        echo ""
+        echo "rebase_command=\"echo \\\"\$rebase_data\\\"\""
+        echo "GIT_SEQUENCE_EDITOR=\"\$rebase_command >\" git rebase -i --onto $bottom $top~$top_index $top"
+        exit $ecf_success
+    fi
+
+    echo "Rebasing the top $top_index commits from $top onto $bottom"
+    echo ""
+    rebase_command="echo \"$rebase_data\""
+    GIT_SEQUENCE_EDITOR="$rebase_command >" git rebase -i --onto $bottom $top~$top_index $top
+}
+
+# usage
+# get_arg file_extension,e "$@"
+# matches: "--file-extension <value>" or "-e <value>"
+# to use the output:
+# echo "what is my file extension? $file_extension"
+# note in the usage, the long form will be the variable
+# name, so short form must come after long form, if at all
+
+get_arg () 
+{ 
+    local looking_for=();
+    IFS=',' read -ra looking_for <<< "$1";
+    shift;
+    local -n outvar=${looking_for[0]};
+    while (( "$#" )); do
+        case "$1" in 
+            -* | --*=)
+                local opt_value="$2";
+                local opt_name="${1,,}";
+                local stripped_name="${opt_name//-/_}";
+                local strip_underscores="_";
+                stripped_name="${stripped_name/$strip_underscores}";
+                if [[ $stripped_name == "_"* ]]; then
+                    stripped_name="${stripped_name/$strip_underscores}";
+                fi;
+                local found_match=false;
+                for match in ${looking_for[@]};
+                do
+                    if [[ $stripped_name == $match ]]; then
+                        if [[ -z $opt_value || $opt_value == "-"* ]]; then
+                            outvar=true;
+                        else
+                            outvar="$opt_value";
+                        fi;
+                        found_match=true;
+                        break;
+                    fi;
+                done;
+                if [[ $found_match == true ]]; then
+                    break;
+                fi;
+                if [[ $opt_value == "-"* ]]; then
+                    shift;
+                else
+                    shift;
+                    shift;
+                fi
+            ;;
+            *)
+                shift
+            ;;
+        esac;
+    done
+}
+
+echo ""
+
+top="$1"
+bottom="$2"
+get_arg dry_run "$@"
+get_arg version "$@"
+
+if [[ ! -z $version ]]; then
+    echo "$doc_program_name version $doc_version ($doc_last_updated)"
+    echo "$doc_copyright"
+    exit 0
+fi
+
+if [[ -z $top || -z $bottom ]]; then
+    print_usage_and_exit $ecf_missing_input
+else
+    topbase "$@"
+fi
