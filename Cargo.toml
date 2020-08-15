@@ -1,0 +1,12 @@
+[package]
+name = "my-git-tools"
+description = "Git tools that enable easy bidirectional sync between multiple repositories"
+version = "0.1.0"
+authors = ["Nikita Skobov"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+git2 = "0.13"
+clap = "2.33"
