@@ -335,3 +335,80 @@ function teardown() {
     [[ -f this/path/will/be/created/rootfile1.txt ]]
     [[ ! -d this/path/will/be/created/lib ]]
 }
+
+@test 'can include only parts of remote repos (file)' {
+    # save current dir to cd back to later
+    curr_dir="$PWD"
+    # setup the test remote repo:
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    mkdir -p lib
+    echo "rootfile1.txt" > rootfile1.txt
+    echo "libfile1.txt" > lib/libfile1.txt
+    echo "libfile2.txt" > lib/libfile2.txt
+    git add .
+    git commit -m "adds 2 lib files and 1 root file"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    repo_name=\"doesnt_matter\"
+    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    include_as=(
+        \"locallibfile2.txt\" \"lib/libfile2.txt\"
+    )
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+
+    run $BATS_TEST_DIRNAME/git-split in repo_file.sh
+
+    echo "split in output:"
+    echo "$output"
+
+    # since we excluded lib, it shouldnt be there
+    # but rootfile1 should
+    [[ ! -d lib ]]
+    [[ -f locallibfile2.txt ]]
+    [[ ! -f libfile1.txt ]]
+    [[ ! -f rootfile1.txt ]]
+}
+
+@test 'can include only parts of remote repos (folder)' {
+    # save current dir to cd back to later
+    curr_dir="$PWD"
+    # setup the test remote repo:
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    mkdir -p lib
+    echo "rootfile1.txt" > rootfile1.txt
+    echo "libfile1.txt" > lib/libfile1.txt
+    echo "libfile2.txt" > lib/libfile2.txt
+    git add .
+    git commit -m "adds 2 lib files and 1 root file"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    repo_name=\"doesnt_matter\"
+    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    include_as=(
+        \"locallib\" \"./lib\"
+    )
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+
+    run $BATS_TEST_DIRNAME/git-split in repo_file.sh
+
+    echo "split in output:"
+    echo "$output"
+
+    # since we excluded lib, it shouldnt be there
+    # but rootfile1 should
+    [[ -d locallib ]]
+
+    # This fails right now because
+    # it converts ./lib to ./locallib/lib
+    # but it should just rename ./lib to ./locallib
+    [[ -f locallib/libfile1.txt ]]
+    [[ -f locallib/libfile2.txt ]]
+    [[ ! -f libfile1.txt ]]
+    [[ ! -f rootfile1.txt ]]
+}
