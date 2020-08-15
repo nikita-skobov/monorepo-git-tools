@@ -254,3 +254,42 @@ function teardown() {
     [[ $output == "test_remote_repo2-reverse" ]]
 }
 
+@test 'can split in and exclude files' {
+    # save current dir to cd back to later
+    curr_dir="$PWD"
+    # setup the test remote repo:
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    echo "rootfile1.txt" > rootfile1.txt
+    echo "rootfile2.txt" > rootfile2.txt
+    git add .
+    git commit -m "adds 2 root files"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    repo_name=\"doesnt_matter\"
+    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    include_as=(
+        \"this/path/will/be/created/\" \"\"
+    )
+    exclude=\"rootfile1.txt\"
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+
+    # a directory called this should not exist at first
+    [[ ! -d this ]]
+
+    run $BATS_TEST_DIRNAME/git-split in repo_file.sh
+
+    echo "split in output:"
+    echo "$output"
+
+    # now it should exist:
+    [[ -d this ]]
+
+    # since we excluded rootfile1, it shouldnt be there
+    # but rootfile2 should
+    [[ -d this/path/will/be/created ]]
+    [[ ! -f this/path/will/be/created/rootfile1.txt ]]
+    [[ -f this/path/will/be/created/rootfile2.txt ]]
+}
