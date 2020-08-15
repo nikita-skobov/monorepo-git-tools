@@ -190,12 +190,28 @@ split_in() {
     fi
     populate_empty_branch_with_remote_commits $remote_uri
     generate_repo_split_args_in
+    generate_repo_split_exclude
     generate_repo_split_strings_in
+
+    # exclude anything specified by the exclude paths:
+    if [[ ! -z $exclude_path_str ]]; then
+        echo "git filter-repo $exclude_path_str --invert-paths --refs $output_branch_name --force"
+        if [[ -z $dry_run ]]; then
+            git filter-repo $exclude_path_str --invert-paths --refs $output_branch_name --force
+        fi
+    fi
 
     if [[ ! -z $include_as_path_str ]]; then
         echo "git filter-repo --force --refs $output_branch_name $include_as_path_str"
         if [[ -z $dry_run ]]; then
             git filter-repo --force --refs $output_branch_name $include_as_path_str
+        fi
+    fi
+
+    if [[ ! -z $include_as_only_path_str ]]; then
+        echo "git filter-repo --force --refs $output_branch_name $include_as_only_path_str"
+        if [[ -z $dry_run ]]; then
+            git filter-repo --force --refs $output_branch_name $include_as_only_path_str
         fi
     fi
 }
