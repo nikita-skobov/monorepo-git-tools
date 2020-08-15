@@ -293,3 +293,45 @@ function teardown() {
     [[ ! -f this/path/will/be/created/rootfile1.txt ]]
     [[ -f this/path/will/be/created/rootfile2.txt ]]
 }
+
+@test 'can split in and exclude folders' {
+    # save current dir to cd back to later
+    curr_dir="$PWD"
+    # setup the test remote repo:
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    mkdir -p lib
+    echo "rootfile1.txt" > rootfile1.txt
+    echo "libfile1.txt" > lib/libfile1.txt
+    echo "libfile2.txt" > lib/libfile2.txt
+    git add .
+    git commit -m "adds 2 lib files and 1 root file"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    repo_name=\"doesnt_matter\"
+    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    include_as=(
+        \"this/path/will/be/created/\" \"\"
+    )
+    exclude=\"lib\"
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+
+    # a directory called this should not exist at first
+    [[ ! -d this ]]
+
+    run $BATS_TEST_DIRNAME/git-split in repo_file.sh
+
+    echo "split in output:"
+    echo "$output"
+
+    # now it should exist:
+    [[ -d this ]]
+
+    # since we excluded lib, it shouldnt be there
+    # but rootfile1 should
+    [[ -d this/path/will/be/created ]]
+    [[ -f this/path/will/be/created/rootfile1.txt ]]
+    [[ ! -d this/path/will/be/created/lib ]]
+}
