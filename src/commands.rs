@@ -2,7 +2,10 @@ use clap::{Arg, App, SubCommand, ArgMatches};
 
 const SPLIT_IN_STR: &'static str = "split-in";
 const SPLIT_OUT_STR: &'static str = "split-out";
+const SPLIT_OUT_DESCRIPTION: &'static str = "split-out descruiptuin";
+const SPLIT_IN_DESCRIPTION: &'static str = "split-in decsription";
 
+#[derive(Clone)]
 pub enum CommandName {
     SplitIn,
     SplitOut,
@@ -31,21 +34,34 @@ impl From<&str> for CommandName {
     }
 }
 
+impl CommandName {
+    pub fn description(&self) -> &'static str {
+        match self {
+            SplitIn => SPLIT_IN_DESCRIPTION,
+            SplitOut => SPLIT_OUT_DESCRIPTION,
+            _ => "",
+        }
+    }
+}
 
-pub fn split_in<'a, 'b>() -> App<'a, 'b> {
-    return SubCommand::with_name(SplitIn.into())
-        .about("splits a remote repo into this local repo")
+fn base_command<'a, 'b>(cmd: CommandName) -> App<'a, 'b> {
+    let name = cmd.clone().into();
+    return SubCommand::with_name(name)
+        .about(cmd.description())
         .arg(
             Arg::with_name("repo_file")
         );
 }
 
+pub fn split_in<'a, 'b>() -> App<'a, 'b> {
+    let base = base_command(SplitIn);
+    // specific arguments and stuff can go here
+    return base;
+}
+
 pub fn split_out<'a, 'b>() -> App<'a, 'b> {
-    return SubCommand::with_name(SplitOut.into())
-        .about("splits this local repo out into a subrepo")
-        .arg(
-            Arg::with_name("repo_file")
-        );
+    let base = base_command(SplitOut);
+    return base;
 }
 
 pub fn run_command(name: &str, matches: &ArgMatches) {
