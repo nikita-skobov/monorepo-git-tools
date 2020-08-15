@@ -77,8 +77,8 @@ rfv_exclude=(
 doc_program_name="git split"
 doc_author="Nikita Skobov"
 doc_author_email="skobo002@umn.edu"
-doc_version="1.2.1"
-doc_last_updated="2020-05-30"
+doc_version="1.4.0"
+doc_last_updated="2020-08-15"
 doc_copyright="Copyright (C) 2020 $doc_author
 
 $doc_program_name is free software and comes with ABSOLUTELY NO WARRANTY.
@@ -312,21 +312,21 @@ generate_repo_split_strings_out ()
     for i in ${repo_split_include[@]};
     do
         if [[ -z $dry_run ]]; then
-            echo "INCLUDING: $i";
+            echo "# INCLUDING: $i";
         fi;
         include_path_str="$include_path_str--path $i ";
     done;
     for i in ${repo_split_include_as[@]};
     do
         if [[ -z $dry_run ]]; then
-            echo "INCLUDING AS: $i";
+            echo "# INCLUDING AS: $i";
         fi;
         include_as_path_str="$include_as_path_str--path-rename $i ";
     done;
     for i in ${repo_split_exclude[@]};
     do
         if [[ -z $dry_run ]]; then
-            echo "EXCLUDING: $i";
+            echo "# EXCLUDING: $i";
         fi;
         exclude_path_str="$exclude_path_str--path $i ";
     done
@@ -557,6 +557,7 @@ generate_repo_split_args_in ()
 { 
     repo_split_include=();
     repo_split_include_as=();
+    repo_split_include_as_only=();
     generate_repo_split_include;
     if [[ ! -z $include_as ]] && is_array "include_as"; then
         include_as_len=${#include_as[@]};
@@ -581,7 +582,7 @@ generate_repo_split_args_in ()
                     i="./";
                 fi;
                 if [[ -d $i ]]; then
-                    echo "INCLUDING EVERYTHING IN DIRECTORY $i AS $previous_i";
+                    echo "# INCLUDING EVERYTHING IN DIRECTORY $i AS $previous_i";
                     for item in "${i%*/}"/* "${i%*/}"/.[^.]*;
                     do
                         remove_common=true;
@@ -606,19 +607,22 @@ generate_repo_split_args_in ()
                                             echo "$previous_i$file";
                                         fi;
                                         repo_split_include_as+=("$input_file:$previous_i$file");
+                                        repo_split_include_as_only+=("$previous_i$file");
                                     else
                                         if [[ ! -z $verbose ]]; then
                                             echo "$previous_i/$file";
                                         fi;
                                         repo_split_include_as+=("$input_file:$previous_i/$file");
+                                        repo_split_include_as_only+=("$previous_i/$file");
                                     fi;
                                 fi;
                             fi;
                         done;
                     done;
                 else
-                    echo "INCLUDING $i AS $previous_i";
+                    echo "# INCLUDING $i AS $previous_i";
                     repo_split_include_as+=("$i:$previous_i");
+                    repo_split_include_as_only+=("$previous_i");
                 fi;
             fi;
             ((include_as_index+=1));
@@ -629,9 +633,21 @@ generate_repo_split_args_in ()
 generate_repo_split_strings_in () 
 { 
     include_as_path_str="";
+    include_as_only_path_str="";
     for i in ${repo_split_include_as[@]};
     do
         include_as_path_str="$include_as_path_str--path-rename $i ";
+    done;
+    for i in ${repo_split_include_as_only[@]};
+    do
+        include_as_only_path_str="$include_as_only_path_str--path $i ";
+    done;
+    for i in ${repo_split_exclude[@]};
+    do
+        if [[ -z $dry_run ]]; then
+            echo "# EXCLUDING: $i";
+        fi;
+        exclude_path_str="$exclude_path_str--path $i ";
     done
 }
 
@@ -808,12 +824,28 @@ split_in() {
     fi
     populate_empty_branch_with_remote_commits $remote_uri
     generate_repo_split_args_in
+    generate_repo_split_exclude
     generate_repo_split_strings_in
+
+    # exclude anything specified by the exclude paths:
+    if [[ ! -z $exclude_path_str ]]; then
+        echo "git filter-repo $exclude_path_str --invert-paths --refs $output_branch_name --force"
+        if [[ -z $dry_run ]]; then
+            git filter-repo $exclude_path_str --invert-paths --refs $output_branch_name --force
+        fi
+    fi
 
     if [[ ! -z $include_as_path_str ]]; then
         echo "git filter-repo --force --refs $output_branch_name $include_as_path_str"
         if [[ -z $dry_run ]]; then
             git filter-repo --force --refs $output_branch_name $include_as_path_str
+        fi
+    fi
+
+    if [[ ! -z $include_as_only_path_str ]]; then
+        echo "git filter-repo --force --refs $output_branch_name $include_as_only_path_str"
+        if [[ -z $dry_run ]]; then
+            git filter-repo --force --refs $output_branch_name $include_as_only_path_str
         fi
     fi
 }
