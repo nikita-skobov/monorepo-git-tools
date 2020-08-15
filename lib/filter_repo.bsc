@@ -70,6 +70,7 @@ generate_repo_split_args_out() {
 generate_repo_split_args_in() {
     repo_split_include=()
     repo_split_include_as=()
+    repo_split_include_as_only=()
 
     # generate the repo_split_include array:
     generate_repo_split_include
@@ -140,10 +141,12 @@ generate_repo_split_args_in() {
                                         # echo "including $input_file as $previous_i$file"
                                         # no need to add a slash, it already has one
                                         repo_split_include_as+=("$input_file:$previous_i$file")
+                                        repo_split_include_as_only+=("$previous_i$file")
                                     else
                                         if [[ ! -z $verbose ]]; then echo "$previous_i/$file" ; fi
                                         # echo "including $input_file as $previous_i/$file"
                                         repo_split_include_as+=("$input_file:$previous_i/$file")
+                                        repo_split_include_as_only+=("$previous_i/$file")
                                     fi
                                 fi
                             fi
@@ -154,6 +157,7 @@ generate_repo_split_args_in() {
                     # echo "$i is a file, adding $i:$previous_i"
                     # echo "LOCAL $i IS A FILE, ADD REPO SPLIT ARGS AS IS:"
                     repo_split_include_as+=("$i:$previous_i")
+                    repo_split_include_as_only+=("$previous_i")
                 fi
             fi
             ((include_as_index+=1))
@@ -188,12 +192,17 @@ generate_repo_split_strings_out() {
 
 # using the previously defined array: repo_split_include_as,
 # and repo_split_exclude.
-# creates the variable: include_as_path_str, and exclude_path_str
+# creates the variable: include_as_path_str,
+# include_as_only_path_str, and exclude_path_str
 # which is used in the call(s) to git-filter-repo
 generate_repo_split_strings_in() {
     include_as_path_str=""
+    include_as_only_path_str=""
     for i in ${repo_split_include_as[@]}; do
         include_as_path_str="$include_as_path_str--path-rename $i "
+    done
+    for i in ${repo_split_include_as_only[@]}; do
+        include_as_only_path_str="$include_as_only_path_str--path $i "
     done
     for i in ${repo_split_exclude[@]}; do
         if [[ -z $dry_run ]]; then echo "EXCLUDING: $i"; fi

@@ -207,4 +207,11 @@ split_in() {
             git filter-repo --force --refs $output_branch_name $include_as_path_str
         fi
     fi
+
+    if [[ ! -z $include_as_only_path_str ]]; then
+        echo "git filter-repo --force --refs $output_branch_name $include_as_only_path_str"
+        if [[ -z $dry_run ]]; then
+            git filter-repo --force --refs $output_branch_name $include_as_only_path_str
+        fi
+    fi
 }
