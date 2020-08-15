@@ -106,7 +106,7 @@ generate_repo_split_args_in() {
                     i="./"
                 fi
                 if [[ -d $i ]]; then
-                    echo "INCLUDING EVERYTHING IN DIRECTORY $i AS $previous_i"
+                    echo "# INCLUDING EVERYTHING IN DIRECTORY $i AS $previous_i"
                     # iterate all files in i, including files that start with dot
                     for item in "${i%*/}"/* "${i%*/}"/.[^.]*; do
                         # remove the common prefix/suffic
@@ -153,7 +153,7 @@ generate_repo_split_args_in() {
                         done
                     done
                 else
-                    echo "INCLUDING $i AS $previous_i"
+                    echo "# INCLUDING $i AS $previous_i"
                     # echo "$i is a file, adding $i:$previous_i"
                     # echo "LOCAL $i IS A FILE, ADD REPO SPLIT ARGS AS IS:"
                     repo_split_include_as+=("$i:$previous_i")
@@ -177,15 +177,15 @@ generate_repo_split_strings_out() {
     include_path_str=""
     include_as_path_str=""
     for i in ${repo_split_include[@]}; do
-        if [[ -z $dry_run ]]; then echo "INCLUDING: $i"; fi
+        if [[ -z $dry_run ]]; then echo "# INCLUDING: $i"; fi
         include_path_str="$include_path_str--path $i "
     done
     for i in ${repo_split_include_as[@]}; do
-        if [[ -z $dry_run ]]; then echo "INCLUDING AS: $i"; fi
+        if [[ -z $dry_run ]]; then echo "# INCLUDING AS: $i"; fi
         include_as_path_str="$include_as_path_str--path-rename $i "
     done
     for i in ${repo_split_exclude[@]}; do
-        if [[ -z $dry_run ]]; then echo "EXCLUDING: $i"; fi
+        if [[ -z $dry_run ]]; then echo "# EXCLUDING: $i"; fi
         exclude_path_str="$exclude_path_str--path $i "
     done
 }
@@ -205,7 +205,7 @@ generate_repo_split_strings_in() {
         include_as_only_path_str="$include_as_only_path_str--path $i "
     done
     for i in ${repo_split_exclude[@]}; do
-        if [[ -z $dry_run ]]; then echo "EXCLUDING: $i"; fi
+        if [[ -z $dry_run ]]; then echo "# EXCLUDING: $i"; fi
         exclude_path_str="$exclude_path_str--path $i "
     done
 }
