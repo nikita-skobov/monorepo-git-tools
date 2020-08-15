@@ -187,11 +187,16 @@ generate_repo_split_strings_out() {
 }
 
 # using the previously defined array: repo_split_include_as,
-# creates the variable: include_as_path_str
+# and repo_split_exclude.
+# creates the variable: include_as_path_str, and exclude_path_str
 # which is used in the call(s) to git-filter-repo
 generate_repo_split_strings_in() {
     include_as_path_str=""
     for i in ${repo_split_include_as[@]}; do
         include_as_path_str="$include_as_path_str--path-rename $i "
+    done
+    for i in ${repo_split_exclude[@]}; do
+        if [[ -z $dry_run ]]; then echo "EXCLUDING: $i"; fi
+        exclude_path_str="$exclude_path_str--path $i "
     done
 }
