@@ -10,36 +10,27 @@ print_usage_and_exit() {
     local extra_sections="\nFor the full help, see the manpage."
     local ind=0
 
-# needs to be indented poorly
-# so that newlines work properly in strings:
-for i in "${doc_synopsis[@]}"; do
-if [[ $ind -eq 0 ]]; then
-synopsis="${synopsis}usage: $doc_program_name $i
-"
-else
-synopsis="$synopsis   or: $doc_program_name $i
-"
-fi
-((ind+=1))
-done
-ind=0
-for i in "${doc_global_options[@]}"; do
-if [[ $ind -eq 0 ]]; then
-global_options="$global_options
-$i"
-ind=1
-else
-global_options="$global_options
-\t$i
-"
-ind=0
-fi
-done
+    for i in "${doc_synopsis[@]}"; do
+        if [[ $ind -eq 0 ]]; then
+            synopsis="${synopsis}usage: $doc_program_name $i\n"
+        else
+            synopsis="$synopsis   or: $doc_program_name $i\n"
+        fi
+        ((ind+=1))
+    done
 
-local usage_string="$synopsis
-Global Options:
-$global_options
-$extra_sections"
+    ind=0
+    for i in "${doc_global_options[@]}"; do
+        if [[ $ind -eq 0 ]]; then
+            global_options="$global_options\n$i"
+            ind=1
+        else
+        global_options="$global_options\n\t$i\n"
+        ind=0
+        fi
+    done
+
+    local usage_string="$synopsis\nGlobal Options:\n$global_options\n$extra_sections"
 
     echo -e "$usage_string"
     exit $exit_code
