@@ -20,13 +20,7 @@ fn get_cli_input<'a>() -> ArgMatches<'a> {
 fn main() {
     let matches = get_cli_input();
 
-    if let Some(submatches) = matches.subcommand_matches("split") {
-        let iterator = submatches.value_of("repo_file").unwrap_or("");
-        println!("{:?}", iterator);
+    if let Some(command_name) = matches.subcommand_name() {
+        commands::run_command(command_name, &matches);
     }
-
-    let repo = match Repository::discover(".") {
-        Ok(repo) => repo,
-        Err(e) => panic!("failed to open: {}", e),
-    };
 }
