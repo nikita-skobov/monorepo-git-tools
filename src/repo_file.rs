@@ -4,8 +4,9 @@ use std::io::{BufRead, BufReader};
 
 #[derive(Debug, PartialEq)]
 pub struct RepoFile {
-    remote_repo: String,
-    include_as: Vec<String>,
+    remote_repo: Option<String>,
+    include_as: Option<Vec<String>>,
+    include: Option<Vec<String>>,
 }
 
 const RFVN_REMOTE_REPO: &'static str = "remote_repo";
@@ -167,8 +168,8 @@ fn parse_variable(variable: &mut RepoFileVariable, text: &String) {
 
 fn add_variable_to_repo_file(repofile: &mut RepoFile, variable: &mut RepoFileVariable) {
     match variable.name {
-        VarRemoteRepo => repofile.remote_repo = variable.value[0].clone(),
-        VarIncludeAs => repofile.include_as = variable.value.clone(),
+        VarRemoteRepo => repofile.remote_repo = Some(variable.value[0].clone()),
+        VarIncludeAs => repofile.include_as = Some(variable.value.clone()),
         _ => (),
     }
 
@@ -212,8 +213,9 @@ pub fn parse_repo_file(filename: &str) -> RepoFile {
 
 pub fn parse_repo_file_from_lines(lines: Vec<String>) -> RepoFile {
     let mut repofile_obj = RepoFile {
-        remote_repo: EMPTY_STRING.to_string(),
-        include_as: vec![EMPTY_STRING.to_string()],
+        remote_repo: None,
+        include_as: None,
+        include: None,
     };
 
     // this will be modified by the parse_variable func above
@@ -274,10 +276,11 @@ mod test {
             "              )".into(),
         ];
         let expectedrepofileobj = RepoFile {
-            remote_repo: "something".into(),
-            include_as: vec![
+            remote_repo: Some("something".into()),
+            include_as: Some(vec![
                 "one".into(), "two".into(), "three".into()
-            ],
+            ]),
+            include: None,
         };
         let repofileobj = parse_repo_file_from_lines(lines);
         assert_eq!(expectedrepofileobj, repofileobj);
