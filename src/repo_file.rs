@@ -166,11 +166,10 @@ fn parse_variable(variable: &mut RepoFileVariable, text: &String) {
 }
 
 fn add_variable_to_repo_file(repofile: &mut RepoFile, variable: &mut RepoFileVariable) {
-    if variable.var_type == TypeArray {
-        repofile.include_as = variable.value.clone();
-    }
-    if variable.var_type == TypeString {
-        repofile.remote_repo = variable.value[0].clone();
+    match variable.name {
+        VarRemoteRepo => repofile.remote_repo = variable.value[0].clone(),
+        VarIncludeAs => repofile.include_as = variable.value.clone(),
+        _ => (),
     }
 
     variable.name = VarUnknown;
