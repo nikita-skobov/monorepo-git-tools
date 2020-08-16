@@ -18,10 +18,12 @@ fi
 
 
 run_unit_tests() {
-    cargo test 2>/dev/null
+    cargo test 2>tempfile.txt
     if [[ $? != "0" ]]; then
-        echo "Unit tests not successful"
+        echo "Unit tests not successful:"
+        echo "$(<tempfile.txt)"
         echo "Next tests will not run"
+        rm tempfile.txt
         exit 1
     fi
 }
