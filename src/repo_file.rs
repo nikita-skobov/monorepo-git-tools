@@ -2,7 +2,7 @@ use std::path::Path;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct RepoFile {
     remote_repo: String,
     include_as: Vec<String>,
@@ -244,6 +244,7 @@ pub fn parse_repo_file_from_lines(lines: Vec<String>) -> RepoFile {
 
 #[cfg(test)]
 mod test {
+    use super::RepoFile;
     use super::parse_repo_file_from_lines;
 
     #[test]
@@ -252,6 +253,34 @@ mod test {
         let lines: Vec<String> = vec![
             "my_unknown_var=something".into()
         ];
-        let repofile = parse_repo_file_from_lines(lines);
+        parse_repo_file_from_lines(lines);
+    }
+
+    #[test]
+    #[should_panic(expected = "Failed to parse line")]
+    fn should_panic_if_variable_type_unknown() {
+        let lines: Vec<String> = vec![
+            "remote_repo=something".into()
+        ];
+        parse_repo_file_from_lines(lines);
+    }
+
+    #[test]
+    fn should_return_repo_file_obj() {
+        let lines: Vec<String> = vec![
+            "remote_repo=\"something\"".into(),
+            "include_as=(".into(),
+            "    \"one\"".into(),
+            "    \"two\" \"three\"".into(),
+            "              )".into(),
+        ];
+        let expectedrepofileobj = RepoFile {
+            remote_repo: "something".into(),
+            include_as: vec![
+                "one".into(), "two".into(), "three".into()
+            ],
+        };
+        let repofileobj = parse_repo_file_from_lines(lines);
+        assert_eq!(expectedrepofileobj, repofileobj);
     }
 }
