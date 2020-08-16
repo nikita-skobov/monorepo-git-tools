@@ -11,9 +11,14 @@ pub fn try_get_repo_name_from_remote_repo(remote_repo: String) -> String {
 pub fn validate_repo_file(matches: &ArgMatches, repofile: &mut RepoFile) {
     let missing_repo_name = repofile.repo_name.is_none();
     let missing_remote_repo = repofile.remote_repo.is_none();
+    let missing_include_as = repofile.include_as.is_none();
+    let missing_include = repofile.include.is_none();
 
     if missing_remote_repo && missing_repo_name {
         panic!("Must provide either repo_name or remote_repo in your repofile");
+    }
+    if missing_include && missing_include_as {
+        panic!("Must provide either include or include_as in your repofile");
     }
 
     if missing_repo_name && !missing_remote_repo {
@@ -21,6 +26,7 @@ pub fn validate_repo_file(matches: &ArgMatches, repofile: &mut RepoFile) {
             repofile.remote_repo.clone().unwrap()
         ));
     }
+
 }
 
 pub fn run_split_out(matches: &ArgMatches) {
@@ -39,9 +45,18 @@ mod tests {
     use super::*;
 
     #[test]
-    #[should_panic(expected = "Must provide either")]
+    #[should_panic(expected = "Must provide either repo")]
     fn should_panic_if_no_repo_name_or_remote_repo() {
         let mut repofile = RepoFile::new();
+        let argmatches = ArgMatches::new();
+        validate_repo_file(&argmatches, &mut repofile);
+    }
+
+    #[test]
+    #[should_panic(expected = "Must provide either include")]
+    fn should_panic_if_no_include_or_include_as() {
+        let mut repofile = RepoFile::new();
+        repofile.repo_name = Some("reponame".into());
         let argmatches = ArgMatches::new();
         validate_repo_file(&argmatches, &mut repofile);
     }
@@ -50,6 +65,7 @@ mod tests {
     #[should_panic(expected = "Failed to parse repo_name from remote_repo")]
     fn should_panic_if_failed_to_parse_repo_name_from_remote_repo() {
         let mut repofile = RepoFile::new();
+        repofile.include = Some(vec!["sdsa".into()]);
         repofile.remote_repo = Some("badurl".into());
         let argmatches = ArgMatches::new();
         validate_repo_file(&argmatches, &mut repofile);
