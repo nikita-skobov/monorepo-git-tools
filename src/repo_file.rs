@@ -1,5 +1,4 @@
 use std::path::Path;
-use std::process;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
@@ -139,14 +138,12 @@ fn parse_variable(variable: &mut RepoFileVariable, text: &String) {
     }
 
     if variable.var_type == TypeUnknown {
-        println!("Failed to parse line: {}", text);
-        process::exit(1);
+        panic!("Failed to parse line: {}", text);
     }
 
     let strings = get_all_strings(&text);
     if let None = strings {
-        println!("Failed to parse variable at line:\n{}", text);
-        process::exit(1);
+        panic!("Failed to parse variable at line:\n{}", text);
     }
 
     match variable.var_type {
@@ -200,14 +197,12 @@ fn not_a_full_line_comment(text: &String) -> bool {
 pub fn parse_repo_file(filename: &str) -> RepoFile {
     let repo_file_path = Path::new(filename);
     if !repo_file_path.exists() {
-        println!("Failed to find repo_file: {}", filename);
-        process::exit(1);
+        panic!("Failed to find repo_file: {}", filename);
     }
 
     let file = File::open(repo_file_path);
     if let Err(file_error) = file {
-        println!("Failed to open file: {}, {}", filename, file_error);
-        process::exit(1);
+        panic!("Failed to open file: {}, {}", filename, file_error);
     }
 
     let file_contents = file.unwrap();
