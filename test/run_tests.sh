@@ -1,10 +1,32 @@
 #!/usr/bin/env bash
 
-cargo build --release
+cargo_output=$(cargo build --release 2>&1)
+if [[ $? != "0" ]]; then
+    echo "$cargo_output"
+    echo ""
+    echo "Failed to run cargo build"
+    echo "Tests will not run"
+    exit 1
+fi
 # this should output to ./target/release/my-git-tools
 PROGRAM_PATH="./target/release/my-git-tools"
 
-run_all_tests() {
+if [[ ! -f $PROGRAM_PATH ]]; then
+    echo "Failed to find output program to run tests with: $PROGRAM_PATH"
+    exit 1
+fi
+
+
+run_unit_tests() {
+    cargo test 2>/dev/null
+    if [[ $? != "0" ]]; then
+        echo "Unit tests not successful"
+        echo "Next tests will not run"
+        exit 1
+    fi
+}
+
+run_end_to_end_tests() {
     echo "GENERAL PROGRAM:"
     PROGRAM_PATH="$PROGRAM_PATH" bats test/general
     echo ""
@@ -19,18 +41,11 @@ run_all_tests() {
     # echo ""
 }
 
-if [[ ! -f $PROGRAM_PATH ]]; then
-    echo "Failed to find output program to run tests with: $PROGRAM_PATH"
-    exit 1
-fi
+run_all_tests() {
+    echo "UNIT TESTS:"
+    run_unit_tests
+    echo "END-TO-END TESTS:"
+    run_end_to_end_tests
+}
 
 run_all_tests
-
-# # prevent running tests that involve remote access:
-# if [[ $1 == "-l" || $1 == "--local-only" ]]; then
-    # mv test/split/end-to-end-remote.bats test/tmpe2e.txt
-    # run_all_tests
-    # mv test/tmpe2e.txt test/split/end-to-end-remote.bats
-# else
-    # run_all_tests
-# fi
