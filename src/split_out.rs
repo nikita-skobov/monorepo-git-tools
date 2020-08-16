@@ -1,7 +1,10 @@
+use std::env;
 use clap::ArgMatches;
+
 use super::commands::REPO_FILE_ARG;
 use super::repo_file;
 use super::repo_file::RepoFile;
+use super::git_helpers;
 
 fn get_string_after_last_slash(s: String) -> String {
     let mut pieces = s.rsplit('/');
@@ -113,7 +116,16 @@ pub fn run_split_out(matches: &ArgMatches) {
     // we validate the fields of the repo file
     // according to what split_out command wants it to be
     validate_repo_file(matches, &mut repofile);
+
+    let current_dir = match env::current_dir() {
+        Ok(pathbuf) => pathbuf,
+        Err(_) => panic!("Failed to find your current directory. Cannot proceed"),
+    };
+
+    let (repo, repo_path) = git_helpers::get_repository_and_root_directory(&current_dir);
+    println!("Found repo path: {}", repo_path.display());
 }
+
 
 #[cfg(test)]
 mod test {

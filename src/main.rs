@@ -1,9 +1,9 @@
-use git2::Repository;
 use clap::{App, ArgMatches};
 
 mod commands;
 mod repo_file;
 mod split_out;
+mod git_helpers;
 
 fn get_cli_input<'a>() -> ArgMatches<'a> {
     let mut base_app = App::new(env!("CARGO_PKG_NAME"))
