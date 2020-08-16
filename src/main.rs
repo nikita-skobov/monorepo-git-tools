@@ -2,6 +2,7 @@ use git2::Repository;
 use clap::{App, ArgMatches};
 
 mod commands;
+mod repo_file;
 
 fn get_cli_input<'a>() -> ArgMatches<'a> {
     let mut base_app = App::new(env!("CARGO_PKG_NAME"))

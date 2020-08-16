@@ -1,5 +1,7 @@
 use clap::{Arg, App, SubCommand, ArgMatches};
 
+use super::repo_file;
+
 const SPLIT_IN_STR: &'static str = "split-in";
 const SPLIT_OUT_STR: &'static str = "split-out";
 const SPLIT_OUT_DESCRIPTION: &'static str = "split-out descruiptuin";
@@ -50,6 +52,7 @@ fn base_command<'a, 'b>(cmd: CommandName) -> App<'a, 'b> {
         .about(cmd.description())
         .arg(
             Arg::with_name("repo_file")
+                .required(true)
         );
 }
 
@@ -68,8 +71,10 @@ pub fn run_command(name: &str, matches: &ArgMatches) {
     let command: CommandName = name.into();
     match command {
         UnknownCommand => (),
-        SplitIn => run_split_in(matches),
-        SplitOut => run_split_out(matches),
+        // it is safe to unwrap here because this function is called
+        // if we know that the name subcommand exists
+        SplitIn => run_split_in(matches.subcommand_matches(name).unwrap()),
+        SplitOut => run_split_out(matches.subcommand_matches(name).unwrap()),
     }
 }
 
@@ -78,5 +83,9 @@ pub fn run_split_in(matches: &ArgMatches) {
 }
 
 pub fn run_split_out(matches: &ArgMatches) {
+    // safe to unwrap because repo_file is a required argument
+    let repo_file_name = matches.value_of("repo_file").unwrap();
+    println!("repo file: {}", repo_file_name);
 
+    repo_file::parse_repo_file(repo_file_name);
 }
