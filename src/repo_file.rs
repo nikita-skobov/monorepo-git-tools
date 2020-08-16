@@ -11,7 +11,7 @@ pub struct RepoFile {
 }
 
 impl RepoFile {
-    fn new() -> RepoFile {
+    pub fn new() -> RepoFile {
         RepoFile {
             repo_name: None,
             remote_repo: None,
