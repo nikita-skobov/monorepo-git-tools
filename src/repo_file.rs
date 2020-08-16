@@ -121,7 +121,7 @@ fn is_end_of_array(text: &String) -> bool {
     return is_end;
 }
 
-fn parse_variable(variable: &mut RepoFileVariable, text: String) {
+fn parse_variable(variable: &mut RepoFileVariable, text: &String) {
     if variable.name == VarUnknown && text.contains("=") {
         // variable is empty, and this line
         // contains an equal sign, so we assume the variable
@@ -134,9 +134,8 @@ fn parse_variable(variable: &mut RepoFileVariable, text: String) {
         };
     }
 
-    // TODO: should exit with error message here?
     if variable.name == VarUnknown {
-        return;
+        panic!("Invalid variable name found on line: {}", text);
     }
 
     if variable.var_type == TypeUnknown {
@@ -211,6 +210,13 @@ pub fn parse_repo_file(filename: &str) -> RepoFile {
         process::exit(1);
     }
 
+    let file_contents = file.unwrap();
+    let reader = BufReader::new(file_contents);
+    let lines: Vec<String> = reader.lines().map(|x| x.unwrap()).collect();
+    return parse_repo_file_from_lines(lines);
+}
+
+pub fn parse_repo_file_from_lines(lines: Vec<String>) -> RepoFile {
     let mut repofile_obj = RepoFile {
         remote_repo: EMPTY_STRING.to_string(),
         include_as: vec![EMPTY_STRING.to_string()],
@@ -226,10 +232,7 @@ pub fn parse_repo_file(filename: &str) -> RepoFile {
         var_type: TypeUnknown,
     };
 
-    let file_contents = file.unwrap();
-    let reader = BufReader::new(file_contents);
-    for (_, line_res) in reader.lines().enumerate() {
-        let line = line_res.unwrap();
+    for line in lines.iter() {
         println!("line: {}", line);
         if not_a_full_line_comment(&line) {
             parse_variable(&mut current_variable, line);
@@ -240,7 +243,20 @@ pub fn parse_repo_file(filename: &str) -> RepoFile {
             current_variable.complete = false;
         }
     }
-
     println!("repo file obj: {:?}", repofile_obj);
     return repofile_obj;
+}
+
+#[cfg(test)]
+mod test {
+    use super::parse_repo_file_from_lines;
+
+    #[test]
+    #[should_panic(expected = "Invalid variable name")]
+    fn should_panic_if_finds_unknown_var() {
+        let lines: Vec<String> = vec![
+            "my_unknown_var=something".into()
+        ];
+        let repofile = parse_repo_file_from_lines(lines);
+    }
 }
