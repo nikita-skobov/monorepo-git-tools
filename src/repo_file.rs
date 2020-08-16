@@ -45,7 +45,7 @@ fn char_after_equals(text: &String) -> char {
     return ' ';
 }
 
-fn get_all_strings(text: &String) -> Vec<String> {
+fn get_all_strings(text: &String) -> Option<Vec<String>> {
     let mut strings: Vec<String> = vec![];
     let mut current_string = String::from("");
     let mut should_append_string = false;
@@ -71,10 +71,10 @@ fn get_all_strings(text: &String) -> Vec<String> {
     // if its not, then it was a failure to parse and we should
     // return empty vector
     if current_string != "" {
-        return vec![];
+        return None;
     }
 
-    return strings;
+    return Some(strings);
 }
 
 fn is_end_of_array(text: &String) -> bool {
@@ -107,24 +107,24 @@ fn parse_variable(variable: &mut RepoFileVariable, text: String) {
     // easiest case to parse. just get everything between the quotes
     if variable.name != EMPTY_STRING && variable.var_type == TypeString {
         let strings = get_all_strings(&text);
-        if strings.len() == 0 {
+        if let None = strings {
             println!("Failed to parse variable at line:\n{}", text);
             process::exit(1);
         }
 
         // there should only be one string
-        variable.value = vec![strings[0].clone()];
+        variable.value = vec![strings.unwrap()[0].clone()];
         variable.complete = true;
     }
     if variable.name != EMPTY_STRING && variable.var_type == TypeArray {
-        let mut strings = get_all_strings(&text);
-        if strings.len() == 0 {
+        let strings = get_all_strings(&text);
+        if let None = strings {
             println!("Failed to parse variable at line:\n{}", text);
             process::exit(1);
         }
 
         // add all of the strings we found on this line
-        variable.value.append(&mut strings);
+        variable.value.append(&mut strings.unwrap());
         variable.complete = is_end_of_array(&text);
     }
 }
