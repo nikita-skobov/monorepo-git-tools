@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+verbose=""
+if [[ "$@" == *"-v"* ]]; then
+    verbose="true"
+fi
+
 cargo_output=$(cargo build --release 2>&1)
 if [[ $? != "0" ]]; then
     echo "$cargo_output"
@@ -21,7 +26,11 @@ run_unit_tests() {
     cargo test 2>tempfile.txt
     if [[ $? != "0" ]]; then
         echo "Unit tests not successful:"
-        echo "$(<tempfile.txt)"
+        if [[ ! -z $verbose ]]; then
+            echo "$(<tempfile.txt)"
+        else
+            echo "re-run this test script with -v to see detailed output"
+        fi
         echo "Next tests will not run"
         rm tempfile.txt
         exit 1
