@@ -56,6 +56,31 @@ pub fn try_get_repo_name_from_remote_repo(remote_repo: String) -> String {
     return out_str;
 }
 
+// works for include, or include_as
+// the variable is valid if it is a single item,
+// or if it is multiple items, it is valid if it has an even length
+pub fn include_var_valid(var: &Vec<String>, can_be_single: bool) -> bool {
+    let vlen = var.len();
+    if vlen == 1 && can_be_single {
+        return true;
+    }
+    if vlen >= 1 && vlen % 2 == 0 {
+        return true;
+    }
+    return false;
+}
+
+pub fn panic_if_array_invalid(var: &Option<Vec<String>>, can_be_single: bool, varname: &str) {
+    match var {
+        Some(v) => {
+            if ! include_var_valid(&v, can_be_single) {
+                panic!("{} is invalid. Must be either a single string, or an even length array of strings", varname);
+            }
+        },
+        _ => (),
+    };
+}
+
 pub fn validate_repo_file(matches: &ArgMatches, repofile: &mut RepoFile) {
     let missing_repo_name = repofile.repo_name.is_none();
     let missing_remote_repo = repofile.remote_repo.is_none();
@@ -75,6 +100,8 @@ pub fn validate_repo_file(matches: &ArgMatches, repofile: &mut RepoFile) {
         ));
     }
 
+    panic_if_array_invalid(&repofile.include, true, "include");
+    panic_if_array_invalid(&repofile.include_as, false, "include_as");
 }
 
 pub fn run_split_out(matches: &ArgMatches) {
@@ -89,7 +116,7 @@ pub fn run_split_out(matches: &ArgMatches) {
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
 
     #[test]
@@ -137,5 +164,27 @@ mod tests {
         let argmatches = ArgMatches::new();
         validate_repo_file(&argmatches, &mut repofile);
         assert_eq!(repofile.repo_name.unwrap(), "reponame".to_string());
+    }
+
+    #[test]
+    #[should_panic(expected = "Must be either a single string, or")]
+    fn should_panic_if_include_is_odd() {
+        let mut repofile = RepoFile::new();
+        // vec of 3 strings:
+        repofile.include = Some(vec!["dsadsa".into(), "dsadsa".into(), "dsadsa".into()]);
+        repofile.repo_name = Some("dsadsa".into());
+        let argmatches = ArgMatches::new();
+        validate_repo_file(&argmatches, &mut repofile);
+    }
+
+    #[test]
+    #[should_panic(expected = "Must be either a single string, or")]
+    fn should_panic_if_include_as_is_single_string() {
+        let mut repofile = RepoFile::new();
+        // single string should not be valid for include_as
+        repofile.include_as = Some(vec!["dsadsa".into()]);
+        repofile.repo_name = Some("dsadsa".into());
+        let argmatches = ArgMatches::new();
+        validate_repo_file(&argmatches, &mut repofile);
     }
 }
