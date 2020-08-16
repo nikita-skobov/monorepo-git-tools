@@ -3,9 +3,57 @@ use super::commands::REPO_FILE_ARG;
 use super::repo_file;
 use super::repo_file::RepoFile;
 
+fn get_string_after_last_slash(s: String) -> String {
+    let mut pieces = s.rsplit('/');
+    match pieces.next() {
+        Some(p) => p.into(),
+        None => s.into(),
+    }
+}
+
+fn get_string_before_first_dot(s: String) -> String {
+    let mut pieces = s.split('.');
+    match pieces.next() {
+        Some(p) => p.into(),
+        None => s.into(),
+    }
+}
+
+pub fn is_valid_remote_repo(remote_repo: &String) -> bool {
+    // TODO:
+    // need to check for if it matches a regex like a server ip
+    // like 192.168.1.1, or user@server.com:/gitpath
+    return remote_repo.starts_with("ssh://") ||
+    remote_repo.starts_with("git://") ||
+    remote_repo.starts_with("http://") ||
+    remote_repo.starts_with("https://") ||
+    remote_repo.starts_with("ftp://") ||
+    remote_repo.starts_with("sftp://") ||
+    remote_repo.starts_with("file://") ||
+    remote_repo.starts_with(".") ||
+    remote_repo.starts_with("/");
+}
+
 // try to parse the remote repo
 pub fn try_get_repo_name_from_remote_repo(remote_repo: String) -> String {
-    panic!("Failed to parse repo_name from remote_repo: {}", remote_repo);
+    let mut out_str = remote_repo.clone().trim_end().to_string();
+    if !is_valid_remote_repo(&remote_repo) {
+        out_str = "".into();
+    }
+    if out_str.ends_with("/") {
+        out_str.pop();
+    }
+    if !out_str.contains("/") {
+        out_str = "".into();
+    }
+    out_str = get_string_after_last_slash(out_str);
+    out_str = get_string_before_first_dot(out_str);
+
+    if out_str == "" {
+        panic!("Failed to parse repo_name from remote_repo: {}", remote_repo);
+    }
+
+    return out_str;
 }
 
 pub fn validate_repo_file(matches: &ArgMatches, repofile: &mut RepoFile) {
@@ -72,10 +120,20 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "not implemented yet"]
-    fn should_parse_repo_name_from_remote_repo_if_valid() {
+    fn should_parse_repo_name_from_remote_repo_if_valid_path() {
         let mut repofile = RepoFile::new();
+        repofile.include_as = Some(vec!["dsadsa".into(), "dsadsa".into()]);
         repofile.remote_repo = Some("./path/to/reponame".into());
+        let argmatches = ArgMatches::new();
+        validate_repo_file(&argmatches, &mut repofile);
+        assert_eq!(repofile.repo_name.unwrap(), "reponame".to_string());
+    }
+
+    #[test]
+    fn should_parse_repo_name_from_remote_repo_if_valid_url() {
+        let mut repofile = RepoFile::new();
+        repofile.include_as = Some(vec!["dsadsa".into(), "dsadsa".into()]);
+        repofile.remote_repo = Some("https://website.com/path/to/reponame.git".into());
         let argmatches = ArgMatches::new();
         validate_repo_file(&argmatches, &mut repofile);
         assert_eq!(repofile.repo_name.unwrap(), "reponame".to_string());
