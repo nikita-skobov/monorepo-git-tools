@@ -77,6 +77,20 @@ fn get_all_strings(text: &String) -> Vec<String> {
     return strings;
 }
 
+fn is_end_of_array(text: &String) -> bool {
+    let mut is_end = false;
+    for c in text.chars() {
+        if c == '#' {
+            break;
+        }
+        if c == ')' {
+            is_end = true;
+            break;
+        }
+    }
+    return is_end;
+}
+
 fn parse_variable(variable: &mut RepoFileVariable, text: String) {
     if variable.name == EMPTY_STRING && text.contains("=") {
         // variable is empty, and this line
@@ -102,13 +116,46 @@ fn parse_variable(variable: &mut RepoFileVariable, text: String) {
         variable.value = vec![strings[0].clone()];
         variable.complete = true;
     }
+    if variable.name != EMPTY_STRING && variable.var_type == TypeArray {
+        let mut strings = get_all_strings(&text);
+        if strings.len() == 0 {
+            println!("Failed to parse variable at line:\n{}", text);
+            process::exit(1);
+        }
+
+        // add all of the strings we found on this line
+        variable.value.append(&mut strings);
+        variable.complete = is_end_of_array(&text);
+    }
 }
 
 fn add_variable_to_repo_file(repofile: &mut RepoFile, variable: &mut RepoFileVariable) {
-    repofile.remote_repo = variable.value[0].clone();
+    if variable.var_type == TypeArray {
+        repofile.include_as = variable.value.clone();
+    }
+    if variable.var_type == TypeString {
+        repofile.remote_repo = variable.value[0].clone();
+    }
 
     variable.name = EMPTY_STRING.to_string();
     variable.value = vec![EMPTY_STRING.to_string()];
+}
+
+
+fn not_a_full_line_comment(text: &String) -> bool {
+    let mut is_full_line_comment = false;
+    for c in text.chars() {
+        if c.is_whitespace() {
+            continue;
+        }
+
+        if c == '#' {
+            is_full_line_comment = true;
+        }
+        break;
+    }
+
+    return !is_full_line_comment;
 }
 
 pub fn parse_repo_file(filename: &str) -> RepoFile {
@@ -144,7 +191,9 @@ pub fn parse_repo_file(filename: &str) -> RepoFile {
     for (_, line_res) in reader.lines().enumerate() {
         let line = line_res.unwrap();
         println!("line: {}", line);
-        parse_variable(&mut current_variable, line);
+        if not_a_full_line_comment(&line) {
+            parse_variable(&mut current_variable, line);
+        }
 
         if current_variable.complete {
             add_variable_to_repo_file(&mut repofile_obj, &mut current_variable);
