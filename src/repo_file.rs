@@ -4,9 +4,21 @@ use std::io::{BufRead, BufReader};
 
 #[derive(Debug, PartialEq)]
 pub struct RepoFile {
-    remote_repo: Option<String>,
-    include_as: Option<Vec<String>>,
-    include: Option<Vec<String>>,
+    pub repo_name: Option<String>,
+    pub remote_repo: Option<String>,
+    pub include_as: Option<Vec<String>>,
+    pub include: Option<Vec<String>>,
+}
+
+impl RepoFile {
+    fn new() -> RepoFile {
+        RepoFile {
+            repo_name: None,
+            remote_repo: None,
+            include: None,
+            include_as: None,
+        }
+    }
 }
 
 const RFVN_REMOTE_REPO: &'static str = "remote_repo";
@@ -212,11 +224,7 @@ pub fn parse_repo_file(filename: &str) -> RepoFile {
 }
 
 pub fn parse_repo_file_from_lines(lines: Vec<String>) -> RepoFile {
-    let mut repofile_obj = RepoFile {
-        remote_repo: None,
-        include_as: None,
-        include: None,
-    };
+    let mut repofile_obj = RepoFile::new();
 
     // this will be modified by the parse_variable func above
     // everytime this variable is "complete", it will be added
@@ -275,13 +283,11 @@ mod test {
             "    \"two\" \"three\"".into(),
             "              )".into(),
         ];
-        let expectedrepofileobj = RepoFile {
-            remote_repo: Some("something".into()),
-            include_as: Some(vec![
-                "one".into(), "two".into(), "three".into()
-            ]),
-            include: None,
-        };
+        let mut expectedrepofileobj = RepoFile::new();
+        expectedrepofileobj.remote_repo = Some("something".into());
+        expectedrepofileobj.include_as = Some(vec![
+            "one".into(), "two".into(), "three".into()
+        ]);
         let repofileobj = parse_repo_file_from_lines(lines);
         assert_eq!(expectedrepofileobj, repofileobj);
     }
