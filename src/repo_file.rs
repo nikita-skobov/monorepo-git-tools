@@ -9,6 +9,36 @@ pub struct RepoFile {
     include_as: Vec<String>,
 }
 
+const RFVN_REMOTE_REPO: &'static str = "remote_repo";
+const RFVN_INCLUDE_AS: &'static str = "include_as";
+
+#[derive(Clone, PartialEq)]
+pub enum RepoFileVariableName {
+    VarRemoteRepo,
+    VarIncludeAs,
+    VarUnknown,
+}
+use RepoFileVariableName::*;
+impl From<RepoFileVariableName> for &'static str {
+    fn from(original: RepoFileVariableName) -> &'static str {
+        match original {
+            VarRemoteRepo => RFVN_REMOTE_REPO,
+            VarIncludeAs => RFVN_INCLUDE_AS,
+            VarUnknown => "",
+        }
+    }
+}
+impl From<String> for RepoFileVariableName {
+    fn from(value: String) -> RepoFileVariableName {
+        match value.as_str() {
+            RFVN_REMOTE_REPO => VarRemoteRepo,
+            RFVN_INCLUDE_AS => VarIncludeAs,
+            _ => VarUnknown,
+        }
+    }
+}
+
+
 #[derive(PartialEq)]
 enum RepoFileVariableType {
     TypeString,
@@ -18,7 +48,7 @@ enum RepoFileVariableType {
 use RepoFileVariableType::*;
 
 struct RepoFileVariable {
-    name: String,
+    name: RepoFileVariableName,
     value: Vec<String>,
     complete: bool,
     var_type: RepoFileVariableType,
@@ -92,11 +122,11 @@ fn is_end_of_array(text: &String) -> bool {
 }
 
 fn parse_variable(variable: &mut RepoFileVariable, text: String) {
-    if variable.name == EMPTY_STRING && text.contains("=") {
+    if variable.name == VarUnknown && text.contains("=") {
         // variable is empty, and this line
         // contains an equal sign, so we assume the variable
         // is being created
-        variable.name = get_variable_name(&text);
+        variable.name = get_variable_name(&text).into();
         variable.var_type = match char_after_equals(&text) {
             '(' => TypeArray,
             '"' => TypeString,
@@ -104,28 +134,38 @@ fn parse_variable(variable: &mut RepoFileVariable, text: String) {
         };
     }
 
-    // easiest case to parse. just get everything between the quotes
-    if variable.name != EMPTY_STRING && variable.var_type == TypeString {
-        let strings = get_all_strings(&text);
-        if let None = strings {
-            println!("Failed to parse variable at line:\n{}", text);
-            process::exit(1);
-        }
-
-        // there should only be one string
-        variable.value = vec![strings.unwrap()[0].clone()];
-        variable.complete = true;
+    // TODO: should exit with error message here?
+    if variable.name == VarUnknown {
+        return;
     }
-    if variable.name != EMPTY_STRING && variable.var_type == TypeArray {
-        let strings = get_all_strings(&text);
-        if let None = strings {
-            println!("Failed to parse variable at line:\n{}", text);
-            process::exit(1);
-        }
 
-        // add all of the strings we found on this line
-        variable.value.append(&mut strings.unwrap());
-        variable.complete = is_end_of_array(&text);
+    if variable.var_type == TypeUnknown {
+        println!("Failed to parse line: {}", text);
+        process::exit(1);
+    }
+
+    let strings = get_all_strings(&text);
+    if let None = strings {
+        println!("Failed to parse variable at line:\n{}", text);
+        process::exit(1);
+    }
+
+    match variable.var_type {
+        // easiest case to parse. just get everything between the quotes
+        // there should only be one string
+        TypeString => {
+            variable.value = vec![strings.unwrap()[0].clone()];
+            variable.complete = true;
+        },
+        // harder to parse. add all the strings we found
+        // and then only mark it complete if we also found the
+        // end of the array
+        TypeArray => {
+            variable.value.append(&mut strings.unwrap());
+            variable.complete = is_end_of_array(&text);
+        },
+        // we already checked for TypeUnknown above
+        _ => (),
     }
 }
 
@@ -137,8 +177,8 @@ fn add_variable_to_repo_file(repofile: &mut RepoFile, variable: &mut RepoFileVar
         repofile.remote_repo = variable.value[0].clone();
     }
 
-    variable.name = EMPTY_STRING.to_string();
-    variable.value = vec![EMPTY_STRING.to_string()];
+    variable.name = VarUnknown;
+    variable.value = vec![];
 }
 
 
@@ -180,7 +220,7 @@ pub fn parse_repo_file(filename: &str) -> RepoFile {
     // everytime this variable is "complete", it will be added
     // to the RepoFile struct
     let mut current_variable = RepoFileVariable{
-        name: EMPTY_STRING.to_string(),
+        name: VarUnknown,
         value: vec![EMPTY_STRING.to_string()],
         complete: false,
         var_type: TypeUnknown,
