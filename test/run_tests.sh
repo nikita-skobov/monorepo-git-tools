@@ -32,9 +32,9 @@ run_unit_tests() {
             echo "re-run this test script with -v to see detailed output"
         fi
         echo "Next tests will not run"
-        rm tempfile.txt
         exit 1
     fi
+    rm tempfile.txt
 }
 
 run_end_to_end_tests() {
