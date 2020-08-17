@@ -107,6 +107,42 @@ pub fn validate_repo_file(matches: &ArgMatches, repofile: &mut RepoFile) {
     panic_if_array_invalid(&repofile.include_as, false, "include_as");
 }
 
+// iterate over both the include, and include_as
+// repofile variables, and generate an overall
+// include string that can be passed to
+// git-filter-repo
+pub fn generate_split_out_arg_include(repofile: &RepoFile) -> String {
+    let start_with: String = "--path ".into();
+    let include_str = match &repofile.include {
+        Some(v) => [start_with.clone(), v.join(" --path ")].concat(),
+        None => "".to_string(),
+    };
+
+    // include_as is more difficult because the indices matter
+    // for splitting out, the even indices are the local
+    // paths, so those are the ones we want to include
+    let include_as_str = match &repofile.include_as {
+        Some(v) => {
+            [
+                start_with.clone(),
+                v.iter().step_by(2)
+                    .cloned().collect::<Vec<String>>()
+                    .join(" --path "),
+            ].concat()
+        },
+        None => "".to_string(),
+    };
+
+    // include a space between them if include_str isnt empty
+    let seperator: String = if include_str.is_empty() {
+        "".into()
+    } else {
+        " ".into()
+    };
+
+    [include_str, seperator, include_as_str].concat()
+}
+
 pub fn run_split_out(matches: &ArgMatches) {
     // safe to unwrap because repo_file is a required argument
     let repo_file_name = matches.value_of(REPO_FILE_ARG).unwrap();
@@ -137,6 +173,18 @@ mod test {
         let mut repofile = RepoFile::new();
         let argmatches = ArgMatches::new();
         validate_repo_file(&argmatches, &mut repofile);
+    }
+
+    #[test]
+    fn should_generate_include_args_properly() {
+        let mut repofile = RepoFile::new();
+        repofile.include_as = Some(vec![
+            "abc".into(), "abc-remote".into(),
+            "xyz".into(), "xyz-remote".into(),
+        ]);
+        repofile.include = Some(vec!["123".into()]);
+        let filter_args = generate_split_out_arg_include(&repofile);
+        assert_eq!(filter_args, "--path 123 --path abc --path xyz");
     }
 
     #[test]
