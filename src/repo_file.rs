@@ -8,6 +8,7 @@ pub struct RepoFile {
     pub remote_repo: Option<String>,
     pub include_as: Option<Vec<String>>,
     pub include: Option<Vec<String>>,
+    pub exclude: Option<Vec<String>>,
 }
 
 impl RepoFile {
@@ -17,17 +18,22 @@ impl RepoFile {
             remote_repo: None,
             include: None,
             include_as: None,
+            exclude: None,
         }
     }
 }
 
 const RFVN_REMOTE_REPO: &'static str = "remote_repo";
 const RFVN_INCLUDE_AS: &'static str = "include_as";
+const RFVN_INCLUDE: &'static str = "include";
+const RFVN_EXCLUDE: &'static str = "exclude";
 
 #[derive(Clone, PartialEq)]
 pub enum RepoFileVariableName {
     VarRemoteRepo,
     VarIncludeAs,
+    VarExclude,
+    VarInclude,
     VarUnknown,
 }
 use RepoFileVariableName::*;
@@ -36,6 +42,8 @@ impl From<RepoFileVariableName> for &'static str {
         match original {
             VarRemoteRepo => RFVN_REMOTE_REPO,
             VarIncludeAs => RFVN_INCLUDE_AS,
+            VarInclude => RFVN_INCLUDE,
+            VarExclude => RFVN_EXCLUDE,
             VarUnknown => "",
         }
     }
@@ -43,6 +51,8 @@ impl From<RepoFileVariableName> for &'static str {
 impl From<String> for RepoFileVariableName {
     fn from(value: String) -> RepoFileVariableName {
         match value.as_str() {
+            RFVN_INCLUDE => VarInclude,
+            RFVN_EXCLUDE => VarExclude,
             RFVN_REMOTE_REPO => VarRemoteRepo,
             RFVN_INCLUDE_AS => VarIncludeAs,
             _ => VarUnknown,
@@ -182,6 +192,8 @@ fn add_variable_to_repo_file(repofile: &mut RepoFile, variable: &mut RepoFileVar
     match variable.name {
         VarRemoteRepo => repofile.remote_repo = Some(variable.value[0].clone()),
         VarIncludeAs => repofile.include_as = Some(variable.value.clone()),
+        VarExclude => repofile.exclude = Some(variable.value.clone()),
+        VarInclude => repofile.include = Some(variable.value.clone()),
         _ => (),
     }
 
@@ -281,11 +293,17 @@ mod test {
             "    \"one\"".into(),
             "    \"two\" \"three\"".into(),
             "              )".into(),
+            "exclude=(\"abc\")".into(),
+            "    include=(\"xyz\" \"qqq\" \"www\")".into(),
         ];
         let mut expectedrepofileobj = RepoFile::new();
         expectedrepofileobj.remote_repo = Some("something".into());
         expectedrepofileobj.include_as = Some(vec![
             "one".into(), "two".into(), "three".into()
+        ]);
+        expectedrepofileobj.exclude = Some(vec!["abc".into()]);
+        expectedrepofileobj.include = Some(vec![
+            "xyz".into(), "qqq".into(), "www".into(),
         ]);
         let repofileobj = parse_repo_file_from_lines(lines);
         assert_eq!(expectedrepofileobj, repofileobj);
