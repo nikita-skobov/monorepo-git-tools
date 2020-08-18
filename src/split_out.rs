@@ -165,6 +165,14 @@ pub fn generate_split_out_arg_include_as(repofile: &RepoFile) -> String {
     )
 }
 
+pub fn generate_split_out_arg_exclude(repofile: &RepoFile) -> String {
+    let start_with: String = "--invert-paths --path ".into();
+    match &repofile.exclude {
+        Some(v) => format!("{}{}", start_with.clone(), v.join(" --path ")),
+        None => "".to_string(),
+    }
+}
+
 pub fn run_split_out(matches: &ArgMatches) {
     // safe to unwrap because repo_file is a required argument
     let repo_file_name = matches.value_of(REPO_FILE_ARG).unwrap();
@@ -183,7 +191,11 @@ pub fn run_split_out(matches: &ArgMatches) {
     let (repo, repo_path) = git_helpers::get_repository_and_root_directory(&current_dir);
     println!("Found repo path: {}", repo_path.display());
     let include_arg_str = generate_split_out_arg_include(&repofile);
+    let include_as_arg_str = generate_split_out_arg_include_as(&repofile);
+    let exclude_arg_str = generate_split_out_arg_exclude(&repofile);
     println!("include_arg_str: {}", include_arg_str);
+    println!("include_as_arg_str: {}", include_as_arg_str);
+    println!("exclude_arg_str: {}", exclude_arg_str);
 }
 
 
@@ -209,6 +221,26 @@ mod test {
         repofile.include = Some(vec!["123".into()]);
         let filter_args = generate_split_out_arg_include(&repofile);
         assert_eq!(filter_args, "--path 123 --path abc --path xyz");
+    }
+
+    #[test]
+    fn should_generate_exclude_args_properly_for_one_exclude() {
+        let mut repofile = RepoFile::new();
+        repofile.exclude = Some(vec![
+            "one".into(),
+        ]);
+        let filter_args = generate_split_out_arg_exclude(&repofile);
+        assert_eq!(filter_args, "--invert-paths --path one");
+    }
+
+    #[test]
+    fn should_generate_exclude_args_properly_for_multiple_exclude() {
+        let mut repofile = RepoFile::new();
+        repofile.exclude = Some(vec![
+            "one".into(), "two".into(), "three".into(),
+        ]);
+        let filter_args = generate_split_out_arg_exclude(&repofile);
+        assert_eq!(filter_args, "--invert-paths --path one --path two --path three");
     }
 
     #[test]
