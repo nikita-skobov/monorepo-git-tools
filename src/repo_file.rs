@@ -237,7 +237,6 @@ pub fn parse_repo_file_from_lines(lines: Vec<String>) -> RepoFile {
     };
 
     for line in lines.iter() {
-        println!("line: {}", line);
         if not_a_full_line_comment(&line) {
             parse_variable(&mut current_variable, line);
         }
