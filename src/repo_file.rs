@@ -76,8 +76,6 @@ struct RepoFileVariable {
     var_type: RepoFileVariableType,
 }
 
-const EMPTY_STRING: &str = "";
-
 fn get_variable_name(text: &String) -> String {
     let equals_index = text.find("=").unwrap();
     let str_before_equals: String = text.chars().take(equals_index).collect();
@@ -143,7 +141,7 @@ fn is_end_of_array(text: &String) -> bool {
     return is_end;
 }
 
-fn parse_variable(variable: &mut RepoFileVariable, text: &String) {
+fn parse_variable(variable: &mut RepoFileVariable, text: &String, line_num: usize) {
     if variable.name == VarUnknown && text.contains("=") {
         // variable is empty, and this line
         // contains an equal sign, so we assume the variable
@@ -157,16 +155,16 @@ fn parse_variable(variable: &mut RepoFileVariable, text: &String) {
     }
 
     if variable.name == VarUnknown {
-        panic!("Invalid variable name found on line: {}", text);
+        panic!("Invalid variable name found on line {}:\n\"{}\"", line_num, text);
     }
 
     if variable.var_type == TypeUnknown {
-        panic!("Failed to parse line: {}", text);
+        panic!("Failed to parse line {}:\n\"{}\"", line_num, text);
     }
 
     let strings = get_all_strings(&text);
     if let None = strings {
-        panic!("Failed to parse variable at line:\n{}", text);
+        panic!("Failed to parse variable at line {}:\n\"{}\"", line_num, text);
     }
 
     match variable.var_type {
@@ -201,12 +199,16 @@ fn add_variable_to_repo_file(repofile: &mut RepoFile, variable: &mut RepoFileVar
     variable.value = vec![];
 }
 
-
-fn not_a_full_line_comment(text: &String) -> bool {
+// returns true if line is not a full line comment
+// and if line is not entirely whitespace
+fn should_parse_line(text: &String) -> bool {
+    let mut is_entirely_whitespace = true;
     let mut is_full_line_comment = false;
     for c in text.chars() {
         if c.is_whitespace() {
             continue;
+        } else {
+            is_entirely_whitespace = false;
         }
 
         if c == '#' {
@@ -215,7 +217,7 @@ fn not_a_full_line_comment(text: &String) -> bool {
         break;
     }
 
-    return !is_full_line_comment;
+    return !is_full_line_comment && !is_entirely_whitespace;
 }
 
 pub fn parse_repo_file(filename: &str) -> RepoFile {
@@ -243,14 +245,14 @@ pub fn parse_repo_file_from_lines(lines: Vec<String>) -> RepoFile {
     // to the RepoFile struct
     let mut current_variable = RepoFileVariable{
         name: VarUnknown,
-        value: vec![EMPTY_STRING.to_string()],
+        value: vec![],
         complete: false,
         var_type: TypeUnknown,
     };
 
-    for line in lines.iter() {
-        if not_a_full_line_comment(&line) {
-            parse_variable(&mut current_variable, line);
+    for (line_num, line) in lines.iter().enumerate() {
+        if should_parse_line(&line) {
+            parse_variable(&mut current_variable, line, line_num);
         }
 
         if current_variable.complete {
@@ -283,6 +285,26 @@ mod test {
             "remote_repo=something".into()
         ];
         parse_repo_file_from_lines(lines);
+    }
+
+    #[test]
+    fn should_handle_big_space_in_array() {
+        let lines: Vec<String> = vec![
+            "include_as=(\"abc\" \"xyz\"".into(),
+            "".into(),
+            "\t\t  \t".into(),
+            "\n\n    \n\t\t".into(),
+            ")".into(),
+            " ".into(),
+            "exclude=\"yyy\"".into(),
+        ];
+        let mut expectedrepofileobj = RepoFile::new();
+        expectedrepofileobj.include_as = Some(vec![
+            "abc".into(), "xyz".into(),
+        ]);
+        expectedrepofileobj.exclude = Some(vec!["yyy".into()]);
+        let repofileobj = parse_repo_file_from_lines(lines);
+        assert_eq!(expectedrepofileobj, repofileobj);
     }
 
     #[test]
