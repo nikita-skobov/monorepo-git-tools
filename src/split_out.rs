@@ -141,6 +141,30 @@ pub fn generate_split_out_arg_include(repofile: &RepoFile) -> String {
     format!("{}{}{}", include_str, seperator, include_as_str)
 }
 
+// iterate over the include_as variable, and generate a
+// string of args that can be passed to git-filter-repo
+pub fn generate_split_out_arg_include_as(repofile: &RepoFile) -> String {
+    let include_as = if let Some(include_as) = &repofile.include_as {
+        include_as.clone()
+    } else {
+        return "".into();
+    };
+
+    // sources are the even indexed elements, dest are the odd
+    let sources = include_as.iter().skip(0).step_by(2);
+    let destinations = include_as.iter().skip(1).step_by(2);
+    assert_eq!(sources.len(), destinations.len());
+
+    let pairs = sources.zip(destinations);
+    // pairs is a vec of tuples: (src, dest)
+    // when mapping, x.0 is src, x.1 is dest
+    format!("--path-rename {}",
+        pairs.map(|x| format!("{}:{}", x.0, x.1))
+            .collect::<Vec<String>>()
+            .join(" --path-rename ")
+    )
+}
+
 pub fn run_split_out(matches: &ArgMatches) {
     // safe to unwrap because repo_file is a required argument
     let repo_file_name = matches.value_of(REPO_FILE_ARG).unwrap();
@@ -158,6 +182,8 @@ pub fn run_split_out(matches: &ArgMatches) {
 
     let (repo, repo_path) = git_helpers::get_repository_and_root_directory(&current_dir);
     println!("Found repo path: {}", repo_path.display());
+    let include_arg_str = generate_split_out_arg_include(&repofile);
+    println!("include_arg_str: {}", include_arg_str);
 }
 
 
@@ -183,6 +209,26 @@ mod test {
         repofile.include = Some(vec!["123".into()]);
         let filter_args = generate_split_out_arg_include(&repofile);
         assert_eq!(filter_args, "--path 123 --path abc --path xyz");
+    }
+
+    #[test]
+    fn should_generate_split_out_arg_include_as_properly() {
+        let mut repofile = RepoFile::new();
+        repofile.include_as = Some(vec![
+            "abc-src".into(), "abc-dest".into(),
+            "xyz-src".into(), "xyz-dest".into(),
+        ]);
+        let filter_args = generate_split_out_arg_include_as(&repofile);
+        assert_eq!(filter_args, "--path-rename abc-src:abc-dest --path-rename xyz-src:xyz-dest");
+    }
+
+    // if include_as is None, it shouldnt fail, but rather
+    // just return an empty string
+    #[test]
+    fn gen_split_out_arg_include_as_should_not_fail_if_no_include_as() {
+        let repofile = RepoFile::new();
+        let filter_args = generate_split_out_arg_include_as(&repofile);
+        assert_eq!(filter_args, "");
     }
 
     #[test]
