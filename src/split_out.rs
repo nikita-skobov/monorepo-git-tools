@@ -114,7 +114,7 @@ pub fn validate_repo_file(matches: &ArgMatches, repofile: &mut RepoFile) {
 pub fn generate_split_out_arg_include(repofile: &RepoFile) -> String {
     let start_with: String = "--path ".into();
     let include_str = match &repofile.include {
-        Some(v) => [start_with.clone(), v.join(" --path ")].concat(),
+        Some(v) => format!("{}{}", start_with.clone(), v.join(" --path ")),
         None => "".to_string(),
     };
 
@@ -122,14 +122,12 @@ pub fn generate_split_out_arg_include(repofile: &RepoFile) -> String {
     // for splitting out, the even indices are the local
     // paths, so those are the ones we want to include
     let include_as_str = match &repofile.include_as {
-        Some(v) => {
-            [
-                start_with.clone(),
-                v.iter().step_by(2)
-                    .cloned().collect::<Vec<String>>()
-                    .join(" --path "),
-            ].concat()
-        },
+        Some(v) => format!("{}{}",
+            start_with.clone(),
+            v.iter().step_by(2)
+                .cloned().collect::<Vec<String>>()
+                .join(" --path "),
+        ),
         None => "".to_string(),
     };
 
@@ -140,7 +138,7 @@ pub fn generate_split_out_arg_include(repofile: &RepoFile) -> String {
         " ".into()
     };
 
-    [include_str, seperator, include_as_str].concat()
+    format!("{}{}{}", include_str, seperator, include_as_str)
 }
 
 pub fn run_split_out(matches: &ArgMatches) {
