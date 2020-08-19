@@ -99,30 +99,27 @@ impl<'a> Runner<'a> {
         }
         self
     }
-    pub fn make_and_checkout_output_branch(&self) -> &Self {
+    pub fn make_and_checkout_output_branch(self) -> Self {
         if self.dry_run {
             println!("git checkout -b {}", self.repo_file.repo_name.clone().unwrap());
             return self;
         }
 
-        let output_branch_name = &self.repo_file.repo_name;
-        let pair = (&self.repo, output_branch_name);
-        let branch_name = match pair {
-            (Some(repo), Some(branch_name)) => {
+        let output_branch_name = self.repo_file.repo_name.clone().unwrap();
+        match self.repo {
+            Some(ref r) => {
                 let success = git_helpers::make_new_branch_from_head_and_checkout(
-                    repo,
-                    branch_name.as_str(),
+                    r,
+                    output_branch_name.as_str(),
                 ).is_ok();
                 if ! success {
                     panic!("Failed to checkout new branch");
                 }
-                branch_name
             },
             _ => panic!("Something went horribly wrong!"),
         };
-
         if self.verbose {
-            println!("{}created and checked out new branch {}", self.log_p, branch_name);
+            println!("{}created and checked out new branch {}", self.log_p, output_branch_name);
         }
 
         self
@@ -138,6 +135,27 @@ impl<'a> Runner<'a> {
         self
     }
     pub fn filter_include(self) -> Self {
+        let output_branch_name = self.repo_file.repo_name.clone().unwrap();
+        let mut arg_vec = vec!["git", "filter-repo"];
+        let include_arg_str = self.include_arg_str.clone().unwrap();
+        for arg in include_arg_str.split(" ") {
+            arg_vec.push(arg);
+        }
+        arg_vec.push("--refs");
+        arg_vec.push(&output_branch_name);
+        arg_vec.push("--force");
+
+        if self.dry_run {
+            println!("{}", arg_vec.join(" "));
+            return self
+        }
+        if self.verbose {
+            println!("Filtering include");
+        }
+        if ! exec_helpers::executed_successfully(&arg_vec) {
+            panic!("Failed to execute: \"{}\"", arg_vec.join(" "));
+        }
+
         self
     }
 }
@@ -325,7 +343,8 @@ pub fn run_split_out(matches: &ArgMatches) {
         .get_repository_from_current_dir()
         .change_to_repo_root()
         .generate_arg_strings()
-        .make_and_checkout_output_branch();
+        .make_and_checkout_output_branch()
+        .filter_include();
 }
 
 
