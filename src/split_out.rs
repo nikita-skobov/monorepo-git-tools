@@ -3,11 +3,79 @@ use std::path::PathBuf;
 use clap::ArgMatches;
 
 use super::commands::REPO_FILE_ARG;
+use super::commands::DRY_RUN_ARG;
 use super::repo_file;
 use super::repo_file::RepoFile;
 use super::git_helpers;
 
+pub struct Runner<'a> {
+    matches: &'a ArgMatches<'a>,
+    current_dir: PathBuf,
+    pub dry_run: bool,
+    pub repo_file: RepoFile,
+    pub repo_root_dir: PathBuf,
+    pub repo: Option<git2::Repository>,
+    pub include_arg_str: Option<String>,
+    pub include_as_arg_str: Option<String>,
+    pub exclude_arg_str: Option<String>,
+}
 
+impl<'a> Runner<'a> {
+    pub fn new(matches: &'a ArgMatches) -> Runner<'a> {
+        Runner {
+            matches: matches,
+            dry_run: matches.is_present(DRY_RUN_ARG),
+            repo_file: RepoFile::new(),
+            current_dir: PathBuf::new(),
+            repo: None,
+            repo_root_dir: PathBuf::new(),
+            include_arg_str: None,
+            include_as_arg_str: None,
+            exclude_arg_str: None,
+        }
+    }
+    pub fn get_repo_file(mut self) -> Self {
+        let repo_file_name = self.matches.value_of(REPO_FILE_ARG).unwrap();
+        println!("repo file: {}", repo_file_name);
+        self.repo_file = repo_file::parse_repo_file(repo_file_name);
+        self
+    }
+    pub fn validate_repo_file(mut self) -> Self {
+        validate_repo_file(self.matches, &mut self.repo_file);
+        self
+    }
+    pub fn save_current_dir(mut self) -> Self {
+        // save this for later, as well as to find the repository
+        self.current_dir = match env::current_dir() {
+            Ok(pathbuf) => pathbuf,
+            Err(_) => panic!("Failed to find your current directory. Cannot proceed"),
+        };
+        self
+    }
+    pub fn get_repository_from_current_dir(mut self) -> Self {
+        let (repo, repo_path) = git_helpers::get_repository_and_root_directory(&self.current_dir);
+        println!("Found repo path: {}", repo_path.display());
+        self.repo = Some(repo);
+        self.repo_root_dir = repo_path;
+        self
+    }
+    pub fn change_to_repo_root(self) -> Self {
+        if ! changed_to_repo_root(&self.repo_root_dir) {
+            panic!("Failed to change to repository root: {:?}", &self.repo_root_dir);
+        }
+        println!("Changed to repository rott! {:?}", &self.repo_root_dir);
+        self
+    }
+    pub fn generate_arg_strings(self) -> Self {
+        let include_arg_str = generate_split_out_arg_include(&self.repo_file);
+        let include_as_arg_str = generate_split_out_arg_include_as(&self.repo_file);
+        let exclude_arg_str = generate_split_out_arg_exclude(&self.repo_file);
+        println!("include_arg_str: {}", include_arg_str);
+        println!("include_as_arg_str: {}", include_as_arg_str);
+        println!("exclude_arg_str: {}", exclude_arg_str);
+        self
+    }
+}
 
 fn get_string_after_last_slash(s: String) -> String {
     let mut pieces = s.rsplit('/');
@@ -184,34 +252,13 @@ pub fn changed_to_repo_root(repo_root: &PathBuf) -> bool {
 }
 
 pub fn run_split_out(matches: &ArgMatches) {
-    // safe to unwrap because repo_file is a required argument
-    let repo_file_name = matches.value_of(REPO_FILE_ARG).unwrap();
-    println!("repo file: {}", repo_file_name);
-
-    let mut repofile = repo_file::parse_repo_file(repo_file_name);
-    // we validate the fields of the repo file
-    // according to what split_out command wants it to be
-    validate_repo_file(matches, &mut repofile);
-
-    // save this for later, as well as to find the repository
-    let current_dir = match env::current_dir() {
-        Ok(pathbuf) => pathbuf,
-        Err(_) => panic!("Failed to find your current directory. Cannot proceed"),
-    };
-
-    let (repo, repo_path) = git_helpers::get_repository_and_root_directory(&current_dir);
-    println!("Found repo path: {}", repo_path.display());
-    let include_arg_str = generate_split_out_arg_include(&repofile);
-    let include_as_arg_str = generate_split_out_arg_include_as(&repofile);
-    let exclude_arg_str = generate_split_out_arg_exclude(&repofile);
-    println!("include_arg_str: {}", include_arg_str);
-    println!("include_as_arg_str: {}", include_as_arg_str);
-    println!("exclude_arg_str: {}", exclude_arg_str);
-
-    if ! changed_to_repo_root(&repo_path) {
-        panic!("Failed to change to repository root: {:?}", repo_path);
-    }
-    println!("Changed to repository rott! {:?}", repo_path);
+    Runner::new(matches)
+        .get_repo_file()
+        .validate_repo_file()
+        .save_current_dir()
+        .get_repository_from_current_dir()
+        .change_to_repo_root()
+        .generate_arg_strings();
 }
 
 
