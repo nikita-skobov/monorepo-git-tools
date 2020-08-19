@@ -9,22 +9,24 @@ if [[ "$@" == *"-g"* ]]; then
     should_run_git_unit_tests="true"
 fi
 
-cargo_output=$(cargo build --release 2>&1)
-if [[ $? != "0" ]]; then
-    echo "$cargo_output"
-    echo ""
-    echo "Failed to run cargo build"
-    echo "Tests will not run"
-    exit 1
-fi
-# this should output to ./target/release/my-git-tools
-PROGRAM_PATH="./target/release/my-git-tools"
 
-if [[ ! -f $PROGRAM_PATH ]]; then
-    echo "Failed to find output program to run tests with: $PROGRAM_PATH"
-    exit 1
-fi
+build_program() {
+    cargo_output=$(cargo build --release 2>&1)
+    if [[ $? != "0" ]]; then
+        echo "$cargo_output"
+        echo ""
+        echo "Failed to run cargo build"
+        echo "Tests will not run"
+        exit 1
+    fi
+    # this should output to ./target/release/my-git-tools
+    PROGRAM_PATH="./target/release/my-git-tools"
 
+    if [[ ! -f $PROGRAM_PATH ]]; then
+        echo "Failed to find output program to run tests with: $PROGRAM_PATH"
+        exit 1
+    fi
+}
 
 run_unit_tests() {
     if [[ ! -z $should_run_git_unit_tests ]]; then
@@ -61,6 +63,8 @@ run_end_to_end_tests() {
 }
 
 run_all_tests() {
+    echo "BUILDING..."
+    build_program
     echo "UNIT TESTS:"
     run_unit_tests
     echo "END-TO-END TESTS:"
