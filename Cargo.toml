@@ -10,3 +10,6 @@ edition = "2018"
 [dependencies]
 git2 = "0.13"
 clap = "2.33"
+
+[features]
+gittests = []

@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 
+should_run_git_unit_tests=""
 verbose=""
 if [[ "$@" == *"-v"* ]]; then
     verbose="true"
+fi
+if [[ "$@" == *"-g"* ]]; then
+    should_run_git_unit_tests="true"
 fi
 
 cargo_output=$(cargo build --release 2>&1)
@@ -23,7 +27,11 @@ fi
 
 
 run_unit_tests() {
-    cargo test 2>tempfile.txt
+    if [[ ! -z $should_run_git_unit_tests ]]; then
+        cargo test --features gittests 2>tempfile.txt
+    else
+        cargo test 2>tempfile.txt
+    fi
     if [[ $? != "0" ]]; then
         echo "Unit tests not successful:"
         if [[ ! -z $verbose ]]; then
