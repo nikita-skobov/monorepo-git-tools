@@ -113,10 +113,48 @@ pub fn checkout_to_branch(
     repo.set_head(branch_name)
 }
 
+pub fn get_head_commit(
+    repo: &Repository,
+) -> Result<git2::Commit, git2::Error> {
+    let current_ref = get_current_branch(repo)?;
+    let current_oid = repo.refname_to_id(current_ref.as_str())?;
+    repo.find_commit(current_oid)
+}
+
+pub fn make_new_branch_from_head(
+    repo: &Repository,
+    branch_name: &str,
+) -> Result<(), git2::Error> {
+    let current_head_commit = get_head_commit(repo)?;
+    let branch = repo.branch(branch_name, &current_head_commit, false)?;
+    println!("Made new branch! {}", branch.name().unwrap().unwrap());
+    Ok(())
+}
+
+pub fn make_new_branch_from_head_and_checkout(
+    repo: &Repository,
+    branch_name: &str
+) -> Result<(), git2::Error> {
+    make_new_branch_from_head(repo, branch_name)?;
+    let branch_ref = format!("refs/heads/{}", branch_name);
+    checkout_to_branch(branch_ref.as_str(), repo)?;
+    Ok(())
+}
 
 #[cfg(test)]
 mod test {
     use super::*;
+
+    // #[test]
+    // // TODO: write this test
+    // // ensure branch exists,
+    // // and points to same commit as master. idk how to do that yet
+    // fn make_new_branch_works() {
+    //     let mut pathbuf = PathBuf::new();
+    //     pathbuf.push(".");
+    //     let (repo, _) = get_repository_and_root_directory(&pathbuf);
+    //     make_new_branch_from_head_and_checkout(&repo, "testbranch");
+    // }
 
     #[test]
     #[cfg_attr(not(feature = "gittests"), ignore)]
