@@ -1,9 +1,9 @@
 use clap::{Arg, App, SubCommand, ArgMatches};
 
-use super::repo_file;
 use super::split_out::run_split_out;
 
-pub const REPO_FILE_ARG: &'static str = "repo_file";
+pub const REPO_FILE_ARG: &'static str = "repo-file";
+pub const DRY_RUN_ARG: &'static str = "dry-run";
 
 const SPLIT_IN_STR: &'static str = "split-in";
 const SPLIT_OUT_STR: &'static str = "split-out";
@@ -56,6 +56,11 @@ fn base_command<'a, 'b>(cmd: CommandName) -> App<'a, 'b> {
         .arg(
             Arg::with_name(REPO_FILE_ARG)
                 .required(true)
+        )
+        .arg(
+            Arg::with_name(DRY_RUN_ARG)
+                .long(DRY_RUN_ARG)
+                .help("Print out the steps taken, but don't actually run or change anything.")
         );
 }
 
