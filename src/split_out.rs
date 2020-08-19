@@ -106,19 +106,20 @@ impl<'a> Runner<'a> {
 
         let output_branch_name = &self.repo_file.repo_name;
         let pair = (&self.repo, output_branch_name);
-        let (success, branch_name) = match pair {
+        let branch_name = match pair {
             (Some(repo), Some(branch_name)) => {
-                (git_helpers::make_new_branch_from_head_and_checkout(
+                let success = git_helpers::make_new_branch_from_head_and_checkout(
                     repo,
                     branch_name.as_str(),
-                ).is_ok(),
-                branch_name)
+                ).is_ok();
+                if ! success {
+                    panic!("Failed to checkout new branch");
+                }
+                branch_name
             },
             _ => panic!("Something went horribly wrong!"),
         };
-        if ! success {
-            panic!("Failed to checkout new branch");
-        }
+
         if self.verbose {
             println!("{}created and checked out new branch {}", self.log_p, branch_name);
         }
