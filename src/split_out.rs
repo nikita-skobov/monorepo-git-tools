@@ -139,14 +139,12 @@ impl<'a> Runner<'a> {
     }
     pub fn filter_include(self) -> Self {
         let output_branch_name = self.repo_file.repo_name.clone().unwrap();
-        let mut arg_vec = vec!["git", "filter-repo"];
-        let include_arg_str = self.include_arg_str.clone().unwrap();
-        for arg in include_arg_str.split_whitespace() {
-            arg_vec.push(arg);
-        }
-        arg_vec.push("--refs");
-        arg_vec.push(&output_branch_name);
-        arg_vec.push("--force");
+        let include_arg_str_opt = self.include_arg_str.clone();
+        let include_arg_str = include_arg_str_opt.unwrap();
+        let arg_vec = generate_filter_arg_vec(
+            include_arg_str.as_str(),
+            output_branch_name.as_str(),
+        );
 
         if self.dry_run {
             println!("{}", arg_vec.join(" "));
@@ -161,6 +159,21 @@ impl<'a> Runner<'a> {
 
         self
     }
+}
+
+pub fn generate_filter_arg_vec<'a>(
+    arg_str: &'a str,
+    output_branch: &'a str
+) -> Vec<&'a str> {
+    let mut arg_vec = vec!["git", "filter-repo"];
+    for arg in arg_str.split_whitespace() {
+        arg_vec.push(arg);
+    }
+    arg_vec.push("--refs");
+    arg_vec.push(&output_branch);
+    arg_vec.push("--force");
+
+    arg_vec
 }
 
 fn get_string_after_last_slash(s: String) -> String {
