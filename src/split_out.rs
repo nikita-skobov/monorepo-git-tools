@@ -8,6 +8,7 @@ use super::commands::VERBOSE_ARG;
 use super::repo_file;
 use super::repo_file::RepoFile;
 use super::git_helpers;
+use super::exec_helpers;
 
 pub struct Runner<'a> {
     matches: &'a ArgMatches<'a>,
@@ -124,6 +125,19 @@ impl<'a> Runner<'a> {
             println!("{}created and checked out new branch {}", self.log_p, branch_name);
         }
 
+        self
+    }
+    // panic if all dependencies are not met
+    pub fn verify_dependencies(self) -> Self {
+        if ! exec_helpers::executed_successfully(&["git", "--version"]) {
+            panic!("Failed to run. Missing dependency 'git'");
+        }
+        if ! exec_helpers::executed_successfully(&["git", "filter-repo", "--version"]) {
+            panic!("Failed to run. Missing dependency 'git-filter-repo'");
+        }
+        self
+    }
+    pub fn filter_include(self) -> Self {
         self
     }
 }
@@ -305,6 +319,7 @@ pub fn changed_to_repo_root(repo_root: &PathBuf) -> bool {
 pub fn run_split_out(matches: &ArgMatches) {
     Runner::new(matches)
         .get_repo_file()
+        .verify_dependencies()
         .validate_repo_file()
         .save_current_dir()
         .get_repository_from_current_dir()
