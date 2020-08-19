@@ -88,7 +88,7 @@ impl<'a> Runner<'a> {
         }
         self
     }
-    pub fn generate_arg_strings(self) -> Self {
+    pub fn generate_arg_strings(mut self) -> Self {
         let include_arg_str = generate_split_out_arg_include(&self.repo_file);
         let include_as_arg_str = generate_split_out_arg_include_as(&self.repo_file);
         let exclude_arg_str = generate_split_out_arg_exclude(&self.repo_file);
@@ -97,6 +97,9 @@ impl<'a> Runner<'a> {
             println!("{}include_as_arg_str: {}", self.log_p, include_as_arg_str);
             println!("{}exclude_arg_str: {}", self.log_p, exclude_arg_str);
         }
+        self.include_arg_str = Some(include_arg_str);
+        self.include_as_arg_str = Some(include_as_arg_str);
+        self.exclude_arg_str = Some(exclude_arg_str);
         self
     }
     pub fn make_and_checkout_output_branch(self) -> Self {
@@ -138,7 +141,7 @@ impl<'a> Runner<'a> {
         let output_branch_name = self.repo_file.repo_name.clone().unwrap();
         let mut arg_vec = vec!["git", "filter-repo"];
         let include_arg_str = self.include_arg_str.clone().unwrap();
-        for arg in include_arg_str.split(" ") {
+        for arg in include_arg_str.split_whitespace() {
             arg_vec.push(arg);
         }
         arg_vec.push("--refs");
