@@ -1,10 +1,13 @@
 use std::env;
+use std::path::PathBuf;
 use clap::ArgMatches;
 
 use super::commands::REPO_FILE_ARG;
 use super::repo_file;
 use super::repo_file::RepoFile;
 use super::git_helpers;
+
+
 
 fn get_string_after_last_slash(s: String) -> String {
     let mut pieces = s.rsplit('/');
@@ -173,6 +176,13 @@ pub fn generate_split_out_arg_exclude(repofile: &RepoFile) -> String {
     }
 }
 
+pub fn changed_to_repo_root(repo_root: &PathBuf) -> bool {
+    match env::set_current_dir(repo_root) {
+        Ok(_) => true,
+        Err(_) => false,
+    }
+}
+
 pub fn run_split_out(matches: &ArgMatches) {
     // safe to unwrap because repo_file is a required argument
     let repo_file_name = matches.value_of(REPO_FILE_ARG).unwrap();
@@ -183,6 +193,7 @@ pub fn run_split_out(matches: &ArgMatches) {
     // according to what split_out command wants it to be
     validate_repo_file(matches, &mut repofile);
 
+    // save this for later, as well as to find the repository
     let current_dir = match env::current_dir() {
         Ok(pathbuf) => pathbuf,
         Err(_) => panic!("Failed to find your current directory. Cannot proceed"),
@@ -196,6 +207,11 @@ pub fn run_split_out(matches: &ArgMatches) {
     println!("include_arg_str: {}", include_arg_str);
     println!("include_as_arg_str: {}", include_as_arg_str);
     println!("exclude_arg_str: {}", exclude_arg_str);
+
+    if ! changed_to_repo_root(&repo_path) {
+        panic!("Failed to change to repository root: {:?}", repo_path);
+    }
+    println!("Changed to repository rott! {:?}", repo_path);
 }
 
 
