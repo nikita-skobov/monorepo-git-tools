@@ -127,7 +127,6 @@ pub fn make_new_branch_from_head(
 ) -> Result<(), git2::Error> {
     let current_head_commit = get_head_commit(repo)?;
     let branch = repo.branch(branch_name, &current_head_commit, false)?;
-    println!("Made new branch! {}", branch.name().unwrap().unwrap());
     Ok(())
 }
 

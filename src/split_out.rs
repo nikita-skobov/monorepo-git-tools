@@ -39,7 +39,7 @@ impl<'a> Runner<'a> {
             include_arg_str: None,
             include_as_arg_str: None,
             exclude_arg_str: None,
-            log_p: if is_dry_run { "#" } else { "" },
+            log_p: if is_dry_run { "   # " } else { "" },
         }
     }
     pub fn get_repo_file(mut self) -> Self {
@@ -75,11 +75,15 @@ impl<'a> Runner<'a> {
         self
     }
     pub fn change_to_repo_root(self) -> Self {
+        if self.dry_run {
+            println!("cd {}", self.repo_root_dir.display());
+            return self;
+        }
         if ! changed_to_repo_root(&self.repo_root_dir) {
             panic!("Failed to change to repository root: {:?}", &self.repo_root_dir);
         }
         if self.verbose {
-            println!("{}changed to repository root! {}", self.log_p, self.repo_root_dir.display());
+            println!("{}changed to repository root {}", self.log_p, self.repo_root_dir.display());
         }
         self
     }
@@ -92,6 +96,33 @@ impl<'a> Runner<'a> {
             println!("{}include_as_arg_str: {}", self.log_p, include_as_arg_str);
             println!("{}exclude_arg_str: {}", self.log_p, exclude_arg_str);
         }
+        self
+    }
+    pub fn make_and_checkout_output_branch(&self) -> &Self {
+        if self.dry_run {
+            println!("git checkout -b {}", self.repo_file.repo_name.clone().unwrap());
+            return self;
+        }
+
+        let output_branch_name = &self.repo_file.repo_name;
+        let pair = (&self.repo, output_branch_name);
+        let (success, branch_name) = match pair {
+            (Some(repo), Some(branch_name)) => {
+                (git_helpers::make_new_branch_from_head_and_checkout(
+                    repo,
+                    branch_name.as_str(),
+                ).is_ok(),
+                branch_name)
+            },
+            _ => panic!("Something went horribly wrong!"),
+        };
+        if ! success {
+            panic!("Failed to checkout new branch");
+        }
+        if self.verbose {
+            println!("{}created and checked out new branch {}", self.log_p, branch_name);
+        }
+
         self
     }
 }
@@ -277,7 +308,8 @@ pub fn run_split_out(matches: &ArgMatches) {
         .save_current_dir()
         .get_repository_from_current_dir()
         .change_to_repo_root()
-        .generate_arg_strings();
+        .generate_arg_strings()
+        .make_and_checkout_output_branch();
 }
 
 
