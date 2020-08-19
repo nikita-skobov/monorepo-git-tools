@@ -2,13 +2,7 @@ use git2::Repository;
 use git2::Error;
 use std::path::PathBuf;
 
-pub fn get_repository_and_root_directory(dir: &PathBuf) -> (Repository, PathBuf) {
-    let repo = match Repository::discover(dir) {
-        Err(e) => panic!("Failed to find or open repository from {} - {}", dir.display(), e),
-        Ok(repo) => repo,
-    };
-
-    let mut pathbuf = repo.path().to_path_buf();
+fn remove_git_from_path_buf(pathbuf: &mut PathBuf) -> PathBuf {
     match &pathbuf.file_name() {
         Some(p) => {
             match p.to_str() {
@@ -22,6 +16,18 @@ pub fn get_repository_and_root_directory(dir: &PathBuf) -> (Repository, PathBuf)
         },
         _ => (),
     };
+    return pathbuf.clone();
+}
+
+pub fn get_repository_and_root_directory(dir: &PathBuf) -> (Repository, PathBuf) {
+    let repo = match Repository::discover(dir) {
+        Err(e) => panic!("Failed to find or open repository from {} - {}", dir.display(), e),
+        Ok(repo) => repo,
+    };
+
+    let pathbuf = remove_git_from_path_buf(
+        &mut repo.path().to_path_buf()
+    );
 
     return (repo, pathbuf);
 }
