@@ -4,6 +4,7 @@ use clap::ArgMatches;
 
 use super::commands::REPO_FILE_ARG;
 use super::commands::DRY_RUN_ARG;
+use super::commands::VERBOSE_ARG;
 use super::repo_file;
 use super::repo_file::RepoFile;
 use super::git_helpers;
@@ -11,7 +12,10 @@ use super::git_helpers;
 pub struct Runner<'a> {
     matches: &'a ArgMatches<'a>,
     current_dir: PathBuf,
+    // log prefix
+    log_p: &'static str,
     pub dry_run: bool,
+    pub verbose: bool,
     pub repo_file: RepoFile,
     pub repo_root_dir: PathBuf,
     pub repo: Option<git2::Repository>,
@@ -22,9 +26,12 @@ pub struct Runner<'a> {
 
 impl<'a> Runner<'a> {
     pub fn new(matches: &'a ArgMatches) -> Runner<'a> {
+        let is_verbose = matches.is_present(VERBOSE_ARG[0]);
+        let is_dry_run = matches.is_present(DRY_RUN_ARG);
         Runner {
             matches: matches,
-            dry_run: matches.is_present(DRY_RUN_ARG),
+            dry_run: is_dry_run,
+            verbose: is_verbose,
             repo_file: RepoFile::new(),
             current_dir: PathBuf::new(),
             repo: None,
@@ -32,12 +39,15 @@ impl<'a> Runner<'a> {
             include_arg_str: None,
             include_as_arg_str: None,
             exclude_arg_str: None,
+            log_p: if is_dry_run { "#" } else { "" },
         }
     }
     pub fn get_repo_file(mut self) -> Self {
         let repo_file_name = self.matches.value_of(REPO_FILE_ARG).unwrap();
-        println!("repo file: {}", repo_file_name);
         self.repo_file = repo_file::parse_repo_file(repo_file_name);
+        if self.verbose {
+            println!("{}repo file: {}", self.log_p, repo_file_name);
+        }
         self
     }
     pub fn validate_repo_file(mut self) -> Self {
@@ -50,29 +60,38 @@ impl<'a> Runner<'a> {
             Ok(pathbuf) => pathbuf,
             Err(_) => panic!("Failed to find your current directory. Cannot proceed"),
         };
+        if self.verbose {
+            println!("{}saving current dir to return to later: {}", self.log_p, self.current_dir.display());
+        }
         self
     }
     pub fn get_repository_from_current_dir(mut self) -> Self {
         let (repo, repo_path) = git_helpers::get_repository_and_root_directory(&self.current_dir);
-        println!("Found repo path: {}", repo_path.display());
         self.repo = Some(repo);
         self.repo_root_dir = repo_path;
+        if self.verbose {
+            println!("{}found repo path: {}", self.log_p, self.repo_root_dir.display());
+        }
         self
     }
     pub fn change_to_repo_root(self) -> Self {
         if ! changed_to_repo_root(&self.repo_root_dir) {
             panic!("Failed to change to repository root: {:?}", &self.repo_root_dir);
         }
-        println!("Changed to repository rott! {:?}", &self.repo_root_dir);
+        if self.verbose {
+            println!("{}changed to repository root! {}", self.log_p, self.repo_root_dir.display());
+        }
         self
     }
     pub fn generate_arg_strings(self) -> Self {
         let include_arg_str = generate_split_out_arg_include(&self.repo_file);
         let include_as_arg_str = generate_split_out_arg_include_as(&self.repo_file);
         let exclude_arg_str = generate_split_out_arg_exclude(&self.repo_file);
-        println!("include_arg_str: {}", include_arg_str);
-        println!("include_as_arg_str: {}", include_as_arg_str);
-        println!("exclude_arg_str: {}", exclude_arg_str);
+        if self.verbose {
+            println!("{}include_arg_str: {}", self.log_p, include_arg_str);
+            println!("{}include_as_arg_str: {}", self.log_p, include_as_arg_str);
+            println!("{}exclude_arg_str: {}", self.log_p, exclude_arg_str);
+        }
         self
     }
 }

@@ -4,6 +4,7 @@ use super::split_out::run_split_out;
 
 pub const REPO_FILE_ARG: &'static str = "repo-file";
 pub const DRY_RUN_ARG: &'static str = "dry-run";
+pub const VERBOSE_ARG: [&'static str; 2]= ["verbose", "v"];
 
 const SPLIT_IN_STR: &'static str = "split-in";
 const SPLIT_OUT_STR: &'static str = "split-out";
@@ -61,6 +62,12 @@ fn base_command<'a, 'b>(cmd: CommandName) -> App<'a, 'b> {
             Arg::with_name(DRY_RUN_ARG)
                 .long(DRY_RUN_ARG)
                 .help("Print out the steps taken, but don't actually run or change anything.")
+        )
+        .arg(
+            Arg::with_name(VERBOSE_ARG[0])
+                .long(VERBOSE_ARG[0])
+                .short(VERBOSE_ARG[1])
+                .help("show more detailed logs")
         );
 }
 
