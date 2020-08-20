@@ -137,6 +137,20 @@ impl<'a> Runner<'a> {
         }
         self
     }
+    pub fn run_filter(self, arg_vec: Vec<&str>, verbose_log: &str) -> Self {
+        if self.dry_run {
+            println!("{}", arg_vec.join(" "));
+            return self
+        }
+        if self.verbose {
+            println!("{}", verbose_log);
+        }
+        if ! exec_helpers::executed_successfully(&arg_vec) {
+            panic!("Failed to execute: \"{}\"", arg_vec.join(" "));
+        }
+
+        self
+    }
     pub fn filter_include(self) -> Self {
         let output_branch_name = self.repo_file.repo_name.clone().unwrap();
         let include_arg_str_opt = self.include_arg_str.clone();
@@ -146,18 +160,29 @@ impl<'a> Runner<'a> {
             output_branch_name.as_str(),
         );
 
-        if self.dry_run {
-            println!("{}", arg_vec.join(" "));
-            return self
-        }
-        if self.verbose {
-            println!("Filtering include");
-        }
-        if ! exec_helpers::executed_successfully(&arg_vec) {
-            panic!("Failed to execute: \"{}\"", arg_vec.join(" "));
-        }
+        self.run_filter(arg_vec, "Filtering include")
+    }
+    pub fn filter_include_as(self) -> Self {
+        let output_branch_name = self.repo_file.repo_name.clone().unwrap();
+        let include_as_arg_str_opt = self.include_as_arg_str.clone();
+        let include_as_arg_str = include_as_arg_str_opt.unwrap();
+        let arg_vec = generate_filter_arg_vec(
+            include_as_arg_str.as_str(),
+            output_branch_name.as_str(),
+        );
 
-        self
+        self.run_filter(arg_vec, "Filtering include_as")
+    }
+    pub fn filter_exclude(self) -> Self {
+        let output_branch_name = self.repo_file.repo_name.clone().unwrap();
+        let exclude_arg_str_opt = self.exclude_arg_str.clone();
+        let exclude_arg_str = exclude_arg_str_opt.unwrap();
+        let arg_vec = generate_filter_arg_vec(
+            exclude_arg_str.as_str(),
+            output_branch_name.as_str(),
+        );
+
+        self.run_filter(arg_vec, "Filtering exclude")
     }
 }
 
@@ -360,7 +385,9 @@ pub fn run_split_out(matches: &ArgMatches) {
         .change_to_repo_root()
         .generate_arg_strings()
         .make_and_checkout_output_branch()
-        .filter_include();
+        .filter_include()
+        .filter_include_as()
+        .filter_exclude();
 }
 
 
