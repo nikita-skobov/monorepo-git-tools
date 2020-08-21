@@ -21,6 +21,7 @@ build_program() {
     fi
     # this should output to ./target/release/my-git-tools
     PROGRAM_PATH="./target/release/my-git-tools"
+    PROGRAM_PATH="$(realpath $PROGRAM_PATH)"
 
     if [[ ! -f $PROGRAM_PATH ]]; then
         echo "Failed to find output program to run tests with: $PROGRAM_PATH"
@@ -50,6 +51,9 @@ run_unit_tests() {
 run_end_to_end_tests() {
     echo "GENERAL PROGRAM:"
     PROGRAM_PATH="$PROGRAM_PATH" bats test/general
+    echo ""
+    echo "SPLIT-OUT:"
+    PROGRAM_PATH="$PROGRAM_PATH" bats test/splitout
     echo ""
     # echo "HELPER FUNCTIONS:"
     # bats test/helpers
