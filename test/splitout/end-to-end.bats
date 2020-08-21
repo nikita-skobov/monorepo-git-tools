@@ -28,6 +28,35 @@ function teardown() {
     fi
 }
 
+@test 'capable of only including certain files' {
+    repo_file_contents="
+    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    include=\"a.txt\"
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+
+    echo "b" > b.txt
+    echo "a" > a.txt
+    git add a.txt
+    git commit -m "a"
+    git add b.txt
+    git commit -m "b"
+
+    [[ -f a.txt ]]
+    [[ -f b.txt ]]
+
+    run $PROGRAM_PATH split-out repo_file.sh --verbose
+
+    echo "$output"
+    [[ $status == "0" ]]
+
+    # since we only included a.txt
+    # b.txt should not exist
+    [[ -f a.txt ]]
+    [[ ! -f b.txt ]]
+}
+
 @test 'dont need a repo_name if providing a remote_repo uri (out)' {
     # from test_remote_repo, we split out the file test_remote_repo.txt
     # and into a repo called test_remote_repo2:
@@ -37,11 +66,6 @@ function teardown() {
     "
 
     echo "$repo_file_contents" > repo_file.sh
-
-    run $PROGRAM_PATH --version
-
-    echo "$output"
-    echo "version?"
 
     run $PROGRAM_PATH split-out repo_file.sh --verbose
 
