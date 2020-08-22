@@ -105,8 +105,8 @@ impl<'a> SplitOut for Runner<'a> {
                 match (self.dry_run, &self.input_branch) {
                     (true, Some(branch_name)) => println!("git merge {}", branch_name),
                     (true, None) => println!("git pull {}", remote_repo),
-                    (false, Some(branch_name)) => { git_helpers::merge(&r, &branch_name[..]); },
-                    (false, None) => { git_helpers::pull(&r, &remote_repo[..]); },
+                    (false, Some(branch_name)) => { git_helpers::merge_branches(&r, &branch_name[..], None); },
+                    (false, None) => { git_helpers::pull(&r, &remote_repo[..], None); },
                 };
             },
         };
