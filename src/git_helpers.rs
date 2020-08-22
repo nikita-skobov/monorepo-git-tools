@@ -1,6 +1,9 @@
 use git2::Repository;
 use git2::Error;
 use std::path::PathBuf;
+use std::path::Path;
+use std::fs;
+use std::str::from_utf8;
 
 fn remove_git_from_path_buf(pathbuf: &mut PathBuf) -> PathBuf {
     match &pathbuf.file_name() {
@@ -127,6 +130,59 @@ pub fn make_new_branch_from_head(
 ) -> Result<(), git2::Error> {
     let current_head_commit = get_head_commit(repo)?;
     let branch = repo.branch(branch_name, &current_head_commit, false)?;
+    Ok(())
+}
+
+// basically git rm -rf .
+// it gets all paths from the index
+// and then removes all of them one by one
+pub fn remove_index_and_files(
+    repo: &Repository
+) -> Result<(), git2::Error> {
+    let mut index = repo.index().expect("FAILED TO GET INDEX");
+    let mut files_to_delete: Vec<PathBuf> = vec![];
+    for entry in index.iter() {
+        let p = from_utf8(&entry.path).unwrap();
+        files_to_delete.push(p.into());
+    }
+    // we probably want to write index before
+    // deleting the files, because if the index change fails
+    // we dont want to delete the files
+    index.clear()?;
+    index.write()?;
+
+    // we only check if we have successfully removed the first file
+    // otherwise whats the point of erroring if we remove one or more files
+    // but fail on another one?
+    let mut file_removed = false;
+    for f in &files_to_delete {
+        if ! file_removed {
+            let result = fs::remove_file(f);
+            if result.is_err() {
+                panic!("Failed to remove file {}. Stopping operation without modifying index", f.display());
+            }
+            file_removed = true;
+        } else {
+            fs::remove_file(f);
+        }
+    }
+
+    // we need to do this to delete empty directories that were left over
+    // from deleting the above files... yeah kinda slow but idk a better way
+    for f in &files_to_delete {
+        let mut parent = f.parent();
+        while parent.is_some() {
+            let parent_path = parent.unwrap();
+            if parent_path.is_dir() {
+                // we dont care if this errors.
+                // an error will occur if the directory is not empty, which
+                // is fine because if its not empty we dont want to delete it anyway
+                fs::remove_dir(parent_path);
+            }
+            parent = parent_path.parent();
+        }
+    }
+
     Ok(())
 }
 

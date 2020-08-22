@@ -79,6 +79,12 @@ impl<'a> SplitOut for Runner<'a> {
                 if ! success {
                     panic!("Failed to checkout orphan branch");
                 }
+                // on a new orphan branch our existing files appear in the stage
+                // we need to essentially do "git rm -rf ."
+                let success = git_helpers::remove_index_and_files(r).is_ok();
+                if ! success {
+                    panic!("Failed to remove git indexed files after making orphan");
+                }
             },
             _ => panic!("Something went horribly wrong!"),
         };
