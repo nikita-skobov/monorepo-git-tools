@@ -13,14 +13,12 @@ function make_temp_repo() {
 }
 
 function setup() {
-    echo "SETUP!"
     make_temp_repo test_remote_repo
     make_temp_repo test_remote_repo2
     cd $BATS_TMPDIR/test_remote_repo
 }
 
 function teardown() {
-    echo "TEARDOWN!"
     cd $BATS_TMPDIR
     if [[ -d test_remote_repo ]]; then
         rm -rf test_remote_repo

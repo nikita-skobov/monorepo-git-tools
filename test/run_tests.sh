@@ -55,11 +55,8 @@ run_end_to_end_tests() {
     echo "SPLIT-OUT:"
     PROGRAM_PATH="$PROGRAM_PATH" bats test/splitout
     echo ""
-    # echo "HELPER FUNCTIONS:"
-    # bats test/helpers
-    # echo ""
-    # echo "GIT SPLIT:"
-    # bats test/splitin
+    echo "SPLIT-IN:"
+    PROGRAM_PATH="$PROGRAM_PATH" bats test/splitin
     # echo ""
     # echo "GIT TOPBASE:"
     # bats test/topbase
