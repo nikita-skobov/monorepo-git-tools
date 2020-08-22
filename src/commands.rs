@@ -1,6 +1,7 @@
 use clap::{Arg, App, SubCommand, ArgMatches};
 
 use super::split_out::run_split_out;
+use super::split_in::run_split_in;
 
 pub const REPO_FILE_ARG: &'static str = "repo-file";
 pub const DRY_RUN_ARG: &'static str = "dry-run";
@@ -91,8 +92,4 @@ pub fn run_command(name: &str, matches: &ArgMatches) {
         SplitIn => run_split_in(matches.subcommand_matches(name).unwrap()),
         SplitOut => run_split_out(matches.subcommand_matches(name).unwrap()),
     }
-}
-
-pub fn run_split_in(matches: &ArgMatches) {
-
 }

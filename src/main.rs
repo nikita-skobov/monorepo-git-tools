@@ -3,6 +3,7 @@ use clap::{App, ArgMatches};
 mod commands;
 mod repo_file;
 mod split_out;
+mod split_in;
 mod split;
 mod git_helpers;
 mod exec_helpers;
