@@ -9,6 +9,7 @@ use super::repo_file::RepoFile;
 pub trait SplitOut {
     fn validate_repo_file(self) -> Self;
     fn generate_arg_strings(self) -> Self;
+    fn make_and_checkout_output_branch(self) -> Self;
 }
 
 impl<'a> SplitOut for Runner<'a> {
@@ -50,6 +51,34 @@ impl<'a> SplitOut for Runner<'a> {
     fn generate_arg_strings(mut self) -> Self {
         self
     }
+
+    fn make_and_checkout_output_branch(self) -> Self {
+        let output_branch_name = self.repo_file.repo_name.clone().unwrap();
+        let output_branch_name = format!("{}-reverse", output_branch_name);
+        if self.dry_run {
+            println!("git checkout --orphan {}", output_branch_name);
+            print!("git rm -rf . > /dev/null");
+            return self;
+        }
+
+        match self.repo {
+            Some(ref r) => {
+                let success = git_helpers::make_orphan_branch_and_checkout(
+                    output_branch_name.as_str(),
+                    r,
+                ).is_ok();
+                if ! success {
+                    panic!("Failed to checkout orphan branch");
+                }
+            },
+            _ => panic!("Something went horribly wrong!"),
+        };
+        if self.verbose {
+            println!("{}created and checked out orphan branch {}", self.log_p, output_branch_name);
+        }
+
+        self
+    }
 }
 
 pub fn run_split_in(matches: &ArgMatches) {
@@ -58,10 +87,10 @@ pub fn run_split_in(matches: &ArgMatches) {
         .save_current_dir()
         .get_repository_from_current_dir()
         .verify_dependencies()
-        .validate_repo_file();
-        // .change_to_repo_root()
+        .validate_repo_file()
+        .change_to_repo_root()
+        .make_and_checkout_output_branch();
         // .generate_arg_strings()
-        // .make_and_checkout_output_branch()
         // .filter_exclude()
         // .filter_include_as();
 }

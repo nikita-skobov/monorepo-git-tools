@@ -90,31 +90,6 @@ impl<'a> Runner<'a> {
         self
     }
 
-    pub fn make_and_checkout_output_branch(self) -> Self {
-        if self.dry_run {
-            println!("git checkout -b {}", self.repo_file.repo_name.clone().unwrap());
-            return self;
-        }
-
-        let output_branch_name = self.repo_file.repo_name.clone().unwrap();
-        match self.repo {
-            Some(ref r) => {
-                let success = git_helpers::make_new_branch_from_head_and_checkout(
-                    r,
-                    output_branch_name.as_str(),
-                ).is_ok();
-                if ! success {
-                    panic!("Failed to checkout new branch");
-                }
-            },
-            _ => panic!("Something went horribly wrong!"),
-        };
-        if self.verbose {
-            println!("{}created and checked out new branch {}", self.log_p, output_branch_name);
-        }
-
-        self
-    }
     // panic if all dependencies are not met
     pub fn verify_dependencies(self) -> Self {
         if ! exec_helpers::executed_successfully(&["git", "--version"]) {

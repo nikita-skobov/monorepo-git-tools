@@ -4,11 +4,12 @@ use super::split::panic_if_array_invalid;
 use super::split::Runner;
 use super::split::try_get_repo_name_from_remote_repo;
 use super::repo_file::RepoFile;
-
+use super::git_helpers;
 
 pub trait SplitOut {
     fn validate_repo_file(self) -> Self;
     fn generate_arg_strings(self) -> Self;
+    fn make_and_checkout_output_branch(self) -> Self;
 }
 
 impl<'a> SplitOut for Runner<'a> {
@@ -57,6 +58,32 @@ impl<'a> SplitOut for Runner<'a> {
         if exclude_arg_str != "" {
             self.exclude_arg_str = Some(exclude_arg_str);
         }
+        self
+    }
+
+    fn make_and_checkout_output_branch(self) -> Self {
+        if self.dry_run {
+            println!("git checkout -b {}", self.repo_file.repo_name.clone().unwrap());
+            return self;
+        }
+
+        let output_branch_name = self.repo_file.repo_name.clone().unwrap();
+        match self.repo {
+            Some(ref r) => {
+                let success = git_helpers::make_new_branch_from_head_and_checkout(
+                    r,
+                    output_branch_name.as_str(),
+                ).is_ok();
+                if ! success {
+                    panic!("Failed to checkout new branch");
+                }
+            },
+            _ => panic!("Something went horribly wrong!"),
+        };
+        if self.verbose {
+            println!("{}created and checked out new branch {}", self.log_p, output_branch_name);
+        }
+
         self
     }
 }
