@@ -4,6 +4,7 @@ use super::commands::INPUT_BRANCH_ARG;
 use super::split::panic_if_array_invalid;
 use super::split::Runner;
 use super::git_helpers;
+use super::split::try_get_repo_name_from_remote_repo;
 use super::repo_file::RepoFile;
 
 pub trait SplitOut {
@@ -30,6 +31,7 @@ impl<'a> SplitOut for Runner<'a> {
         };
 
         let missing_input_branch = self.input_branch.is_none();
+        let missing_repo_name = self.repo_file.repo_name.is_none();
         let missing_remote_repo = self.repo_file.remote_repo.is_none();
         let missing_include_as = self.repo_file.include_as.is_none();
         let missing_include = self.repo_file.include.is_none();
@@ -40,6 +42,12 @@ impl<'a> SplitOut for Runner<'a> {
 
         if missing_include && missing_include_as {
             panic!("Must provide either include or include_as in your repofile");
+        }
+
+        if missing_repo_name && !missing_remote_repo {
+            self.repo_file.repo_name = Some(try_get_repo_name_from_remote_repo(
+                self.repo_file.remote_repo.clone().unwrap()
+            ));
         }
 
         panic_if_array_invalid(&self.repo_file.include, true, "include");
