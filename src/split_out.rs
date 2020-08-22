@@ -408,8 +408,8 @@ pub fn run_split_out(matches: &ArgMatches) {
         .generate_arg_strings()
         .make_and_checkout_output_branch()
         .filter_include()
-        .filter_include_as()
-        .filter_exclude();
+        .filter_exclude()
+        .filter_include_as();
 }
 
 
