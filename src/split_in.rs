@@ -11,6 +11,7 @@ pub trait SplitOut {
     fn validate_repo_file(self) -> Self;
     fn generate_arg_strings(self) -> Self;
     fn make_and_checkout_output_branch(self) -> Self;
+    fn populate_empty_branch_with_remote_commits(self) -> Self;
 }
 
 impl<'a> SplitOut for Runner<'a> {
@@ -94,6 +95,18 @@ impl<'a> SplitOut for Runner<'a> {
 
         self
     }
+
+    fn populate_empty_branch_with_remote_commits(self) -> Self {
+        let remote_repo = self.repo_file.remote_repo.unwrap();
+        let ref r = self.repo;
+        match (self.dry_run, self.input_branch) {
+            (true, Some(branch_name)) => println!("git merge {}", branch_name),
+            (true, None) => println!("git pull {}", remote_repo),
+            (false, Some(branch_name)) => { git_helpers::merge(&r.unwrap(), &branch_name[..]); },
+            (false, None) => { git_helpers::pull(&r.unwrap(), &remote_repo[..]); },
+        };
+        self
+    }
 }
 
 pub fn run_split_in(matches: &ArgMatches) {
@@ -104,7 +117,8 @@ pub fn run_split_in(matches: &ArgMatches) {
         .verify_dependencies()
         .validate_repo_file()
         .change_to_repo_root()
-        .make_and_checkout_output_branch();
+        .make_and_checkout_output_branch()
+        .populate_empty_branch_with_remote_commits();
         // .generate_arg_strings()
         // .filter_exclude()
         // .filter_include_as();
