@@ -186,6 +186,102 @@ pub fn remove_index_and_files(
     Ok(())
 }
 
+pub fn fast_forward(
+    repo: &Repository,
+    target_reference: &mut git2::Reference,
+    source_commit: &git2::AnnotatedCommit,
+) -> Result<(), git2::Error> {
+    let name = match target_reference.name() {
+        Some(s) => s.to_string(),
+        None => String::from_utf8_lossy(target_reference.name_bytes()).to_string(),
+    };
+    target_reference.set_target(source_commit.id(), "")?;
+    repo.set_head(&name)?;
+    repo.checkout_head(Some(
+        git2::build::CheckoutBuilder::default().force(),
+    ))?;
+    Ok(())
+}
+
+// given a source commit, merge it into the target branch via the
+// branch name. If target branch is None, use current HEAD instead.
+pub fn merge<'a>(
+    repo: &Repository,
+    source_commit: git2::AnnotatedCommit<'a>,
+    target_branch: Option<&str>,
+) -> Result<(), git2::Error> {
+    let analysis = repo.merge_analysis(&[&source_commit])?;
+    let refname = match target_branch {
+        Some(s) => format!("refs/heads/{}", s),
+        None => get_current_branch(repo).unwrap(),
+    };
+
+    if analysis.0.is_fast_forward() {
+        match repo.find_reference(&refname) {
+            Ok(mut r) => { fast_forward(repo, &mut r, &source_commit)?; },
+            Err(_) => {
+                // The branch doesn't exist so just set the reference to the
+                // commit directly. Usually this is because you are pulling
+                // into an empty repository.
+                repo.reference(&refname, source_commit.id(), true, "")?;
+                repo.set_head(&refname)?;
+                repo.checkout_head(Some(
+                    git2::build::CheckoutBuilder::default()
+                        .allow_conflicts(true)
+                        .conflict_style_merge(true)
+                        .force(),
+                ))?;
+            }
+        }
+    } else {
+        panic!("cannot fast-forward. Alternate merge strategies not implements yet");
+    }
+
+    Ok(())
+}
+
+pub fn merge_branches(
+    repo: &Repository,
+    source_branch: &str,
+    target_branch: Option<&str>,
+) -> Result<(), git2::Error> {
+    // TODO: get commit from source branch
+    // and then call merge()
+    Ok(())
+}
+
+pub fn pull(
+    repo: &Repository,
+    remote_name: &str,
+    remote_branch_name: Option<&str>,
+) -> Result<(), git2::Error> {
+    let mut remote = repo.remote_anonymous(remote_name)?;
+    let remote_branch = remote_branch_name.unwrap_or("master");
+    let fetched_commit = fetch(
+        repo,
+        &[remote_branch],
+        &mut remote,
+    ).unwrap();
+    merge(repo, fetched_commit, None)
+}
+
+pub fn fetch<'a>(
+    repo: &'a Repository,
+    refs: &[&str],
+    remote: &'a mut git2::Remote,
+) -> Result<git2::AnnotatedCommit<'a>, git2::Error> {
+    remote.fetch(
+        refs,
+        Some(&mut git2::FetchOptions::new()
+            .download_tags(git2::AutotagOption::All)
+        ),
+        None
+    )?;
+
+    let fetched_commit = repo.find_reference("FETCH_HEAD")?;
+    Ok(repo.reference_to_annotated_commit(&fetched_commit)?)
+}
+
 pub fn make_new_branch_from_head_and_checkout(
     repo: &Repository,
     branch_name: &str
