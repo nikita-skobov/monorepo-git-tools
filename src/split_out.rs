@@ -97,9 +97,17 @@ impl<'a> Runner<'a> {
             println!("{}include_as_arg_str: {}", self.log_p, include_as_arg_str);
             println!("{}exclude_arg_str: {}", self.log_p, exclude_arg_str);
         }
-        self.include_arg_str = Some(include_arg_str);
-        self.include_as_arg_str = Some(include_as_arg_str);
-        self.exclude_arg_str = Some(exclude_arg_str);
+
+        if include_arg_str != "" {
+            self.include_arg_str = Some(include_arg_str);
+        }
+        if include_as_arg_str != "" {
+            self.include_as_arg_str = Some(include_as_arg_str);
+        }
+        if exclude_arg_str != "" {
+            self.exclude_arg_str = Some(exclude_arg_str);
+        }
+
         self
     }
     pub fn make_and_checkout_output_branch(self) -> Self {
@@ -151,7 +159,12 @@ impl<'a> Runner<'a> {
 
         self
     }
+
     pub fn filter_include(self) -> Self {
+        if self.include_arg_str.is_none() {
+            // dont run filter if this arg was not provided
+            return self;
+        }
         let output_branch_name = self.repo_file.repo_name.clone().unwrap();
         let include_arg_str_opt = self.include_arg_str.clone();
         let include_arg_str = include_arg_str_opt.unwrap();
@@ -163,6 +176,10 @@ impl<'a> Runner<'a> {
         self.run_filter(arg_vec, "Filtering include")
     }
     pub fn filter_include_as(self) -> Self {
+        if self.include_as_arg_str.is_none() {
+            // dont run filter if this arg was not provided
+            return self;
+        }
         let output_branch_name = self.repo_file.repo_name.clone().unwrap();
         let include_as_arg_str_opt = self.include_as_arg_str.clone();
         let include_as_arg_str = include_as_arg_str_opt.unwrap();
@@ -174,6 +191,10 @@ impl<'a> Runner<'a> {
         self.run_filter(arg_vec, "Filtering include_as")
     }
     pub fn filter_exclude(self) -> Self {
+        if self.exclude_arg_str.is_none() {
+            // dont run filter if this arg was not provided
+            return self;
+        }
         let output_branch_name = self.repo_file.repo_name.clone().unwrap();
         let exclude_arg_str_opt = self.exclude_arg_str.clone();
         let exclude_arg_str = exclude_arg_str_opt.unwrap();
@@ -288,6 +309,7 @@ pub fn validate_repo_file(matches: &ArgMatches, repofile: &mut RepoFile) {
     if missing_remote_repo && missing_repo_name {
         panic!("Must provide either repo_name or remote_repo in your repofile");
     }
+
     if missing_include && missing_include_as {
         panic!("Must provide either include or include_as in your repofile");
     }
@@ -433,6 +455,64 @@ mod test {
         ]);
         let filter_args = generate_split_out_arg_exclude(&repofile);
         assert_eq!(filter_args, "--invert-paths --path one --path two --path three");
+    }
+
+    // not sure how to test this. I want to test if
+    // println was called with certain strings (because dry-run was set true
+    // that means it will println instead of running the command)
+    // but i dont think you can do that in rust
+    // #[test]
+    // fn should_not_run_filter_exclude_if_no_exclude_provided() {
+    //     let matches = ArgMatches::new();
+    //     let mut runner = Runner::new(&matches);
+    //     // ensure we dont actually run anything
+    //     runner.dry_run = true;
+    //     let repofile = RepoFile::new();
+    //     runner.repo_file = repofile;
+    //     runner = runner.generate_arg_strings();
+    //     let exclude_arg_str = runner.exclude_arg_str.clone().unwrap();
+    //     assert_eq!(exclude_arg_str, "".to_string());
+    // }
+
+    #[test]
+    fn should_generate_empty_strings_for_generating_args_of_none() {
+        let mut repofile = RepoFile::new();
+        repofile.exclude = None;
+        repofile.include = None;
+        repofile.include_as = None;
+
+        let filter_exclude_args = generate_split_out_arg_exclude(&repofile);
+        assert_eq!(filter_exclude_args, "");
+
+        let filter_include_args = generate_split_out_arg_include(&repofile);
+        assert_eq!(filter_include_args, "");
+
+        let filter_include_as_args = generate_split_out_arg_include_as(&repofile);
+        assert_eq!(filter_include_as_args, "");
+    }
+
+    // similarly to the above test, if the actual generate_split_out_arg_include_as
+    // returns "", then we want the generate_arg_strings method to
+    // set the fields to None
+    #[test]
+    fn should_set_arg_strs_to_none_if_empty_string() {
+        let matches = ArgMatches::new();
+        let mut runner = Runner::new(&matches);
+        // ensure we dont actually run anything
+        runner.dry_run = true;
+        let mut repofile = RepoFile::new();
+        repofile.exclude = None;
+        repofile.include = None;
+        repofile.include_as = None;
+        runner.repo_file = repofile;
+        runner = runner.generate_arg_strings();
+        let exclude_arg_str_opt = runner.exclude_arg_str.clone();
+        let include_arg_str_opt = runner.include_arg_str.clone();
+        let include_as_arg_str_opt = runner.include_as_arg_str.clone();
+
+        assert_eq!(exclude_arg_str_opt, None);
+        assert_eq!(include_arg_str_opt, None);
+        assert_eq!(include_as_arg_str_opt, None);
     }
 
     #[test]
