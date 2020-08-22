@@ -1,10 +1,10 @@
 use clap::ArgMatches;
 
+use super::commands::INPUT_BRANCH_ARG;
 use super::split::panic_if_array_invalid;
 use super::split::Runner;
 use super::split::try_get_repo_name_from_remote_repo;
 use super::repo_file::RepoFile;
-
 
 pub trait SplitOut {
     fn validate_repo_file(self) -> Self;
@@ -13,23 +13,22 @@ pub trait SplitOut {
 
 impl<'a> SplitOut for Runner<'a> {
     fn validate_repo_file(mut self) -> Self {
-        let missing_repo_name = self.repo_file.repo_name.is_none();
+        self.input_branch = match self.matches.value_of(INPUT_BRANCH_ARG) {
+            Some(branch_name) => Some(branch_name.into()),
+            None => None,
+        };
+
+        let missing_input_branch = self.input_branch.is_none();
         let missing_remote_repo = self.repo_file.remote_repo.is_none();
         let missing_include_as = self.repo_file.include_as.is_none();
         let missing_include = self.repo_file.include.is_none();
 
-        if missing_remote_repo && missing_repo_name {
-            panic!("Must provide either repo_name or remote_repo in your repofile");
+        if missing_remote_repo && missing_input_branch {
+            panic!("Must provide either repo_name in your repofile, or specify a --{} argument", INPUT_BRANCH_ARG);
         }
 
         if missing_include && missing_include_as {
             panic!("Must provide either include or include_as in your repofile");
-        }
-
-        if missing_repo_name && !missing_remote_repo {
-            self.repo_file.repo_name = Some(try_get_repo_name_from_remote_repo(
-                self.repo_file.remote_repo.clone().unwrap()
-            ));
         }
 
         panic_if_array_invalid(&self.repo_file.include, true, "include");

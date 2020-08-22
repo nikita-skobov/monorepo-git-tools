@@ -22,6 +22,7 @@ pub struct Runner<'a> {
     pub repo_file: RepoFile,
     pub repo_root_dir: PathBuf,
     pub repo: Option<git2::Repository>,
+    pub input_branch: Option<String>,
     pub include_arg_str: Option<String>,
     pub include_as_arg_str: Option<String>,
     pub exclude_arg_str: Option<String>,
@@ -43,6 +44,7 @@ impl<'a> Runner<'a> {
             include_as_arg_str: None,
             exclude_arg_str: None,
             log_p: if is_dry_run { "   # " } else { "" },
+            input_branch: None,
         }
     }
     pub fn get_repo_file(mut self) -> Self {

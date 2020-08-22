@@ -3,6 +3,8 @@ use clap::{Arg, App, SubCommand, ArgMatches};
 use super::split_out::run_split_out;
 use super::split_in::run_split_in;
 
+pub const INPUT_BRANCH_ARG: &'static str = "input-branch";
+pub const INPUT_BRANCH_NAME: &'static str = "branch-name";
 pub const REPO_FILE_ARG: &'static str = "repo-file";
 pub const DRY_RUN_ARG: &'static str = "dry-run";
 pub const VERBOSE_ARG: [&'static str; 2]= ["verbose", "v"];
@@ -73,14 +75,19 @@ fn base_command<'a, 'b>(cmd: CommandName) -> App<'a, 'b> {
 }
 
 pub fn split_in<'a, 'b>() -> App<'a, 'b> {
-    let base = base_command(SplitIn);
-    // specific arguments and stuff can go here
-    return base;
+    // split in has specific arguments in addition to base
+    base_command(SplitIn)
+        .arg(
+            Arg::with_name(INPUT_BRANCH_ARG)
+                .long(INPUT_BRANCH_ARG)
+                .takes_value(true)
+                .value_name(INPUT_BRANCH_NAME)
+                .help("split in from a local branch in this repository")
+        )
 }
 
 pub fn split_out<'a, 'b>() -> App<'a, 'b> {
-    let base = base_command(SplitOut);
-    return base;
+    base_command(SplitOut)
 }
 
 pub fn run_command(name: &str, matches: &ArgMatches) {
