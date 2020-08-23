@@ -14,6 +14,7 @@ pub trait SplitOut {
 
 impl<'a> SplitOut for Runner<'a> {
     fn validate_repo_file(mut self) -> Self {
+        let missing_output_branch = self.output_branch.is_none();
         let missing_repo_name = self.repo_file.repo_name.is_none();
         let missing_remote_repo = self.repo_file.remote_repo.is_none();
         let missing_include_as = self.repo_file.include_as.is_none();
@@ -27,10 +28,15 @@ impl<'a> SplitOut for Runner<'a> {
             panic!("Must provide either include or include_as in your repofile");
         }
     
-        if missing_repo_name && !missing_remote_repo {
-            self.repo_file.repo_name = Some(try_get_repo_name_from_remote_repo(
+        if missing_repo_name && !missing_remote_repo && missing_output_branch {
+            let output_branch_str = try_get_repo_name_from_remote_repo(
                 self.repo_file.remote_repo.clone().unwrap()
-            ));
+            );
+            self.repo_file.repo_name = Some(output_branch_str.clone());
+            self.output_branch = Some(output_branch_str);
+        } else if ! missing_repo_name {
+            // make the repo_name the output branch name
+            self.output_branch = Some(self.repo_file.repo_name.clone().unwrap());
         }
     
         panic_if_array_invalid(&self.repo_file.include, true, "include");
@@ -62,12 +68,12 @@ impl<'a> SplitOut for Runner<'a> {
     }
 
     fn make_and_checkout_output_branch(self) -> Self {
+        let output_branch_name = self.output_branch.clone().unwrap();
         if self.dry_run {
-            println!("git checkout -b {}", self.repo_file.repo_name.clone().unwrap());
+            println!("git checkout -b {}", output_branch_name);
             return self;
         }
 
-        let output_branch_name = self.repo_file.repo_name.clone().unwrap();
         match self.repo {
             Some(ref r) => {
                 let success = git_helpers::make_new_branch_from_head_and_checkout(

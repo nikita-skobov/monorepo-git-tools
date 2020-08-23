@@ -31,6 +31,7 @@ impl<'a> SplitOut for Runner<'a> {
             },
         };
 
+        let missing_output_branch = self.output_branch.is_none();
         let missing_input_branch = self.input_branch.is_none();
         let missing_repo_name = self.repo_file.repo_name.is_none();
         let missing_remote_repo = self.repo_file.remote_repo.is_none();
@@ -45,10 +46,15 @@ impl<'a> SplitOut for Runner<'a> {
             panic!("Must provide either include or include_as in your repofile");
         }
 
-        if missing_repo_name && !missing_remote_repo {
-            self.repo_file.repo_name = Some(try_get_repo_name_from_remote_repo(
+        if missing_repo_name && !missing_remote_repo && missing_output_branch {
+            let output_branch_str = try_get_repo_name_from_remote_repo(
                 self.repo_file.remote_repo.clone().unwrap()
-            ));
+            );
+            self.repo_file.repo_name = Some(output_branch_str.clone());
+            self.output_branch = Some(output_branch_str);
+        } else if ! missing_repo_name {
+            // make the repo_name the output branch name
+            self.output_branch = Some(self.repo_file.repo_name.clone().unwrap());
         }
 
         panic_if_array_invalid(&self.repo_file.include, true, "include");
@@ -76,13 +82,7 @@ impl<'a> SplitOut for Runner<'a> {
     }
 
     fn make_and_checkout_output_branch(mut self) -> Self {
-        let output_branch_name = self.repo_file.repo_name.clone().unwrap();
-        let output_branch_name = format!("{}-reverse", output_branch_name);
-
-        // TODO:
-        // make seperate output_branch field of runner
-        // this line is a hack and shouldnt be here
-        self.repo_file.repo_name = Some(output_branch_name.clone());
+        let output_branch_name = self.output_branch.clone().unwrap();
 
         if self.dry_run {
             println!("git checkout --orphan {}", output_branch_name);

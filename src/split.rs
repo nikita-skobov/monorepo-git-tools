@@ -7,6 +7,7 @@ use clap::ArgMatches;
 use super::commands::REPO_FILE_ARG;
 use super::commands::DRY_RUN_ARG;
 use super::commands::VERBOSE_ARG;
+use super::commands::OUTPUT_BRANCH_ARG;
 use super::repo_file;
 use super::repo_file::RepoFile;
 use super::git_helpers;
@@ -23,6 +24,7 @@ pub struct Runner<'a> {
     pub repo_root_dir: PathBuf,
     pub repo: Option<git2::Repository>,
     pub input_branch: Option<String>,
+    pub output_branch: Option<String>,
     pub include_arg_str: Option<String>,
     pub include_as_arg_str: Option<String>,
     pub exclude_arg_str: Option<String>,
@@ -32,6 +34,7 @@ impl<'a> Runner<'a> {
     pub fn new(matches: &'a ArgMatches) -> Runner<'a> {
         let is_verbose = matches.is_present(VERBOSE_ARG[0]);
         let is_dry_run = matches.is_present(DRY_RUN_ARG);
+        let output_branch = matches.value_of(OUTPUT_BRANCH_ARG[0]);
         Runner {
             matches: matches,
             dry_run: is_dry_run,
@@ -45,6 +48,11 @@ impl<'a> Runner<'a> {
             exclude_arg_str: None,
             log_p: if is_dry_run { "   # " } else { "" },
             input_branch: None,
+            output_branch: if let Some(branch_name) = output_branch {
+                Some(branch_name.into())
+            } else {
+                None
+            }
         }
     }
     pub fn get_repo_file(mut self) -> Self {
@@ -120,7 +128,7 @@ impl<'a> Runner<'a> {
             // dont run filter if this arg was not provided
             return self;
         }
-        let output_branch_name = self.repo_file.repo_name.clone().unwrap();
+        let output_branch_name = self.output_branch.clone().unwrap();
         let include_arg_str_opt = self.include_arg_str.clone();
         let include_arg_str = include_arg_str_opt.unwrap();
         let arg_vec = generate_filter_arg_vec(
@@ -135,7 +143,7 @@ impl<'a> Runner<'a> {
             // dont run filter if this arg was not provided
             return self;
         }
-        let output_branch_name = self.repo_file.repo_name.clone().unwrap();
+        let output_branch_name = self.output_branch.clone().unwrap();
         let include_as_arg_str_opt = self.include_as_arg_str.clone();
         let include_as_arg_str = include_as_arg_str_opt.unwrap();
         let arg_vec = generate_filter_arg_vec(
@@ -150,7 +158,7 @@ impl<'a> Runner<'a> {
             // dont run filter if this arg was not provided
             return self;
         }
-        let output_branch_name = self.repo_file.repo_name.clone().unwrap();
+        let output_branch_name = self.output_branch.clone().unwrap();
         let exclude_arg_str_opt = self.exclude_arg_str.clone();
         let exclude_arg_str = exclude_arg_str_opt.unwrap();
         let arg_vec = generate_filter_arg_vec(

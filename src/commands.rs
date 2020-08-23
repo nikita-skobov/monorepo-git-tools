@@ -5,6 +5,8 @@ use super::split_in::run_split_in;
 
 pub const INPUT_BRANCH_ARG: &'static str = "input-branch";
 pub const INPUT_BRANCH_NAME: &'static str = "branch-name";
+pub const OUTPUT_BRANCH_ARG: [&'static str; 2] = ["output-branch", "o"];
+pub const OUTPUT_BRANCH_NAME: &'static str = "branch-name";
 pub const REPO_FILE_ARG: &'static str = "repo-file";
 pub const DRY_RUN_ARG: &'static str = "dry-run";
 pub const VERBOSE_ARG: [&'static str; 2]= ["verbose", "v"];
@@ -71,6 +73,14 @@ fn base_command<'a, 'b>(cmd: CommandName) -> App<'a, 'b> {
                 .long(VERBOSE_ARG[0])
                 .short(VERBOSE_ARG[1])
                 .help("show more detailed logs")
+        )
+        .arg(
+            Arg::with_name(OUTPUT_BRANCH_ARG[0])
+                .long(OUTPUT_BRANCH_ARG[0])
+                .short(OUTPUT_BRANCH_ARG[1])
+                .takes_value(true)
+                .value_name(OUTPUT_BRANCH_NAME)
+                .help("name of branch that will be created with new split history")
         );
 }
 

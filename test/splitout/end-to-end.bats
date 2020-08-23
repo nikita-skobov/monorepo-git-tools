@@ -178,6 +178,38 @@ function teardown() {
     [[ -f a/a1/a2/a2.txt ]]
 }
 
+@test 'can split out to a specific output branch' {
+    repo_file_contents="
+    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    include_as=(
+        \"a.txt\"
+        \"new_a.txt\"
+    )
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+
+    echo "a" > a.txt
+    echo "b" > b.txt
+    git add a.txt
+    git commit -m "a"
+    git add b.txt
+    git commit -m "b"
+
+    run $PROGRAM_PATH split-out repo_file.sh --verbose --output-branch newbranch1
+
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ "$(git branch --show-current)" == *"newbranch1"* ]]
+
+    # a.txt should be the only thing included
+    # so b.txt should not exist, also a.txt
+    # should been renamed to new_a.txt
+    [[ -f new_a.txt ]]
+    [[ ! -f a.txt ]]
+    [[ ! -f b.txt ]]
+}
+
 @test 'can only include_as a single file' {
     repo_file_contents="
     remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
