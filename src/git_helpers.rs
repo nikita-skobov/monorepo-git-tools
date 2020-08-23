@@ -245,9 +245,10 @@ pub fn merge_branches(
     source_branch: &str,
     target_branch: Option<&str>,
 ) -> Result<(), git2::Error> {
-    // TODO: get commit from source branch
-    // and then call merge()
-    Ok(())
+    let refname = format!("refs/heads/{}", source_branch);
+    let source_ref = repo.find_reference(&refname[..])?;
+    let source_commit = repo.reference_to_annotated_commit(&source_ref)?;
+    merge(repo, source_commit, target_branch)
 }
 
 pub fn pull(
