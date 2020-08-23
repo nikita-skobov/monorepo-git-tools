@@ -6,6 +6,7 @@ use std::io::{BufRead, BufReader};
 pub struct RepoFile {
     pub repo_name: Option<String>,
     pub remote_repo: Option<String>,
+    pub remote_branch: Option<String>,
     pub include_as: Option<Vec<String>>,
     pub include: Option<Vec<String>>,
     pub exclude: Option<Vec<String>>,
@@ -16,6 +17,7 @@ impl RepoFile {
         RepoFile {
             repo_name: None,
             remote_repo: None,
+            remote_branch: None,
             include: None,
             include_as: None,
             exclude: None,
@@ -23,6 +25,7 @@ impl RepoFile {
     }
 }
 
+const RFVN_REMOTE_BRANCH: &'static str = "remote_branch";
 const RFVN_REPO_NAME: &'static str = "repo_name";
 const RFVN_REMOTE_REPO: &'static str = "remote_repo";
 const RFVN_INCLUDE_AS: &'static str = "include_as";
@@ -33,6 +36,7 @@ const RFVN_EXCLUDE: &'static str = "exclude";
 pub enum RepoFileVariableName {
     VarRemoteRepo,
     VarRepoName,
+    VarRemoteBranch,
     VarIncludeAs,
     VarExclude,
     VarInclude,
@@ -44,6 +48,7 @@ impl From<RepoFileVariableName> for &'static str {
         match original {
             VarRepoName => RFVN_REPO_NAME,
             VarRemoteRepo => RFVN_REMOTE_REPO,
+            VarRemoteBranch => RFVN_REMOTE_BRANCH,
             VarIncludeAs => RFVN_INCLUDE_AS,
             VarInclude => RFVN_INCLUDE,
             VarExclude => RFVN_EXCLUDE,
@@ -54,6 +59,7 @@ impl From<RepoFileVariableName> for &'static str {
 impl From<String> for RepoFileVariableName {
     fn from(value: String) -> RepoFileVariableName {
         match value.as_str() {
+            RFVN_REMOTE_BRANCH => VarRemoteBranch,
             RFVN_REPO_NAME => VarRepoName,
             RFVN_INCLUDE => VarInclude,
             RFVN_EXCLUDE => VarExclude,
@@ -197,6 +203,7 @@ fn add_variable_to_repo_file(repofile: &mut RepoFile, variable: &mut RepoFileVar
         VarExclude => repofile.exclude = Some(variable.value.clone()),
         VarInclude => repofile.include = Some(variable.value.clone()),
         VarRepoName => repofile.repo_name = Some(variable.value[0].clone()),
+        VarRemoteBranch => repofile.remote_branch = Some(variable.value[0].clone()),
         _ => (),
     }
 
@@ -343,6 +350,17 @@ mod test {
         ];
         let mut expectedrepofileobj = RepoFile::new();
         expectedrepofileobj.repo_name = Some("something".into());
+        let repofileobj = parse_repo_file_from_lines(lines);
+        assert_eq!(expectedrepofileobj, repofileobj);
+    }
+
+    #[test]
+    fn should_parse_remote_branch() {
+        let lines: Vec<String> = vec![
+            "remote_branch=\"something\"".into(),
+        ];
+        let mut expectedrepofileobj = RepoFile::new();
+        expectedrepofileobj.remote_branch = Some("something".into());
         let repofileobj = parse_repo_file_from_lines(lines);
         assert_eq!(expectedrepofileobj, repofileobj);
     }

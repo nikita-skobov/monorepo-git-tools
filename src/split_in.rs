@@ -122,6 +122,10 @@ impl<'a> SplitOut for Runner<'a> {
 
     fn populate_empty_branch_with_remote_commits(self) -> Self {
         let remote_repo = self.repo_file.remote_repo.clone();
+        let remote_branch: Option<&str> = match &self.repo_file.remote_branch {
+            Some(branch_name) => Some(branch_name.as_str()),
+            None => None,
+        };
 
         match self.repo {
             None => panic!("Failed to find repo?"),
@@ -130,7 +134,7 @@ impl<'a> SplitOut for Runner<'a> {
                     (true, Some(branch_name)) => println!("git merge {}", branch_name),
                     (true, None) => println!("git pull {}", remote_repo.unwrap()),
                     (false, Some(branch_name)) => { git_helpers::merge_branches(&r, &branch_name[..], None); },
-                    (false, None) => { git_helpers::pull(&r, &remote_repo.unwrap()[..], None); },
+                    (false, None) => { git_helpers::pull(&r, &remote_repo.unwrap()[..], remote_branch); },
                 };
             },
         };

@@ -111,3 +111,39 @@ function teardown() {
     [[ -d this/path/will/be/created ]]
     [[ -f this/path/will/be/created/test_remote_repo2.txt ]]
 }
+
+@test 'can split in a remote_repo with a specific remote_branch' {
+    repo_file_contents="
+    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_branch=\"test-branch\"
+    include_as=(
+        \"this/path/will/be/created/\" \" \"
+    )
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+
+    # a directory called this should not exist at first
+    [[ ! -d this ]]
+
+    cd $BATS_TMPDIR/test_remote_repo2
+    git checkout -b test-branch
+    mkdir -p lib
+    echo "libfiletext" > lib/test-branch-file.txt
+    git add lib/
+    git commit -m "lib commit"
+    git checkout master
+    cd -
+
+    run $PROGRAM_PATH split-in repo_file.sh --verbose
+    echo "$output"
+    [[ $status == "0" ]]
+    # now it should exist:
+    [[ -d this ]]
+
+    # and just to be safe, check that the whole path to the files
+    # is created:
+    [[ -d this/path/will/be/created ]]
+    [[ -f this/path/will/be/created/test_remote_repo2.txt ]]
+    [[ -f this/path/will/be/created/lib/test-branch-file.txt ]]
+}
