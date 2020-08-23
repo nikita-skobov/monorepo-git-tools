@@ -312,4 +312,34 @@ mod test {
         assert_eq!(include_as_arg_str_opt.unwrap(), "--path-rename lib/:locallib/");
         assert_eq!(include_arg_str_opt.unwrap(), "--path locallib/");
     }
+
+    // // TODO: add this functionality. kinda annoying since it would need
+    // // to exist across several methods...
+    // //
+    // // we cant do this for all include_as since it can be files or folders
+    // // but in the case where user is bringing entire repo into a subdir
+    // // (ie: include_as=("subdir" " ") we can detect this case
+    // // so if the user forgets to place a trailing slash (which
+    // // it needs, otherwise filter-repo will not work), then we should
+    // // add one for them
+    // #[test]
+    // fn should_append_trailing_slash_if_missing_for_entire_repo_case() {
+    //     let matches = ArgMatches::new();
+    //     let mut runner = Runner::new(&matches);
+    //     // ensure we dont actually run anything
+    //     runner.dry_run = true;
+    //     let mut repofile = RepoFile::new();
+    //     // include_as has dest:src for split in
+    //     // because its the reverse of the split out
+    //     repofile.include_as = Some(vec![
+    //         "locallib".into(), " ".into(),
+    //     ]);
+    //     runner.repo_file = repofile;
+    //     runner = runner.generate_arg_strings();
+    //     let include_arg_str_opt = runner.include_arg_str.clone();
+    //     let include_as_arg_str_opt = runner.include_as_arg_str.clone();
+
+    //     assert_eq!(include_as_arg_str_opt.unwrap(), "--path-rename  :locallib/");
+    //     assert_eq!(include_arg_str_opt.unwrap(), "--path locallib/");
+    // }
 }
