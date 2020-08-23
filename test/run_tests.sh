@@ -57,7 +57,10 @@ run_end_to_end_tests() {
     echo ""
     echo "SPLIT-IN:"
     PROGRAM_PATH="$PROGRAM_PATH" bats test/splitin
-    # echo ""
+    echo ""
+    echo "SPLIT-IN-AS:"
+    PROGRAM_PATH="$PROGRAM_PATH" bats test/splitinas
+    echo ""
     # echo "GIT TOPBASE:"
     # bats test/topbase
     # echo ""

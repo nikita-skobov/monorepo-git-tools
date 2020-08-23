@@ -1,6 +1,8 @@
 use clap::ArgMatches;
 
 use super::commands::INPUT_BRANCH_ARG;
+use super::commands::AS_SUBDIR_ARG;
+use super::commands::REPO_URI_ARG;
 use super::split::panic_if_array_invalid;
 use super::split::Runner;
 use super::git_helpers;
@@ -73,6 +75,7 @@ impl<'a> SplitIn for Runner<'a> {
         let include_arg_str = generate_split_out_arg_include(&self.repo_file);
 
         if self.verbose {
+            println!("{}include_arg_str: {}", self.log_p, include_arg_str);
             println!("{}include_as_arg_str: {}", self.log_p, include_as_arg_str);
             println!("{}exclude_arg_str: {}", self.log_p, exclude_arg_str);
         }
@@ -235,9 +238,16 @@ pub fn run_split_in(matches: &ArgMatches) {
 }
 
 pub fn run_split_in_as(matches: &ArgMatches) {
-    Runner::new(matches)
-        .get_repo_file()
-        .save_current_dir()
+    // should be safe to unwrap because its a required argument
+    let include_as_src = matches.value_of(AS_SUBDIR_ARG).unwrap();
+    let repo_uri = matches.value_of(REPO_URI_ARG).unwrap();
+    let mut runner = Runner::new(matches);
+    runner.repo_file.include_as = Some(vec![
+        include_as_src.into(), " ".into(),
+    ]);
+    runner.repo_file.remote_repo = Some(repo_uri.into());
+
+    runner.save_current_dir()
         .get_repository_from_current_dir()
         .verify_dependencies()
         .validate_repo_file()
