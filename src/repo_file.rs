@@ -23,6 +23,7 @@ impl RepoFile {
     }
 }
 
+const RFVN_REPO_NAME: &'static str = "repo_name";
 const RFVN_REMOTE_REPO: &'static str = "remote_repo";
 const RFVN_INCLUDE_AS: &'static str = "include_as";
 const RFVN_INCLUDE: &'static str = "include";
@@ -31,6 +32,7 @@ const RFVN_EXCLUDE: &'static str = "exclude";
 #[derive(Clone, PartialEq)]
 pub enum RepoFileVariableName {
     VarRemoteRepo,
+    VarRepoName,
     VarIncludeAs,
     VarExclude,
     VarInclude,
@@ -40,6 +42,7 @@ use RepoFileVariableName::*;
 impl From<RepoFileVariableName> for &'static str {
     fn from(original: RepoFileVariableName) -> &'static str {
         match original {
+            VarRepoName => RFVN_REPO_NAME,
             VarRemoteRepo => RFVN_REMOTE_REPO,
             VarIncludeAs => RFVN_INCLUDE_AS,
             VarInclude => RFVN_INCLUDE,
@@ -51,6 +54,7 @@ impl From<RepoFileVariableName> for &'static str {
 impl From<String> for RepoFileVariableName {
     fn from(value: String) -> RepoFileVariableName {
         match value.as_str() {
+            RFVN_REPO_NAME => VarRepoName,
             RFVN_INCLUDE => VarInclude,
             RFVN_EXCLUDE => VarExclude,
             RFVN_REMOTE_REPO => VarRemoteRepo,
@@ -192,6 +196,7 @@ fn add_variable_to_repo_file(repofile: &mut RepoFile, variable: &mut RepoFileVar
         VarIncludeAs => repofile.include_as = Some(variable.value.clone()),
         VarExclude => repofile.exclude = Some(variable.value.clone()),
         VarInclude => repofile.include = Some(variable.value.clone()),
+        VarRepoName => repofile.repo_name = Some(variable.value[0].clone()),
         _ => (),
     }
 
@@ -327,6 +332,17 @@ mod test {
         expectedrepofileobj.include = Some(vec![
             "xyz".into(), "qqq".into(), "www".into(),
         ]);
+        let repofileobj = parse_repo_file_from_lines(lines);
+        assert_eq!(expectedrepofileobj, repofileobj);
+    }
+
+    #[test]
+    fn should_parse_repo_name() {
+        let lines: Vec<String> = vec![
+            "repo_name=\"something\"".into(),
+        ];
+        let mut expectedrepofileobj = RepoFile::new();
+        expectedrepofileobj.repo_name = Some("something".into());
         let repofileobj = parse_repo_file_from_lines(lines);
         assert_eq!(expectedrepofileobj, repofileobj);
     }
