@@ -234,6 +234,22 @@ pub fn run_split_in(matches: &ArgMatches) {
         .filter_include();
 }
 
+pub fn run_split_in_as(matches: &ArgMatches) {
+    Runner::new(matches)
+        .get_repo_file()
+        .save_current_dir()
+        .get_repository_from_current_dir()
+        .verify_dependencies()
+        .validate_repo_file()
+        .change_to_repo_root()
+        .make_and_checkout_output_branch()
+        .populate_empty_branch_with_remote_commits()
+        .generate_arg_strings()
+        .filter_exclude()
+        .filter_include_as()
+        .filter_include();
+}
+
 
 #[cfg(test)]
 mod test {
