@@ -55,6 +55,10 @@ impl<'a> SplitOut for Runner<'a> {
         } else if ! missing_repo_name {
             // make the repo_name the output branch name
             self.output_branch = Some(self.repo_file.repo_name.clone().unwrap());
+        } else if ! missing_input_branch {
+            // make the output_branch the name of the input_branch -reverse
+            let output_branch_str = format!("{}-reverse", self.input_branch.clone().unwrap());
+            self.output_branch = Some(output_branch_str);
         }
 
         panic_if_array_invalid(&self.repo_file.include, true, "include");
@@ -117,16 +121,16 @@ impl<'a> SplitOut for Runner<'a> {
     }
 
     fn populate_empty_branch_with_remote_commits(self) -> Self {
-        let remote_repo = self.repo_file.remote_repo.clone().unwrap();
+        let remote_repo = self.repo_file.remote_repo.clone();
 
         match self.repo {
             None => println!("Failed to find repo?"),
             Some(ref r) => {
                 match (self.dry_run, &self.input_branch) {
                     (true, Some(branch_name)) => println!("git merge {}", branch_name),
-                    (true, None) => println!("git pull {}", remote_repo),
+                    (true, None) => println!("git pull {}", remote_repo.unwrap()),
                     (false, Some(branch_name)) => { git_helpers::merge_branches(&r, &branch_name[..], None); },
-                    (false, None) => { git_helpers::pull(&r, &remote_repo[..], None); },
+                    (false, None) => { git_helpers::pull(&r, &remote_repo.unwrap()[..], None); },
                 };
             },
         };
