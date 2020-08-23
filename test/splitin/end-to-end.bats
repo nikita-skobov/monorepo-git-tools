@@ -186,3 +186,78 @@ function teardown() {
     [[ ! -f libfile1.txt ]]
     [[ ! -f rootfile1.txt ]]
 }
+
+@test 'can include without renaming' {
+    # save current dir to cd back to later
+    curr_dir="$PWD"
+    # setup the test remote repo:
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    mkdir -p lib
+    echo "rootfile1.txt" > rootfile1.txt
+    echo "libfile1.txt" > lib/libfile1.txt
+    echo "libfile2.txt" > lib/libfile2.txt
+    git add .
+    git commit -m "adds 2 lib files and 1 root file"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    repo_name=\"doesnt_matter\"
+    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    include=\"lib/libfile1.txt\"
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+    echo "$(git split in repo_file.sh --dry-run)"
+
+    run $PROGRAM_PATH split-in repo_file.sh --verbose
+    [[ $status == "0" ]]
+    echo "$output"
+    echo "$(find . -not -path '*/\.*')"
+
+
+    [[ -f lib/libfile1.txt ]]
+    [[ ! -f lib/libfile2.txt ]]
+    [[ ! -f rootfile1.txt ]]
+    [[ ! -f test_remote_repo2.txt ]]
+}
+
+@test 'can include folders without renaming' {
+    # save current dir to cd back to later
+    curr_dir="$PWD"
+    # setup the test remote repo:
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    mkdir -p lib
+    mkdir -p src
+    echo "rootfile1.txt" > rootfile1.txt
+    echo "libfile1.txt" > lib/libfile1.txt
+    echo "libfile2.txt" > lib/libfile2.txt
+    echo "srcfile1.txt" > src/srcfile1.txt
+    echo "srcfile2.txt" > src/srcfile2.txt
+    git add lib
+    git commit -m "adds 2 lib files and 1 root file"
+    git add src
+    git commit -m "adds src"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    repo_name=\"doesnt_matter\"
+    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    include=(\"src/\" \"lib\")
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+    echo "$(git split in repo_file.sh --dry-run)"
+
+    run $PROGRAM_PATH split-in repo_file.sh --verbose
+    [[ $status == "0" ]]
+    echo "$output"
+    echo "$(find . -not -path '*/\.*')"
+
+
+    [[ -f lib/libfile1.txt ]]
+    [[ -f lib/libfile2.txt ]]
+    [[ -f src/srcfile1.txt ]]
+    [[ -f src/srcfile2.txt ]]
+    [[ ! -f rootfile1.txt ]]
+    [[ ! -f test_remote_repo2.txt ]]
+}
