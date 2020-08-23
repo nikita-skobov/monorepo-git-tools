@@ -124,7 +124,7 @@ impl<'a> SplitOut for Runner<'a> {
         let remote_repo = self.repo_file.remote_repo.clone();
 
         match self.repo {
-            None => println!("Failed to find repo?"),
+            None => panic!("Failed to find repo?"),
             Some(ref r) => {
                 match (self.dry_run, &self.input_branch) {
                     (true, Some(branch_name)) => println!("git merge {}", branch_name),
