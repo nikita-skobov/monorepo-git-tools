@@ -7,14 +7,14 @@ use super::git_helpers;
 use super::split::try_get_repo_name_from_remote_repo;
 use super::repo_file::RepoFile;
 
-pub trait SplitOut {
+pub trait SplitIn {
     fn validate_repo_file(self) -> Self;
     fn generate_arg_strings(self) -> Self;
     fn make_and_checkout_output_branch(self) -> Self;
     fn populate_empty_branch_with_remote_commits(self) -> Self;
 }
 
-impl<'a> SplitOut for Runner<'a> {
+impl<'a> SplitIn for Runner<'a> {
     fn validate_repo_file(mut self) -> Self {
         self.input_branch = match self.matches.value_of(INPUT_BRANCH_ARG) {
             None => None,
@@ -70,11 +70,16 @@ impl<'a> SplitOut for Runner<'a> {
     fn generate_arg_strings(mut self) -> Self {
         let include_as_arg_str = generate_split_out_arg_include_as(&self.repo_file);
         let exclude_arg_str = generate_split_out_arg_exclude(&self.repo_file);
+        let include_arg_str = generate_split_out_arg_include(&self.repo_file);
+
         if self.verbose {
             println!("{}include_as_arg_str: {}", self.log_p, include_as_arg_str);
             println!("{}exclude_arg_str: {}", self.log_p, exclude_arg_str);
         }
 
+        if include_arg_str != "" {
+            self.include_arg_str = Some(include_arg_str);
+        }
         if include_as_arg_str != "" {
             self.include_as_arg_str = Some(include_as_arg_str);
         }
@@ -142,6 +147,43 @@ impl<'a> SplitOut for Runner<'a> {
     }
 }
 
+// iterate over both the include, and include_as
+// repofile variables, and generate an overall
+// include string that can be passed to
+// git-filter-repo
+// include gets taken as is, but for include_as, we only care about
+// what the destination is because we will run
+// the include filter after we rename, so we want the renamed versions
+pub fn generate_split_out_arg_include(repofile: &RepoFile) -> String {
+    let start_with: String = "--path ".into();
+    let include_str = match &repofile.include {
+        Some(v) => format!("{}{}", start_with.clone(), v.join(" --path ")),
+        None => "".to_string(),
+    };
+
+    // include_as is more difficult because the indices matter
+    // for splitting out, the even indices are the local
+    // paths, so those are the ones we want to include
+    let include_as_str = match &repofile.include_as {
+        Some(v) => format!("{}{}",
+            start_with.clone(),
+            v.iter().step_by(2)
+                .cloned().collect::<Vec<String>>()
+                .join(" --path "),
+        ),
+        None => "".to_string(),
+    };
+
+    // include a space between them if include_str isnt empty
+    let seperator: String = if include_str.is_empty() {
+        "".into()
+    } else {
+        " ".into()
+    };
+
+    format!("{}{}{}", include_str, seperator, include_as_str)
+}
+
 
 // iterate over the include_as variable, and generate a
 // string of args that can be passed to git-filter-repo
@@ -188,7 +230,8 @@ pub fn run_split_in(matches: &ArgMatches) {
         .populate_empty_branch_with_remote_commits()
         .generate_arg_strings()
         .filter_exclude()
-        .filter_include_as();
+        .filter_include_as()
+        .filter_include();
 }
 
 
@@ -217,5 +260,30 @@ mod test {
         runner.repo_file = repofile;
         runner = runner.generate_arg_strings();
         assert_eq!(runner.include_as_arg_str.unwrap(), "--path-rename  :path/will/be/created/");
+    }
+
+    // even if user only provides include_as, that is just for renaming
+    // we also need to translate that to an include step so that
+    // we include only the things the user specifies, otherwise
+    // we would just have renamed some folders/files
+    #[test]
+    fn generate_arg_strings_should_make_an_include_from_include_as() {
+        let matches = ArgMatches::new();
+        let mut runner = Runner::new(&matches);
+        // ensure we dont actually run anything
+        runner.dry_run = true;
+        let mut repofile = RepoFile::new();
+        // include_as has dest:src for split in
+        // because its the reverse of the split out
+        repofile.include_as = Some(vec![
+            "locallib/".into(), "lib/".into(),
+        ]);
+        runner.repo_file = repofile;
+        runner = runner.generate_arg_strings();
+        let include_arg_str_opt = runner.include_arg_str.clone();
+        let include_as_arg_str_opt = runner.include_as_arg_str.clone();
+
+        assert_eq!(include_as_arg_str_opt.unwrap(), "--path-rename lib/:locallib/");
+        assert_eq!(include_arg_str_opt.unwrap(), "--path locallib/");
     }
 }
