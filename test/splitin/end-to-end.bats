@@ -32,7 +32,7 @@ function teardown() {
     repo_file_contents="
     remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
     include_as=(
-        \"this/path/will/be/created/\" \"\"
+        \"this/path/will/be/created/\" \" \"
     )
     "
 
@@ -42,6 +42,9 @@ function teardown() {
     [[ ! -d this ]]
 
     run $PROGRAM_PATH split-in repo_file.sh --verbose
+    echo "$output"
+    [[ $status == "0" ]]
+
     # now it should exist:
     [[ -d this ]]
 

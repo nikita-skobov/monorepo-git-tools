@@ -58,15 +58,35 @@ impl<'a> SplitOut for Runner<'a> {
     }
 
     fn generate_arg_strings(mut self) -> Self {
+        let include_as_arg_str = generate_split_out_arg_include_as(&self.repo_file);
+        let exclude_arg_str = generate_split_out_arg_exclude(&self.repo_file);
+        if self.verbose {
+            println!("{}include_as_arg_str: {}", self.log_p, include_as_arg_str);
+            println!("{}exclude_arg_str: {}", self.log_p, exclude_arg_str);
+        }
+
+        if include_as_arg_str != "" {
+            self.include_as_arg_str = Some(include_as_arg_str);
+        }
+        if exclude_arg_str != "" {
+            self.exclude_arg_str = Some(exclude_arg_str);
+        }
+
         self
     }
 
-    fn make_and_checkout_output_branch(self) -> Self {
+    fn make_and_checkout_output_branch(mut self) -> Self {
         let output_branch_name = self.repo_file.repo_name.clone().unwrap();
         let output_branch_name = format!("{}-reverse", output_branch_name);
+
+        // TODO:
+        // make seperate output_branch field of runner
+        // this line is a hack and shouldnt be here
+        self.repo_file.repo_name = Some(output_branch_name.clone());
+
         if self.dry_run {
             println!("git checkout --orphan {}", output_branch_name);
-            print!("git rm -rf . > /dev/null");
+            println!("git rm -rf . > /dev/null");
             return self;
         }
 
@@ -114,6 +134,40 @@ impl<'a> SplitOut for Runner<'a> {
     }
 }
 
+
+// iterate over the include_as variable, and generate a
+// string of args that can be passed to git-filter-repo
+pub fn generate_split_out_arg_include_as(repofile: &RepoFile) -> String {
+    let include_as = if let Some(include_as) = &repofile.include_as {
+        include_as.clone()
+    } else {
+        return "".into();
+    };
+
+    // for split-in src/dest is reversed from spit-out
+    // sources are the odd indexed elements, dest are the even
+    let sources = include_as.iter().skip(1).step_by(2);
+    let destinations = include_as.iter().skip(0).step_by(2);
+    assert_eq!(sources.len(), destinations.len());
+
+    let pairs = sources.zip(destinations);
+    // pairs is a vec of tuples: (src, dest)
+    // when mapping, x.0 is src, x.1 is dest
+    format!("--path-rename {}",
+        pairs.map(|x| format!("{}:{}", x.0, x.1))
+            .collect::<Vec<String>>()
+            .join(" --path-rename ")
+    )
+}
+
+pub fn generate_split_out_arg_exclude(repofile: &RepoFile) -> String {
+    let start_with: String = "--invert-paths --path ".into();
+    match &repofile.exclude {
+        Some(v) => format!("{}{}", start_with.clone(), v.join(" --path ")),
+        None => "".to_string(),
+    }
+}
+
 pub fn run_split_in(matches: &ArgMatches) {
     Runner::new(matches)
         .get_repo_file()
@@ -123,10 +177,10 @@ pub fn run_split_in(matches: &ArgMatches) {
         .validate_repo_file()
         .change_to_repo_root()
         .make_and_checkout_output_branch()
-        .populate_empty_branch_with_remote_commits();
-        // .generate_arg_strings()
-        // .filter_exclude()
-        // .filter_include_as();
+        .populate_empty_branch_with_remote_commits()
+        .generate_arg_strings()
+        .filter_exclude()
+        .filter_include_as();
 }
 
 
@@ -142,5 +196,18 @@ mod test {
         let repofile = RepoFile::new();
         runner.repo_file = repofile;
         runner.validate_repo_file();
+    }
+
+    #[test]
+    fn should_format_include_as_correctly() {
+        let matches = ArgMatches::new();
+        let mut runner = Runner::new(&matches);
+        let mut repofile = RepoFile::new();
+        repofile.include_as = Some(vec![
+            "path/will/be/created/".into(), " ".into(),
+        ]);
+        runner.repo_file = repofile;
+        runner = runner.generate_arg_strings();
+        assert_eq!(runner.include_as_arg_str.unwrap(), "--path-rename  :path/will/be/created/");
     }
 }
