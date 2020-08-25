@@ -124,6 +124,94 @@ pub fn get_head_commit(
     repo.find_commit(current_oid)
 }
 
+pub fn get_commit_from_ref<'a>(
+    repo: &'a Repository,
+    refname: &str,
+) -> Result<git2::AnnotatedCommit<'a>, git2::Error> {
+    let reference = repo.find_reference(refname)?;
+    repo.reference_to_annotated_commit(&reference)
+}
+
+pub fn get_commit_from_oid(
+    repo: &Repository,
+    oid: git2::Oid,
+) -> Result<git2::Commit, git2::Error> {
+    repo.find_commit(oid)
+}
+
+pub fn rebase_each(
+    repo: &Repository,
+    rebase: &mut git2::Rebase,
+) -> Result<(), git2::Error> {
+    for _ in 0..rebase.len() {
+        let rebase_op_option = rebase.next();
+        if let None = rebase_op_option {
+            // the next was empty, therefore break out
+            // to avoid calling next on a rebase operation that should
+            // already be done
+            break;
+        }
+        // we can unwrap safely because the None case
+        // was handled above
+        let op = rebase_op_option.unwrap();
+        match op {
+            Ok(rebase_op) => {
+                let commit = get_commit_from_oid(&repo, rebase_op.id())?;
+                let author = commit.author();
+                // here we can rewrite the commit if we want
+                // by choosing the commit author as the signature
+                // we ensure that the hash stays the same in the
+                // fast-forwardable case
+                rebase.commit(None, &author, None)?;
+            }
+            Err(e) => return Err(e),
+        };
+    }
+
+    Ok(())
+}
+
+// example:
+// A - B
+//  \
+//   --C
+// if you want to get:
+// A - B - C*
+// you would do:
+// upstream: B, rebase_from C
+// note: the branch strings must be refs:
+// refs/heads/B and refs/heads/C
+pub fn rebase(
+    repo: &Repository,
+    // the branch that will be used as the "bottom" of the rebase comparison
+    upstream_branch: &str,
+    // the branch that will be used as the "top" of the rebase comparison
+    rebase_from_branch: &str,
+    rebase_opts: Option<&mut git2::RebaseOptions<'_>>,
+) -> Result<(), git2::Error> {
+    let upstream = get_commit_from_ref(&repo, upstream_branch)?;
+    let branch = get_commit_from_ref(&repo, rebase_from_branch)?;
+
+    // initialize
+    let mut rebase = match repo.rebase(Some(&branch), Some(&upstream), None, rebase_opts) {
+        Ok(r) => r,
+        Err(e) => {
+            return Err(e);
+        },
+    };
+
+    // do the rebase
+    if let Err(e) = rebase_each(repo, &mut rebase) {
+        rebase.abort()?;
+        return Err(e);
+    }
+
+    // finalize
+    rebase.finish(None)?;
+
+    Ok(())
+}
+
 pub fn make_new_branch_from_head(
     repo: &Repository,
     branch_name: &str,
