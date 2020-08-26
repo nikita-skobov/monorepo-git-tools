@@ -13,7 +13,8 @@ pub const REPO_URI_ARG: &'static str = "git-repo-uri";
 pub const AS_SUBDIR_ARG: &'static str = "as";
 pub const AS_SUBDIR_ARG_NAME: &'static str = "subdirectory";
 pub const DRY_RUN_ARG: &'static str = "dry-run";
-pub const VERBOSE_ARG: [&'static str; 2]= ["verbose", "v"];
+pub const VERBOSE_ARG: [&'static str; 2] = ["verbose", "v"];
+pub const REBASE_ARG: [&'static str; 2] = ["rebase", "r"];
 
 const SPLIT_IN_STR: &'static str = "split-in";
 const SPLIT_IN_AS_STR: &'static str = "split-in-as";
@@ -24,6 +25,7 @@ const SPLIT_IN_AS_DESCRIPTION: &'static str = "fetch the entirety of a remote re
 const REPO_FILE_DESCRIPTION: &'static str = "path to file that contains instructions of how to split a repository";
 const REPO_URI_DESCRIPTION: &'static str = "a valid git url of the repository to split in";
 const AS_SUBDIR_DESCRIPTION: &'static str = "path relative to root of the local repository that will contain the entire repository being split in";
+const REBASE_DESCRIPTION: &'static str = "after generating a branch with rewritten history, rebase that branch such that it can be fast forwarded back into your starting branch";
 
 #[derive(Clone)]
 pub enum CommandName {
@@ -108,6 +110,12 @@ pub fn split_in<'a, 'b>() -> App<'a, 'b> {
                 .value_name(INPUT_BRANCH_NAME)
                 .help("split in from a local branch in this repository")
         )
+        .arg(
+            Arg::with_name(REBASE_ARG[0])
+                .long(REBASE_ARG[0])
+                .short(REBASE_ARG[1])
+                .help(REBASE_DESCRIPTION)
+        )
 }
 
 pub fn split_in_as<'a, 'b>() -> App<'a, 'b> {
@@ -120,6 +128,12 @@ pub fn split_in_as<'a, 'b>() -> App<'a, 'b> {
             Arg::with_name(REPO_URI_ARG)
                 .required(true)
                 .help(REPO_URI_DESCRIPTION)
+        )
+        .arg(
+            Arg::with_name(REBASE_ARG[0])
+                .long(REBASE_ARG[0])
+                .short(REBASE_ARG[1])
+                .help(REBASE_DESCRIPTION)
         )
         .arg(
             Arg::with_name(AS_SUBDIR_ARG)
