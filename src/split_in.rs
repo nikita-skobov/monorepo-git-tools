@@ -14,6 +14,16 @@ pub trait SplitIn {
     fn generate_arg_strings(self) -> Self;
     fn make_and_checkout_output_branch(self) -> Self;
     fn populate_empty_branch_with_remote_commits(self) -> Self;
+    fn rebase(self) -> Self;
+    fn save_current_ref(self) -> Self;
+}
+
+pub fn get_current_ref(repo: &git2::Repository) -> Option<String> {
+    let current_branch_res = git_helpers::get_current_branch(repo);
+    if let Err(e) = current_branch_res {
+        panic!("Failed to get current branch: {}", e);
+    }
+    Some(current_branch_res.unwrap())
 }
 
 impl<'a> SplitIn for Runner<'a> {
@@ -66,6 +76,16 @@ impl<'a> SplitIn for Runner<'a> {
         panic_if_array_invalid(&self.repo_file.include, true, "include");
         panic_if_array_invalid(&self.repo_file.include_as, false, "include_as");
 
+        self
+    }
+
+    // get the current ref that this git repo is pointing to
+    // save it for later
+    fn save_current_ref(mut self) -> Self {
+        self.repo_original_ref = match self.repo {
+            Some(ref repo) => get_current_ref(repo),
+            None => None,
+        };
         self
     }
 
@@ -148,6 +168,54 @@ impl<'a> SplitIn for Runner<'a> {
         };
         self
     }
+
+    fn rebase(self) -> Self {
+        let repo = match self.repo {
+            Some(ref repo) => repo,
+            None => panic!("Failed to find repo?"),
+        };
+
+        let upstream_branch = match self.repo_original_ref {
+            Some(ref branch) => branch,
+            None => {
+                println!("Failed to get repo original ref. Not going to rebase");
+                return self;
+            },
+        };
+        let rebase_from_branch = match get_current_ref(repo) {
+            Some(branch) => branch,
+            None => {
+                println!("Failed to get repo current ref. Not going to rebase");
+                return self;
+            }
+        };
+
+        if self.verbose {
+            println!("rebasing {} onto {}", rebase_from_branch, upstream_branch);
+        }
+        if self.dry_run {
+            // since we are already on the rebase_from_branch
+            // we dont need to specify that in the git command
+            // the below command implies: apply rebased changes in
+            // the branch we are already on
+            println!("git rebase {}", upstream_branch);
+            return self
+        }
+
+        // upstream is the original branch that we were on
+        // rebase_from_branch is our current branch
+        match git_helpers::rebase(
+            repo,
+            upstream_branch,
+            rebase_from_branch.as_str(),
+            None
+        ) {
+            Err(e) => println!("Failed to rebase: {}", e),
+            Ok(_) => println!("successfully rebased!"),
+        };
+
+        self
+    }
 }
 
 // iterate over both the include, and include_as
@@ -222,10 +290,11 @@ pub fn generate_split_out_arg_exclude(repofile: &RepoFile) -> String {
 }
 
 pub fn run_split_in(matches: &ArgMatches) {
-    Runner::new(matches)
+    let runner = Runner::new(matches)
         .get_repo_file()
         .save_current_dir()
         .get_repository_from_current_dir()
+        .save_current_ref()
         .verify_dependencies()
         .validate_repo_file()
         .change_to_repo_root()
@@ -235,6 +304,14 @@ pub fn run_split_in(matches: &ArgMatches) {
         .filter_exclude()
         .filter_include_as()
         .filter_include();
+
+    // if we should rebase, we need to refresh the repository index
+    // since the above filtering commands changed some stuff that
+    // our in-memory repository representation does not know about
+    // idk if this is the best way to do it, but its simplest
+    if runner.should_rebase {
+        runner.get_repository_from_current_dir().rebase();
+    }
 }
 
 pub fn run_split_in_as(matches: &ArgMatches) {

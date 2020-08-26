@@ -7,6 +7,7 @@ use clap::ArgMatches;
 use super::commands::REPO_FILE_ARG;
 use super::commands::DRY_RUN_ARG;
 use super::commands::VERBOSE_ARG;
+use super::commands::REBASE_ARG;
 use super::commands::OUTPUT_BRANCH_ARG;
 use super::repo_file;
 use super::repo_file::RepoFile;
@@ -20,8 +21,10 @@ pub struct Runner<'a> {
     pub log_p: &'static str,
     pub dry_run: bool,
     pub verbose: bool,
+    pub should_rebase: bool,
     pub repo_file: RepoFile,
     pub repo_root_dir: PathBuf,
+    pub repo_original_ref: Option<String>,
     pub repo: Option<git2::Repository>,
     pub input_branch: Option<String>,
     pub output_branch: Option<String>,
@@ -34,12 +37,15 @@ impl<'a> Runner<'a> {
     pub fn new(matches: &'a ArgMatches) -> Runner<'a> {
         let is_verbose = matches.is_present(VERBOSE_ARG[0]);
         let is_dry_run = matches.is_present(DRY_RUN_ARG);
+        let is_rebase = matches.is_present(REBASE_ARG[0]);
         let output_branch = matches.value_of(OUTPUT_BRANCH_ARG[0]);
         Runner {
             matches: matches,
             dry_run: is_dry_run,
             verbose: is_verbose,
+            should_rebase: is_rebase,
             repo_file: RepoFile::new(),
+            repo_original_ref: None,
             current_dir: PathBuf::new(),
             repo: None,
             repo_root_dir: PathBuf::new(),
