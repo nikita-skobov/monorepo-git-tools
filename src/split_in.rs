@@ -324,8 +324,9 @@ pub fn run_split_in_as(matches: &ArgMatches) {
     ]);
     runner.repo_file.remote_repo = Some(repo_uri.into());
 
-    runner.save_current_dir()
+    let runner = runner.save_current_dir()
         .get_repository_from_current_dir()
+        .save_current_ref()
         .verify_dependencies()
         .validate_repo_file()
         .change_to_repo_root()
@@ -335,6 +336,10 @@ pub fn run_split_in_as(matches: &ArgMatches) {
         .filter_exclude()
         .filter_include_as()
         .filter_include();
+
+    if runner.should_rebase {
+        runner.get_repository_from_current_dir().rebase();
+    }
 }
 
 
