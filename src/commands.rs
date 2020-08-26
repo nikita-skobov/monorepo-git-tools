@@ -12,7 +12,7 @@ pub const REPO_FILE_ARG: &'static str = "repo-file";
 pub const REPO_URI_ARG: &'static str = "git-repo-uri";
 pub const AS_SUBDIR_ARG: &'static str = "as";
 pub const AS_SUBDIR_ARG_NAME: &'static str = "subdirectory";
-pub const DRY_RUN_ARG: &'static str = "dry-run";
+pub const DRY_RUN_ARG: [&'static str; 2] = ["dry-run", "d"];
 pub const VERBOSE_ARG: [&'static str; 2] = ["verbose", "v"];
 pub const REBASE_ARG: [&'static str; 2] = ["rebase", "r"];
 
@@ -80,8 +80,9 @@ fn base_command<'a, 'b>(cmd: CommandName) -> App<'a, 'b> {
                 .help(REPO_FILE_DESCRIPTION)
         )
         .arg(
-            Arg::with_name(DRY_RUN_ARG)
-                .long(DRY_RUN_ARG)
+            Arg::with_name(DRY_RUN_ARG[0])
+                .long(DRY_RUN_ARG[0])
+                .short(DRY_RUN_ARG[1])
                 .help("Print out the steps taken, but don't actually run or change anything.")
         )
         .arg(
@@ -144,8 +145,9 @@ pub fn split_in_as<'a, 'b>() -> App<'a, 'b> {
                 .takes_value(true)
         )
         .arg(
-            Arg::with_name(DRY_RUN_ARG)
-                .long(DRY_RUN_ARG)
+            Arg::with_name(DRY_RUN_ARG[0])
+                .long(DRY_RUN_ARG[0])
+                .short(DRY_RUN_ARG[1])
                 .help("Print out the steps taken, but don't actually run or change anything.")
         )
         .arg(

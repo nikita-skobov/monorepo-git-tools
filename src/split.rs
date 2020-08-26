@@ -36,7 +36,7 @@ pub struct Runner<'a> {
 impl<'a> Runner<'a> {
     pub fn new(matches: &'a ArgMatches) -> Runner<'a> {
         let is_verbose = matches.is_present(VERBOSE_ARG[0]);
-        let is_dry_run = matches.is_present(DRY_RUN_ARG);
+        let is_dry_run = matches.is_present(DRY_RUN_ARG[0]);
         let is_rebase = matches.is_present(REBASE_ARG[0]);
         let output_branch = matches.value_of(OUTPUT_BRANCH_ARG[0]);
         Runner {
