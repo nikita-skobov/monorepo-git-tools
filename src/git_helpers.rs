@@ -94,6 +94,9 @@ pub fn get_current_branch(
     }
 }
 
+// branch_name should just be the branch name,
+// it should not include refs/heads/*
+// when this method calls checkout_to_branch, it will format it
 pub fn make_orphan_branch_and_checkout(
     branch_name: &str,
     repo: &Repository,
@@ -106,7 +109,8 @@ pub fn make_orphan_branch_and_checkout(
         return Err(Error::new(code, class, message));
     }
 
-    checkout_to_branch(branch_name, repo)
+    let branch_ref = format!("refs/heads/{}", branch_name);
+    checkout_to_branch(branch_ref.as_str(), repo)
 }
 
 pub fn checkout_to_branch(

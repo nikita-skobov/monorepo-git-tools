@@ -63,3 +63,33 @@ function teardown() {
     [[ ! -f this/path/will/be/created/test_remote_repo2.txt ]]
     [[ ! -d this ]]
 }
+
+@test 'by default it should fail if the output branch it wants to create already exists' {
+    repo_file_contents="
+    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    include_as=(
+        \"this/path/will/be/created/\" \" \"
+    )
+    "
+
+    # make sure it doesnt exist first
+    [[ "$(git branch)" != *"test_remote_repo2"* ]]
+
+    echo "$repo_file_contents" > repo_file.sh
+    run $PROGRAM_PATH split-in repo_file.sh --verbose
+    # this should be fine because test_remote_repo2 doesnt exist yet
+    echo "$output"
+    [[ $status == "0" ]]
+
+    # ensure it was created
+    [[ "$(git branch --show-current)" == "test_remote_repo2" ]]
+
+    # now if we run it again,
+    # it should fail because that branch already exists
+    git checkout master
+    run $PROGRAM_PATH split-in repo_file.sh --verbose
+    echo "$output"
+    [[ "$status" != "0" ]]
+    [[ "$output" == *"Failed to checkout orphan branch"* ]]
+
+}

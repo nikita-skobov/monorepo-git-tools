@@ -124,9 +124,8 @@ impl<'a> SplitIn for Runner<'a> {
 
         match self.repo {
             Some(ref r) => {
-                let branch_ref = format!("refs/heads/{}", output_branch_name);
                 let success = git_helpers::make_orphan_branch_and_checkout(
-                    branch_ref.as_str(),
+                    output_branch_name.as_str(),
                     r,
                 ).is_ok();
                 if ! success {
