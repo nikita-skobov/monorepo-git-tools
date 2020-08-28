@@ -85,3 +85,65 @@ function teardown() {
     # because it existed in master, and we rebased our new branch on top of master
     [[ -f test_remote_repo.txt ]]
 }
+
+# ie:
+# git checkout -b B
+# # make some commits
+# git checkout -b B-rebased-on-master
+# git rebase master
+# git checkout master
+# git merge B-rebased-on-master
+# git checkout B
+# git rebase master <- git CLI handles this just fine. B will be exactly the same as master in this case
+@test 'rebasing the new splitinas branch onto original branch does nothing if original branch already has latest changes' {
+    # save current dir to cd back to later
+    curr_dir="$PWD"
+    # setup the test remote repo:
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    master_commits="$(git log --oneline | wc -l)"
+    made_commits=1 # start at 1 because it has an initial commit
+    mkdir -p lib
+    echo "rootfile1.txt" > rootfile1.txt
+    echo "libfile1.txt" > lib/libfile1.txt
+    echo "libfile2.txt" > lib/libfile2.txt
+    git add .
+    git commit -m "adds 2 lib files and 1 root file"
+    ((made_commits += 1))
+    cd "$curr_dir"
+
+    run $PROGRAM_PATH split-in-as "$BATS_TMPDIR/test_remote_repo2" --as abc/ --verbose --rebase
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ "$(git branch --show-current)" == "test_remote_repo2" ]]
+    output_commits="$(git log --oneline | wc -l)"
+    echo ""
+    echo "$(git log --oneline)"
+    echo ""
+
+    # we test that the number of commits is now the number that we made in master
+    # plus the number we made in the new branch that got filtered.
+    echo "output_commits ($output_commits) =?= master_commits + made_commits ($((master_commits + made_commits)))"
+    [[ "$output_commits" == "$((master_commits + made_commits))" ]]
+
+    [[ -f abc/lib/libfile1.txt ]]
+    [[ -f abc/lib/libfile2.txt ]]
+    # since we specified to rebase, this file should exist
+    # because it existed in master, and we rebased our new branch on top of master
+    [[ -f test_remote_repo.txt ]]
+
+    echo "$(git branch)"
+
+    # now we run it again and ensure that it didn't make any extra commits than last time
+    # since theres no new history, it should be the same commit
+    git checkout master
+    git merge test_remote_repo2
+    git branch -D test_remote_repo2
+    latest_commit="$(git log --oneline -n 1)"
+    
+    run $PROGRAM_PATH split-in-as "$BATS_TMPDIR/test_remote_repo2" --as abc/ --verbose --rebase
+    echo "$output"
+    new_latest_commit="$(git log --oneline -n 1)"
+    [[ $status == "0" ]]
+    [[ "$(git branch --show-current)" == "test_remote_repo2" ]]
+    [[ "$new_latest_commit" == "$latest_commit" ]]
+}
