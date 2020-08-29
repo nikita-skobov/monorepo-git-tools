@@ -20,14 +20,6 @@ pub trait SplitIn {
     fn topbase(self) -> Self;
 }
 
-pub fn get_current_ref(repo: &git2::Repository) -> Option<String> {
-    let current_branch_res = git_helpers::get_current_branch(repo);
-    if let Err(e) = current_branch_res {
-        panic!("Failed to get current branch: {}", e);
-    }
-    Some(current_branch_res.unwrap())
-}
-
 impl<'a> SplitIn for Runner<'a> {
     fn validate_repo_file(mut self) -> Self {
         self.input_branch = match self.matches.value_of(INPUT_BRANCH_ARG) {
@@ -312,6 +304,14 @@ impl<'a> SplitIn for Runner<'a> {
         };
         self
     }
+}
+
+pub fn get_current_ref(repo: &git2::Repository) -> Option<String> {
+    let current_branch_res = git_helpers::get_current_branch(repo);
+    if let Err(e) = current_branch_res {
+        panic!("Failed to get current branch: {}", e);
+    }
+    Some(current_branch_res.unwrap())
 }
 
 // return true if the given tree entry exists
