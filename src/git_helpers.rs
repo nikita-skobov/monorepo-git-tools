@@ -128,12 +128,74 @@ pub fn get_head_commit(
     repo.find_commit(current_oid)
 }
 
+pub fn list_everything_under_tree(
+    repo: &Repository,
+    tree: git2::Tree,
+    indent: &str,
+) -> Result<(), git2::Error> {
+    for t in tree.iter() {
+        println!("{}T:{} ({})", indent, t.id(), t.name().unwrap());
+        let t_obj = t.to_object(repo)?;
+        match t_obj.kind().unwrap() {
+            git2::ObjectType::Blob  => {
+                let blob = match t_obj.into_blob() {
+                    Ok(b) => b,
+                    _ => panic!("failed to turn into blob"),
+                };
+                println!("{}  B:{}", indent, blob.id());
+            }
+            git2::ObjectType::Commit => {
+            }
+            git2::ObjectType::Tree => {
+                let t_next = match t_obj.into_tree() {
+                    Ok(tn) => tn,
+                    _ => panic!("failed to turn into tree"),
+                };
+                let next_indent = format!("{}  ", indent);
+                list_everything_under_tree(repo, t_next, next_indent.as_str())?;
+            }
+            git2::ObjectType::Any => {
+            }
+            git2::ObjectType::Tag => {
+            }
+        };
+    }
+
+    Ok(())
+}
+
+pub fn list_everything_under_commit(
+    repo: &Repository,
+    commit: git2::Commit,
+) -> Result<(), git2::Error> {
+    println!("C:{}", commit.id());
+    let tree = commit.tree()?;
+    list_everything_under_tree(repo, tree, "  ")?;
+
+    for p in commit.parents() {
+        list_everything_under_commit(repo, p)?;
+    }
+
+    Ok(())
+}
+
 pub fn get_commit_from_ref<'a>(
     repo: &'a Repository,
     refname: &str,
 ) -> Result<git2::AnnotatedCommit<'a>, git2::Error> {
     let reference = repo.find_reference(refname)?;
     repo.reference_to_annotated_commit(&reference)
+}
+
+pub fn get_plain_commit_from_ref<'a>(
+    repo: &'a Repository,
+    refname: &str,
+) -> Result<git2::Commit<'a>, git2::Error> {
+    let reference = repo.find_reference(refname)?;
+    match reference.peel_to_commit() {
+        Ok(cmt) => Ok(cmt),
+        Err(e) => Err(e),
+    }
 }
 
 pub fn get_commit_from_oid(
