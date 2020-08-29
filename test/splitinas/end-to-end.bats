@@ -18,6 +18,12 @@ function setup() {
     cd $BATS_TMPDIR/test_remote_repo
 }
 
+function make_commit() {
+    echo "$1" > "$1"
+    git add "$1"
+    git commit -m "$1" > /dev/null
+}
+
 function teardown() {
     cd $BATS_TMPDIR
     if [[ -d test_remote_repo ]]; then
@@ -146,4 +152,115 @@ function teardown() {
     [[ $status == "0" ]]
     [[ "$(git branch --show-current)" == "test_remote_repo2" ]]
     [[ "$new_latest_commit" == "$latest_commit" ]]
+}
+
+# topbasing is basically rebasing but calculating the forking point
+# ourselves instead of trusting git to do it. git sometimes struggles
+# with this when there are squash commits
+@test 'can get latest changes using \"topbase\"' {
+    repo_file_contents="
+    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    include_as=(\"lib/\" \" \")
+    "
+    echo "$repo_file_contents" > repo_file.sh
+    # the repo_file wont be committed
+
+    # save current dir to cd back to later
+    curr_dir="$PWD"
+    make_commit A
+    make_commit B
+    make_commit C
+    echo -e "\nlocal $(git branch --show-current) :"
+    echo "$(git log --oneline)"
+
+    # setup the remote repo:
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    make_commit H
+    make_commit I
+    make_commit J
+    make_commit K
+    make_commit L
+    echo -e "\nremote $(git branch --show-current) :"
+    echo "$(git log --oneline)"
+
+    # split in the remote repo into our local repo and squash merge
+    cd "$curr_dir"
+    run $PROGRAM_PATH split-in repo_file.sh --rebase -o outbranch
+    git checkout master > /dev/null
+    git merge --squash outbranch > /dev/null
+    git commit -m "X" > /dev/null
+    git branch -D outbranch > /dev/null
+    echo -e "\nlocal $(git branch --show-current) :"
+    echo "$(git log --oneline)"
+
+    # make modifications to their code
+    echo -e "\n\nHE" >> lib/H
+    echo -e "\n\nIF" >> lib/I
+    git add lib/H && git commit -m "E" > /dev/null
+    git add lib/I && git commit -m "F" > /dev/null
+
+    # split out and 'contribute' back to remote
+    run $PROGRAM_PATH split-out repo_file.sh > /dev/null
+    echo -e "\nlocal $(git branch --show-current) :"
+    echo "$(git log --oneline)"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    git checkout --orphan from_local > /dev/null 2>&1
+    git rm -rf . > /dev/null 2>&1
+    git pull "$curr_dir" > /dev/null 2>&1
+    git rebase master > /dev/null 2>&1
+    git checkout master > /dev/null 2>&1
+    git merge from_local > /dev/null 2>&1
+    git branch -D from_local > /dev/null 2>&1
+
+    # they make modifications on top of your changes
+    echo -e "\n\nHM" >> H
+    echo -e "\n\nIN" >> I
+    echo -e "\n\nKO" >> K
+    git add H && git commit -m "M" > /dev/null
+    git add I && git commit -m "N" > /dev/null
+    git add K && git commit -m "O" > /dev/null
+    echo -e "\nremote $(git branch --show-current) :"
+    echo "$(git log --oneline)"
+
+    # meanwhile you also made modifications on top of your changes
+    cd "$curr_dir"
+    git checkout master
+    echo -e "\n\nAG" >> lib/A
+    git add lib/A && git commit -m "G" > /dev/null
+    git_log_master_before_topbase="$(git log --oneline)"
+    echo -e "\nlocal $(git branch --show-current) :"
+    echo "$(git log --oneline)"
+
+    # now we split in and try to update from the most recent remote changes
+    # we want the remote changes to go on top of whatever we have on master
+    git branch -D test_remote_repo2
+    run $PROGRAM_PATH split-in repo_file.sh
+    echo -e "\nlocal $(git branch --show-current) :"
+    echo "$(git log --oneline)"
+
+    # a git rebase should fail because it fails to account
+    # for the squashed initial pull
+    run git rebase master
+    [[ $status != "0" ]]
+    [[ $output == *"error: could not apply"* ]]
+
+    # get out of failed state
+    git rebase --abort
+
+    # now a topbase should work
+    run git topbase test_remote_repo2 master
+    [[ $status == "0" ]]
+    git_log_now="$(git log --oneline)"
+    echo -e "\nlocal $(git branch --show-current) :"
+    echo "$(git log --oneline)"
+
+    # if topbase works, it should put everything on top of
+    # what master already had, so we check that it still has everything that
+    # was in master before:
+    [[ "$git_log_now" == *"$git_log_master_before_topbase"* ]]
+
+    # and we also check if it has M, N, O now:
+    [[ "$git_log_now" == *" M"* ]]
+    [[ "$git_log_now" == *" N"* ]]
+    [[ "$git_log_now" == *" O"* ]]
 }
