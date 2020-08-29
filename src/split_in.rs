@@ -227,25 +227,6 @@ impl<'a> SplitIn for Runner<'a> {
             return self
         }
 
-        // match git_helpers::get_plain_commit_from_ref(repo, current_branch.as_str()) {
-        //     Ok(a) => {
-        //         println!("everything under {}", current_branch);
-        //         git_helpers::list_everything_under_commit(repo, a);
-        //     },
-        //     Err(e) => {
-        //         println!("failed to get commit: {}", e);
-        //     },
-        // };
-        // match git_helpers::get_plain_commit_from_ref(repo, upstream_branch.as_str()) {
-        //     Ok(a) => {
-        //         println!("everything under {}", upstream_branch);
-        //         git_helpers::list_everything_under_commit(repo, a);
-        //     },
-        //     Err(e) => {
-        //         println!("failed to get commit: {}", e);
-        //     },
-        // }
-
         let all_commits_of_upstream = match git_helpers::get_all_commits_from_ref(repo, upstream_branch.as_str()) {
             Ok(v) => v,
             Err(e) => panic!("Failed to get all commits! {}", e),
@@ -282,6 +263,11 @@ impl<'a> SplitIn for Runner<'a> {
         // takes commits in order of oldest to newest, but
         // we parsed them from newest to oldest
         rebase_data.reverse();
+
+        // we just want to use the actual branch names, not the ref name
+        let current_branch = current_branch.replace("refs/heads/", "");
+        let upstream_branch = upstream_branch.replace("refs/heads/", "");
+
         println!("rebase_data={}", rebase_data.join(""));
         println!("git rebase -i --onto {} {}~{} {}",
             upstream_branch,
@@ -289,18 +275,33 @@ impl<'a> SplitIn for Runner<'a> {
             num_commits_to_take,
             current_branch,
         );
+
         // rebase_data="pick <hash> <msg>
         // pick <hash> <msg>
         // pick <hash> <msg>
         // "
         // rebase_command="echo \"$rebase_data\""
         // GIT_SEQUENCE_EDITOR="$rebase_command >" git rebase -i --onto bottom top~3 top
+        let upstream_arg = format!("{}~{}", current_branch, num_commits_to_take);
         let args = [
-            "git", "rebase", upstream_branch.as_str(),
+            "git", "rebase", "-i",
+            "--onto", upstream_branch.as_str(),
+            upstream_arg.as_str(),
+            current_branch.as_str(),
         ];
-        match exec_helpers::execute(&args) {
+        let rebase_data_str = rebase_data.join("");
+        let rebase_data_str = format!("echo \"{}\" >", rebase_data_str);
+
+        match exec_helpers::execute_with_env(
+            &args,
+            &["GIT_SEQUENCE_EDITOR"],
+            &[rebase_data_str.as_str()],
+        ) {
             Err(e) => println!("Failed to rebase: {}", e),
-            Ok(_) => (),
+            Ok(o) => {
+                println!("o status? {}", o.status);
+                println!("o out: {}", o.stdout);
+            },
         };
         self
     }
@@ -324,7 +325,6 @@ pub fn tree_entry_exists_in_commits(
         match c.tree() {
             Ok(ctree) => {
                 for cte in ctree.iter() {
-                    println!("cte == te ? ({}) == ({})", cte.id(), te.id());
                     if te.id() == cte.id() {
                         return true;
                     }
