@@ -209,7 +209,7 @@ function teardown() {
     git pull "$curr_dir" > /dev/null 2>&1
     git rebase master > /dev/null 2>&1
     git checkout master > /dev/null 2>&1
-    git merge from_local > /dev/null 2>&1
+    git merge from_local --no-ff > /dev/null 2>&1
     git branch -D from_local > /dev/null 2>&1
 
     # they make modifications on top of your changes
