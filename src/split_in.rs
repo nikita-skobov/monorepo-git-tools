@@ -17,6 +17,7 @@ pub trait SplitIn {
     fn populate_empty_branch_with_remote_commits(self) -> Self;
     fn rebase(self) -> Self;
     fn save_current_ref(self) -> Self;
+    fn topbase(self) -> Self;
 }
 
 pub fn get_current_ref(repo: &git2::Repository) -> Option<String> {
@@ -199,7 +200,71 @@ impl<'a> SplitIn for Runner<'a> {
         };
         self
     }
+
+    fn topbase(self) -> Self {
+        let repo = match self.repo {
+            Some(ref r) => r,
+            None => panic!("failed to get repo?"),
+        };
+
+        let current_branch = match get_current_ref(repo) {
+            Some(s) => s,
+            None => {
+                println!("Failed to get current branch. not going to rebase");
+                return self;
+            },
+        };
+
+        let upstream_branch = match self.repo_original_ref {
+            Some(ref branch) => branch,
+            None => {
+                println!("Failed to get repo original ref. Not going to rebase");
+                return self;
+            },
+        };
+
+        if self.verbose {
+            println!("rebasing onto {}", upstream_branch);
+        }
+        if self.dry_run {
+            // since we are already on the rebase_from_branch
+            // we dont need to specify that in the git command
+            // the below command implies: apply rebased changes in
+            // the branch we are already on
+            println!("git rebase {}", upstream_branch);
+            return self
+        }
+
+        match git_helpers::get_plain_commit_from_ref(repo, current_branch.as_str()) {
+            Ok(a) => {
+                println!("everything under {}", current_branch);
+                git_helpers::list_everything_under_commit(repo, a);
+            },
+            Err(e) => {
+                println!("failed to get commit: {}", e);
+            },
+        };
+        match git_helpers::get_plain_commit_from_ref(repo, upstream_branch) {
+            Ok(a) => {
+                println!("everything under {}", upstream_branch);
+                git_helpers::list_everything_under_commit(repo, a);
+            },
+            Err(e) => {
+                println!("failed to get commit: {}", e);
+            },
+        }
+
+        let args = [
+            "git", "rebase", upstream_branch.as_str(),
+        ];
+        match exec_helpers::execute(&args) {
+            Err(e) => println!("Failed to rebase: {}", e),
+            Ok(_) => (),
+        };
+        self
+    }
 }
+
 
 // iterate over both the include, and include_as
 // repofile variables, and generate an overall
