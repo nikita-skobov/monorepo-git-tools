@@ -6,6 +6,7 @@ use super::commands::REPO_URI_ARG;
 use super::split::panic_if_array_invalid;
 use super::split::Runner;
 use super::git_helpers;
+use super::exec_helpers;
 use super::split::try_get_repo_name_from_remote_repo;
 use super::repo_file::RepoFile;
 
@@ -169,11 +170,6 @@ impl<'a> SplitIn for Runner<'a> {
     }
 
     fn rebase(self) -> Self {
-        let repo = match self.repo {
-            Some(ref repo) => repo,
-            None => panic!("Failed to find repo?"),
-        };
-
         let upstream_branch = match self.repo_original_ref {
             Some(ref branch) => branch,
             None => {
@@ -181,16 +177,9 @@ impl<'a> SplitIn for Runner<'a> {
                 return self;
             },
         };
-        let rebase_from_branch = match get_current_ref(repo) {
-            Some(branch) => branch,
-            None => {
-                println!("Failed to get repo current ref. Not going to rebase");
-                return self;
-            }
-        };
 
         if self.verbose {
-            println!("rebasing {} onto {}", rebase_from_branch, upstream_branch);
+            println!("rebasing onto {}", upstream_branch);
         }
         if self.dry_run {
             // since we are already on the rebase_from_branch
@@ -201,18 +190,13 @@ impl<'a> SplitIn for Runner<'a> {
             return self
         }
 
-        // upstream is the original branch that we were on
-        // rebase_from_branch is our current branch
-        match git_helpers::rebase(
-            repo,
-            upstream_branch,
-            rebase_from_branch.as_str(),
-            None
-        ) {
-            Err(e) => println!("Failed to rebase: {}", e),
-            Ok(_) => println!("successfully rebased!"),
+        let args = [
+            "git", "rebase", upstream_branch.as_str(),
+        ];
+        match exec_helpers::executed_successfully(&args) {
+            false => println!("Failed to rebase"),
+            true => (),
         };
-
         self
     }
 }
