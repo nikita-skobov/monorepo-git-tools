@@ -247,8 +247,14 @@ function teardown() {
     # get out of failed state
     git rebase --abort
 
+    # now lets go back to master, and try to split in again, but this
+    # time we will topbase
+    git checkout master > /dev/null
+    git branch -D test_remote_repo2
+
     # now a topbase should work
-    run git topbase test_remote_repo2 master
+    run $PROGRAM_PATH split-in repo_file.sh -t
+    echo "$output"
     [[ $status == "0" ]]
     git_log_now="$(git log --oneline)"
     echo -e "\nlocal $(git branch --show-current) :"
