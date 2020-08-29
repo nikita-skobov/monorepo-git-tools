@@ -187,6 +187,25 @@ pub fn get_commit_from_ref<'a>(
     repo.reference_to_annotated_commit(&reference)
 }
 
+pub fn get_all_commits_from_ref<'a>(
+    repo: &'a Repository,
+    refname: &str,
+) -> Result<Vec<git2::Commit<'a>>, git2::Error> {
+    let mut commits = vec![];
+
+    let mut revwalk = repo.revwalk()?;
+    revwalk.set_sorting(git2::Sort::NONE)?;
+    let latest_commit_id = repo.revparse_single(refname)?.id();
+    revwalk.push(latest_commit_id)?;
+
+    for c in revwalk {
+        let cmt = get_commit_from_oid(repo, c.unwrap())?;
+        commits.push(cmt);
+    }
+
+    Ok(commits)
+}
+
 pub fn get_plain_commit_from_ref<'a>(
     repo: &'a Repository,
     refname: &str,

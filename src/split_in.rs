@@ -216,7 +216,7 @@ impl<'a> SplitIn for Runner<'a> {
         };
 
         let upstream_branch = match self.repo_original_ref {
-            Some(ref branch) => branch,
+            Some(ref branch) => branch.clone(),
             None => {
                 println!("Failed to get repo original ref. Not going to rebase");
                 return self;
@@ -235,25 +235,74 @@ impl<'a> SplitIn for Runner<'a> {
             return self
         }
 
-        match git_helpers::get_plain_commit_from_ref(repo, current_branch.as_str()) {
-            Ok(a) => {
-                println!("everything under {}", current_branch);
-                git_helpers::list_everything_under_commit(repo, a);
-            },
-            Err(e) => {
-                println!("failed to get commit: {}", e);
-            },
-        };
-        match git_helpers::get_plain_commit_from_ref(repo, upstream_branch) {
-            Ok(a) => {
-                println!("everything under {}", upstream_branch);
-                git_helpers::list_everything_under_commit(repo, a);
-            },
-            Err(e) => {
-                println!("failed to get commit: {}", e);
-            },
-        }
+        // match git_helpers::get_plain_commit_from_ref(repo, current_branch.as_str()) {
+        //     Ok(a) => {
+        //         println!("everything under {}", current_branch);
+        //         git_helpers::list_everything_under_commit(repo, a);
+        //     },
+        //     Err(e) => {
+        //         println!("failed to get commit: {}", e);
+        //     },
+        // };
+        // match git_helpers::get_plain_commit_from_ref(repo, upstream_branch.as_str()) {
+        //     Ok(a) => {
+        //         println!("everything under {}", upstream_branch);
+        //         git_helpers::list_everything_under_commit(repo, a);
+        //     },
+        //     Err(e) => {
+        //         println!("failed to get commit: {}", e);
+        //     },
+        // }
 
+        let all_commits_of_upstream = match git_helpers::get_all_commits_from_ref(repo, upstream_branch.as_str()) {
+            Ok(v) => v,
+            Err(e) => panic!("Failed to get all commits! {}", e),
+        };
+        let all_commits_of_current = match git_helpers::get_all_commits_from_ref(repo, current_branch.as_str()) {
+            Ok(v) => v,
+            Err(e) => panic!("Failed to get all commits! {}", e),
+        };
+
+        let mut num_commits_to_take = 0;
+        let mut rebase_data = vec![];
+        // for every commit in the current branch (the branch going to be rebased)
+        // check if every single tree of every commit exists in the upstream branch.
+        // as soon as we a tree of this current branch that exists
+        // in upstream, then we break, and run out interactive rebase that we
+        // are building
+        for c in all_commits_of_current {
+            match c.tree() {
+                Ok(tree) => {
+                    if all_trees_exist(&tree, &all_commits_of_upstream) {
+                        break;
+                    }
+                    num_commits_to_take += 1;
+                    let rebase_interactive_entry = format!("pick {} {}", c.id(), c.message().unwrap());
+                    rebase_data.push(rebase_interactive_entry);
+                },
+                _ => (),
+            };
+        }
+        // idk some weird borrow/lifetime issue. i have to drop this here...
+        drop(all_commits_of_upstream);
+
+        // need to reverse it because git rebase interactive
+        // takes commits in order of oldest to newest, but
+        // we parsed them from newest to oldest
+        rebase_data.reverse();
+        println!("rebase_data={}", rebase_data.join(""));
+        println!("git rebase -i --onto {} {}~{} {}",
+            upstream_branch,
+            current_branch,
+            num_commits_to_take,
+            current_branch,
+        );
+        // rebase_data="pick <hash> <msg>
+        // pick <hash> <msg>
+        // pick <hash> <msg>
+        // "
+        // rebase_command="echo \"$rebase_data\""
+        // GIT_SEQUENCE_EDITOR="$rebase_command >" git rebase -i --onto bottom top~3 top
         let args = [
             "git", "rebase", upstream_branch.as_str(),
         ];
@@ -265,6 +314,43 @@ impl<'a> SplitIn for Runner<'a> {
     }
 }
 
+// return true if the given tree entry exists
+// in any of the commits
+pub fn tree_entry_exists_in_commits(
+    te: &git2::TreeEntry,
+    commits: &Vec<git2::Commit>,
+) -> bool {
+    for c in commits {
+        match c.tree() {
+            Ok(ctree) => {
+                for cte in ctree.iter() {
+                    println!("cte == te ? ({}) == ({})", cte.id(), te.id());
+                    if te.id() == cte.id() {
+                        return true;
+                    }
+                }
+            },
+            _ => (),
+        }
+    }
+
+    false
+}
+
+// check if ALL of the given tree entries
+// in the tree exist SOMEWHERE in the vec of commits
+pub fn all_trees_exist(
+    tree: &git2::Tree,
+    commits: &Vec<git2::Commit>,
+) -> bool {
+    for te in tree.iter() {
+        if ! tree_entry_exists_in_commits(&te, commits) {
+            return false;
+        }
+    }
+
+    true
+}
 
 // iterate over both the include, and include_as
 // repofile variables, and generate an overall
@@ -353,11 +439,13 @@ pub fn run_split_in(matches: &ArgMatches) {
         .filter_include_as()
         .filter_include();
 
-    // if we should rebase, we need to refresh the repository index
+    // if we should rebase (or topbase), we need to refresh the repository index
     // since the above filtering commands changed some stuff that
     // our in-memory repository representation does not know about
     // idk if this is the best way to do it, but its simplest
-    if runner.should_rebase {
+    if runner.should_topbase {
+        runner.get_repository_from_current_dir().topbase();
+    } else if runner.should_rebase {
         runner.get_repository_from_current_dir().rebase();
     }
 }
@@ -385,7 +473,9 @@ pub fn run_split_in_as(matches: &ArgMatches) {
         .filter_include_as()
         .filter_include();
 
-    if runner.should_rebase {
+    if runner.should_topbase {
+        runner.get_repository_from_current_dir().topbase();
+    } else if runner.should_rebase {
         runner.get_repository_from_current_dir().rebase();
     }
 }
