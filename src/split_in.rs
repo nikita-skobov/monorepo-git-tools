@@ -193,9 +193,9 @@ impl<'a> SplitIn for Runner<'a> {
         let args = [
             "git", "rebase", upstream_branch.as_str(),
         ];
-        match exec_helpers::executed_successfully(&args) {
-            false => println!("Failed to rebase"),
-            true => (),
+        match exec_helpers::execute(&args) {
+            Err(e) => println!("Failed to rebase: {}", e),
+            Ok(_) => (),
         };
         self
     }
