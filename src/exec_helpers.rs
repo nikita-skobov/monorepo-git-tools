@@ -1,9 +1,9 @@
 use std::process::Command;
-use std::{io::Error, process::Stdio};
+use std::{io::Error, process::Stdio, ffi::OsStr};
 
 pub struct CommandOutput {
-    stdout: String,
-    status: i32,
+    pub stdout: String,
+    pub status: i32,
 }
 
 pub fn executed_successfully(exe_and_args: &[&str]) -> bool {
@@ -13,14 +13,25 @@ pub fn executed_successfully(exe_and_args: &[&str]) -> bool {
     }
 }
 
-pub fn execute(exe_and_args: &[&str]) -> Result<CommandOutput, Error> {
+pub fn execute_with_env(
+    exe_and_args: &[&str],
+    keys: &[&str],
+    vals: &[&str],
+) -> Result<CommandOutput, Error> {
     // at the very least must provide the executable name
     assert!(exe_and_args.len() >= 1);
+    assert!(keys.len() == vals.len());
 
     let mut proc = Command::new(exe_and_args[0]);
     for arg in exe_and_args.iter().skip(1) {
         proc.arg(arg);
     }
+
+    let it = keys.iter().zip(vals.iter());
+    for (k, v) in it {
+        proc.env(k, v);
+    }
+
     proc.stdin(Stdio::null());
     proc.stderr(Stdio::null());
     let output = proc.output();
@@ -37,4 +48,8 @@ pub fn execute(exe_and_args: &[&str]) -> Result<CommandOutput, Error> {
             )
         }
     }
+} 
+
+pub fn execute(exe_and_args: &[&str]) -> Result<CommandOutput, Error> {
+    execute_with_env(exe_and_args, &[], &[])
 }
