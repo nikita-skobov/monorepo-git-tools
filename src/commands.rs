@@ -15,6 +15,7 @@ pub const AS_SUBDIR_ARG_NAME: &'static str = "subdirectory";
 pub const DRY_RUN_ARG: [&'static str; 2] = ["dry-run", "d"];
 pub const VERBOSE_ARG: [&'static str; 2] = ["verbose", "v"];
 pub const REBASE_ARG: [&'static str; 2] = ["rebase", "r"];
+pub const TOPBASE_ARG: [&'static str; 2] = ["topbase", "t"];
 
 const SPLIT_IN_STR: &'static str = "split-in";
 const SPLIT_IN_AS_STR: &'static str = "split-in-as";
@@ -26,6 +27,7 @@ const REPO_FILE_DESCRIPTION: &'static str = "path to file that contains instruct
 const REPO_URI_DESCRIPTION: &'static str = "a valid git url of the repository to split in";
 const AS_SUBDIR_DESCRIPTION: &'static str = "path relative to root of the local repository that will contain the entire repository being split in";
 const REBASE_DESCRIPTION: &'static str = "after generating a branch with rewritten history, rebase that branch such that it can be fast forwarded back into your starting branch";
+const TOPBASE_DESCRIPTION: &'static str = "like rebase, but it finds a fork point to only take the top commits from the created branch that dont exist in your starting branch";
 
 #[derive(Clone)]
 pub enum CommandName {
@@ -116,6 +118,14 @@ pub fn split_in<'a, 'b>() -> App<'a, 'b> {
                 .long(REBASE_ARG[0])
                 .short(REBASE_ARG[1])
                 .help(REBASE_DESCRIPTION)
+                .conflicts_with(TOPBASE_ARG[0])
+        )
+        .arg(
+            Arg::with_name(TOPBASE_ARG[0])
+                .long(TOPBASE_ARG[0])
+                .short(TOPBASE_ARG[1])
+                .help(TOPBASE_DESCRIPTION)
+                .conflicts_with(REBASE_ARG[0])
         )
 }
 
@@ -135,6 +145,14 @@ pub fn split_in_as<'a, 'b>() -> App<'a, 'b> {
                 .long(REBASE_ARG[0])
                 .short(REBASE_ARG[1])
                 .help(REBASE_DESCRIPTION)
+                .conflicts_with(TOPBASE_ARG[0])
+        )
+        .arg(
+            Arg::with_name(TOPBASE_ARG[0])
+                .long(TOPBASE_ARG[0])
+                .short(TOPBASE_ARG[1])
+                .help(TOPBASE_DESCRIPTION)
+                .conflicts_with(REBASE_ARG[0])
         )
         .arg(
             Arg::with_name(AS_SUBDIR_ARG)
