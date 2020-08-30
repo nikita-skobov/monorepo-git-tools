@@ -474,7 +474,7 @@ pub fn fetch<'a>(
     remote.fetch(
         refs,
         Some(&mut git2::FetchOptions::new()
-            .download_tags(git2::AutotagOption::All)
+            .download_tags(git2::AutotagOption::None)
         ),
         None
     )?;
