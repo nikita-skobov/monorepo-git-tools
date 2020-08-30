@@ -20,7 +20,7 @@ build_program() {
         exit 1
     fi
     # this should output to ./target/release/my-git-tools
-    PROGRAM_PATH="./target/release/my-git-tools"
+    PROGRAM_PATH="./target/release/mgt"
     PROGRAM_PATH="$(realpath $PROGRAM_PATH)"
 
     if [[ ! -f $PROGRAM_PATH ]]; then
