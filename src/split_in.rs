@@ -296,8 +296,9 @@ impl<'a> SplitIn for Runner<'a> {
         ) {
             Err(e) => println!("Failed to rebase: {}", e),
             Ok(o) => {
-                println!("o status? {}", o.status);
-                println!("o out: {}", o.stdout);
+                if o.status != 0 {
+                    println!("Failed to rebase: {}", o.stdout);
+                }
             },
         };
         self
