@@ -439,3 +439,47 @@ function teardown() {
     echo "$(git branch)"
     [[ "$(git branch)" == $expected_branches ]]
 }
+
+@test 'can topbase new branch onto original branch' {
+    repo_file_contents="
+    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    include=(\"lib/\")
+    "
+    echo "$repo_file_contents" > repo_file.sh
+
+    mkdir -p lib/
+    echo "libfile1.txt" > lib/libfile1.txt
+    git add lib/libfile1.txt && git commit -m "libfile1"
+
+    # make the same 'contribution' on the remote repo
+    # this mimics a scenario where you have previously
+    # contributed to that repo, so the next time you contribute,
+    # topbase will only add your most recent commits
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    mkdir -p lib/
+    echo "libfile1.txt" > lib/libfile1.txt
+    git add lib/libfile1.txt && git commit -m "libfile1"
+    cd "$curr_dir"
+
+    # this is the recent contribution that will be topbased
+    echo "libfile1-mod" >> lib/libfile1.txt
+    git add lib/libfile1.txt && git commit -m "libfile1mod"
+
+    run $PROGRAM_PATH split-out repo_file.sh -t --verbose
+    echo "$output"
+    echo "$(git branch -v)"
+    echo -e "\n$(git branch --show-current):"
+    echo "$(git log --oneline)"
+    [[ $status == "0" ]]
+    [[ "$(git branch --show-current)" == "test_remote_repo2" ]]
+    output_log="$(git log --oneline)"
+    output_commits="$(git log --oneline | wc -l)"
+    echo ""
+    echo "$(git branch)"
+    # output commits should be 3:
+    # 1 initial commit of remote,
+    # the initial contribution "libfile1"
+    # and then the topbased commit "libfile1mod"
+    [[ "$output_commits" == 3 ]]
+}
