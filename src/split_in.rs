@@ -98,35 +98,7 @@ impl<'a> SplitIn for Runner<'a> {
     fn make_and_checkout_output_branch(mut self) -> Self {
         let output_branch_name = self.output_branch.clone().unwrap();
 
-        if self.dry_run {
-            println!("git checkout --orphan {}", output_branch_name);
-            println!("git rm -rf . > /dev/null");
-            return self;
-        }
-
-        match self.repo {
-            Some(ref r) => {
-                let success = git_helpers::make_orphan_branch_and_checkout(
-                    output_branch_name.as_str(),
-                    r,
-                ).is_ok();
-                if ! success {
-                    panic!("Failed to checkout orphan branch");
-                }
-                // on a new orphan branch our existing files appear in the stage
-                // we need to essentially do "git rm -rf ."
-                let success = git_helpers::remove_index_and_files(r).is_ok();
-                if ! success {
-                    panic!("Failed to remove git indexed files after making orphan");
-                }
-            },
-            _ => panic!("Something went horribly wrong!"),
-        };
-        if self.verbose {
-            println!("{}created and checked out orphan branch {}", self.log_p, output_branch_name);
-        }
-
-        self
+        self.make_and_checkout_orphan_branch(output_branch_name.as_str())
     }
 
     fn populate_empty_branch_with_remote_commits(self) -> Self {

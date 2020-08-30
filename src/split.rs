@@ -76,6 +76,38 @@ impl<'a> Runner<'a> {
         self
     }
 
+    pub fn make_and_checkout_orphan_branch(mut self, orphan_branch: &str) -> Self {
+        if self.dry_run {
+            println!("git checkout --orphan {}", orphan_branch);
+            println!("git rm -rf . > /dev/null");
+            return self;
+        }
+
+        match self.repo {
+            Some(ref r) => {
+                let success = git_helpers::make_orphan_branch_and_checkout(
+                    orphan_branch,
+                    r,
+                ).is_ok();
+                if ! success {
+                    panic!("Failed to checkout orphan branch");
+                }
+                // on a new orphan branch our existing files appear in the stage
+                // we need to essentially do "git rm -rf ."
+                let success = git_helpers::remove_index_and_files(r).is_ok();
+                if ! success {
+                    panic!("Failed to remove git indexed files after making orphan");
+                }
+            },
+            _ => panic!("Something went horribly wrong!"),
+        };
+        if self.verbose {
+            println!("{}created and checked out orphan branch {}", self.log_p, orphan_branch);
+        }
+
+        self
+    }
+
     pub fn rebase(self) -> Self {
         let upstream_branch = match self.repo_original_ref {
             Some(ref branch) => branch,
