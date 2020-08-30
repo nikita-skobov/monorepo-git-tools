@@ -206,7 +206,7 @@ pub fn generate_split_out_arg_exclude(repofile: &RepoFile) -> String {
 }
 
 pub fn run_split_out(matches: &ArgMatches) {
-    let runner = Runner::new(matches)
+    let mut runner = Runner::new(matches)
         .get_repo_file()
         .verify_dependencies()
         .validate_repo_file()
@@ -225,16 +225,21 @@ pub fn run_split_out(matches: &ArgMatches) {
     // then save its ref, then checkout back to the newly created branch,
     // then run rebase, then delete the fetched branch since it is not
     // useful to us anymore after the rebase
-    if runner.should_rebase {
+    let either_rebase_or_topbase = runner.should_rebase || runner.should_topbase;
+    if either_rebase_or_topbase {
         // TODO: what if user has a branch with this name...
         let tmp_remote_branch = "mgt-remote-branch-tmp";
-        runner.get_repository_from_current_dir()
+        runner = runner.get_repository_from_current_dir()
             .make_and_checkout_orphan_branch(tmp_remote_branch)
             .populate_empty_branch_with_remote_commits()
             .save_current_ref()
-            .checkout_output_branch()
-            .rebase()
-            .delete_branch(tmp_remote_branch);
+            .checkout_output_branch();
+
+        if runner.should_rebase {
+            runner.rebase().delete_branch(tmp_remote_branch);
+        } else if runner.should_topbase {
+            runner.topbase().delete_branch(tmp_remote_branch);
+        }
     }
 }
 

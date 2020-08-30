@@ -101,6 +101,13 @@ fn base_command<'a, 'b>(cmd: CommandName) -> App<'a, 'b> {
                 .conflicts_with(TOPBASE_ARG[0])
         )
         .arg(
+            Arg::with_name(TOPBASE_ARG[0])
+                .long(TOPBASE_ARG[0])
+                .short(TOPBASE_ARG[1])
+                .help(TOPBASE_DESCRIPTION)
+                .conflicts_with(REBASE_ARG[0])
+        )
+        .arg(
             Arg::with_name(OUTPUT_BRANCH_ARG[0])
                 .long(OUTPUT_BRANCH_ARG[0])
                 .short(OUTPUT_BRANCH_ARG[1])
@@ -119,13 +126,6 @@ pub fn split_in<'a, 'b>() -> App<'a, 'b> {
                 .takes_value(true)
                 .value_name(INPUT_BRANCH_NAME)
                 .help("split in from a local branch in this repository")
-        )
-        .arg(
-            Arg::with_name(TOPBASE_ARG[0])
-                .long(TOPBASE_ARG[0])
-                .short(TOPBASE_ARG[1])
-                .help(TOPBASE_DESCRIPTION)
-                .conflicts_with(REBASE_ARG[0])
         )
 }
 

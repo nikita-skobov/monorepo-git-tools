@@ -253,7 +253,7 @@ function teardown() {
     git branch -D test_remote_repo2
 
     # now a topbase should work
-    run $PROGRAM_PATH split-in repo_file.sh -t
+    run $PROGRAM_PATH split-in repo_file.sh -t --verbose
     echo "$output"
     [[ $status == "0" ]]
     git_log_now="$(git log --oneline)"
