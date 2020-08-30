@@ -409,3 +409,33 @@ function teardown() {
     [[ "$output_log" == *"initial commit for test_remote_repo"* ]]
     [[ "$output_log" == *"initial commit for test_remote_repo2"* ]]
 }
+
+@test 'rebasing new branch onto original should not leave temporary branch' {
+    repo_file_contents="
+    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    include=(\"lib/\" \"test_remote_repo.txt\")
+    "
+    echo "$repo_file_contents" > repo_file.sh
+
+    mkdir -p lib/
+    echo "libfile1.txt" > lib/libfile1.txt
+    git add lib/libfile1.txt && git commit -m "libfile1"
+
+    run $PROGRAM_PATH split-out repo_file.sh -r --verbose
+    echo "$output"
+    echo "$(git branch -v)"
+    echo -e "\n$(git branch --show-current):"
+    echo "$(git log --oneline)"
+    [[ $status == "0" ]]
+    [[ "$(git branch --show-current)" == "test_remote_repo2" ]]
+    output_log="$(git log --oneline)"
+    output_commits="$(git log --oneline | wc -l)"
+    echo ""
+    echo "$(git branch)"
+    expected_branches=$(echo -e "  master\n* test_remote_repo2")
+    echo "expected branches:"
+    echo "$expected_branches"
+    echo "branches:"
+    echo "$(git branch)"
+    [[ "$(git branch)" == $expected_branches ]]
+}

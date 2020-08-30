@@ -11,6 +11,7 @@ pub trait SplitOut {
     fn generate_arg_strings(self) -> Self;
     fn make_and_checkout_output_branch(self) -> Self;
     fn checkout_output_branch(self) -> Self;
+    fn delete_branch(self, branch_name: &str) -> Self;
 }
 
 impl<'a> SplitOut for Runner<'a> {
@@ -122,6 +123,19 @@ impl<'a> SplitOut for Runner<'a> {
 
         self
     }
+
+    fn delete_branch(self, branch_name: &str) -> Self {
+        match self.repo {
+            Some(ref r) => {
+                match git_helpers::delete_branch(branch_name, r) {
+                    Err(e) => println!("Failed to delete branch: {}. {}", branch_name, e),
+                    Ok(_) => (),
+                }
+            },
+            None => println!("Failed to delete branch: {}", branch_name),
+        }
+        self
+    }
 }
 
 
@@ -219,7 +233,8 @@ pub fn run_split_out(matches: &ArgMatches) {
             .populate_empty_branch_with_remote_commits()
             .save_current_ref()
             .checkout_output_branch()
-            .rebase();
+            .rebase()
+            .delete_branch(tmp_remote_branch);
     }
 }
 

@@ -127,6 +127,15 @@ pub fn checkout_to_branch(
     repo.set_head(branch_name)
 }
 
+pub fn delete_branch(
+    branch_name: &str,
+    repo: &Repository,
+) -> Result<(), git2::Error> {
+    let local_branch = git2::BranchType::Local;
+    let mut branch = repo.find_branch(branch_name, local_branch)?;
+    branch.delete()
+}
+
 pub fn checkout_to_branch_and_clear_index(
     branch_name: &str,
     repo: &Repository,
