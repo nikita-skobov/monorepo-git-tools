@@ -206,7 +206,7 @@ impl<'a> Runner<'a> {
                         break;
                     }
                     num_commits_to_take += 1;
-                    let rebase_interactive_entry = format!("pick {} {}", c.id(), c.message().unwrap());
+                    let rebase_interactive_entry = format!("pick {} {}\n", c.id(), c.summary().unwrap());
                     rebase_data.push(rebase_interactive_entry);
                 },
                 _ => (),
@@ -265,7 +265,7 @@ impl<'a> Runner<'a> {
             Err(e) => println!("Failed to rebase: {}", e),
             Ok(o) => {
                 if o.status != 0 {
-                    println!("Failed to rebase: {}", o.stdout);
+                    println!("Failed to rebase: {} {}", o.stdout, o.stderr);
                 }
             },
         };
