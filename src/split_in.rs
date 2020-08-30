@@ -215,18 +215,6 @@ impl<'a> SplitIn for Runner<'a> {
             },
         };
 
-        if self.verbose {
-            println!("rebasing onto {}", upstream_branch);
-        }
-        if self.dry_run {
-            // since we are already on the rebase_from_branch
-            // we dont need to specify that in the git command
-            // the below command implies: apply rebased changes in
-            // the branch we are already on
-            println!("git rebase {}", upstream_branch);
-            return self
-        }
-
         let all_commits_of_upstream = match git_helpers::get_all_commits_from_ref(repo, upstream_branch.as_str()) {
             Ok(v) => v,
             Err(e) => panic!("Failed to get all commits! {}", e),
@@ -268,13 +256,22 @@ impl<'a> SplitIn for Runner<'a> {
         let current_branch = current_branch.replace("refs/heads/", "");
         let upstream_branch = upstream_branch.replace("refs/heads/", "");
 
-        println!("rebase_data={}", rebase_data.join(""));
-        println!("git rebase -i --onto {} {}~{} {}",
-            upstream_branch,
-            current_branch,
-            num_commits_to_take,
-            current_branch,
-        );
+        if self.dry_run || self.verbose {
+            // since we are already on the rebase_from_branch
+            // we dont need to specify that in the git command
+            // the below command implies: apply rebased changes in
+            // the branch we are already on
+            println!("rebase_data=\"{}\"", rebase_data.join(""));
+            println!("GIT_SEQUENCE_EDITOR=\"echo $rebase_data >\" git rebase -i --onto {} {}~{} {}",
+                upstream_branch,
+                current_branch,
+                num_commits_to_take,
+                current_branch,
+            );
+            if self.dry_run {
+                return self;
+            }
+        }
 
         // rebase_data="pick <hash> <msg>
         // pick <hash> <msg>
