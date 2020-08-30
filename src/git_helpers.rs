@@ -127,6 +127,17 @@ pub fn checkout_to_branch(
     repo.set_head(branch_name)
 }
 
+pub fn checkout_to_branch_and_clear_index(
+    branch_name: &str,
+    repo: &Repository,
+) -> Result<(), git2::Error> {
+    repo.set_head(branch_name)?;
+    let mut checkout_opts = git2::build::CheckoutBuilder::new();
+    let mut checkout_opts = checkout_opts.recreate_missing(true);
+    let mut checkout_opts = checkout_opts.force();
+    repo.checkout_head(Some(&mut checkout_opts))
+}
+
 pub fn get_head_commit(
     repo: &Repository,
 ) -> Result<git2::Commit, git2::Error> {

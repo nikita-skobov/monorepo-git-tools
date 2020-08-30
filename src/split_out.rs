@@ -10,6 +10,7 @@ pub trait SplitOut {
     fn validate_repo_file(self) -> Self;
     fn generate_arg_strings(self) -> Self;
     fn make_and_checkout_output_branch(self) -> Self;
+    fn checkout_output_branch(self) -> Self;
 }
 
 impl<'a> SplitOut for Runner<'a> {
@@ -64,6 +65,35 @@ impl<'a> SplitOut for Runner<'a> {
         if exclude_arg_str != "" {
             self.exclude_arg_str = Some(exclude_arg_str);
         }
+        self
+    }
+
+    fn checkout_output_branch(self) -> Self {
+        let output_branch_name = self.output_branch.clone().unwrap();
+        if self.dry_run {
+            println!("git checkout {}", output_branch_name);
+            return self;
+        }
+        let output_branch_ref = format!("refs/heads/{}", output_branch_name);
+
+        match self.repo {
+            Some(ref r) => {
+                match git_helpers::checkout_to_branch_and_clear_index(
+                    output_branch_ref.as_str(),
+                    r,
+                ) {
+                    Ok(_) => (),
+                    Err(e) => {
+                        panic!("Failed to checkout branch {}", e);
+                    }
+                };
+            },
+            _ => panic!("Something went horribly wrong!"),
+        };
+        if self.verbose {
+            println!("{} checked out branch {}", self.log_p, output_branch_name);
+        }
+
         self
     }
 
@@ -162,7 +192,7 @@ pub fn generate_split_out_arg_exclude(repofile: &RepoFile) -> String {
 }
 
 pub fn run_split_out(matches: &ArgMatches) {
-    Runner::new(matches)
+    let runner = Runner::new(matches)
         .get_repo_file()
         .verify_dependencies()
         .validate_repo_file()
@@ -174,6 +204,23 @@ pub fn run_split_out(matches: &ArgMatches) {
         .filter_include()
         .filter_exclude()
         .filter_include_as();
+
+    // for split out, rebase is a bit different because
+    // we actually need to fetch the remote repo|branch that
+    // the user specified in the repo file, and then checkout to that branch
+    // then save its ref, then checkout back to the newly created branch,
+    // then run rebase, then delete the fetched branch since it is not
+    // useful to us anymore after the rebase
+    if runner.should_rebase {
+        // TODO: what if user has a branch with this name...
+        let tmp_remote_branch = "mgt-remote-branch-tmp";
+        runner.get_repository_from_current_dir()
+            .make_and_checkout_orphan_branch(tmp_remote_branch)
+            .populate_empty_branch_with_remote_commits()
+            .save_current_ref()
+            .checkout_output_branch()
+            .rebase();
+    }
 }
 
 

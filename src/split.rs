@@ -137,6 +137,7 @@ impl<'a> Runner<'a> {
                 return self;
             },
         };
+        let upstream_branch = upstream_branch.replace("refs/heads/", "");
 
         if self.verbose {
             println!("rebasing onto {}", upstream_branch);

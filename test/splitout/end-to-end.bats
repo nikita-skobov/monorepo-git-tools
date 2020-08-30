@@ -379,3 +379,33 @@ function teardown() {
     [[ $output == "test_remote_repo2" ]]
 }
 
+@test 'can optionally rebase new branch onto original' {
+    repo_file_contents="
+    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    include=(\"lib/\" \"test_remote_repo.txt\")
+    "
+    echo "$repo_file_contents" > repo_file.sh
+
+    mkdir -p lib/
+    echo "libfile1.txt" > lib/libfile1.txt
+    git add lib/libfile1.txt && git commit -m "libfile1"
+
+    run $PROGRAM_PATH split-out repo_file.sh -r --verbose
+    echo "$output"
+    echo "$(git branch -v)"
+    echo -e "\n$(git branch --show-current):"
+    echo "$(git log --oneline)"
+    [[ $status == "0" ]]
+    [[ "$(git branch --show-current)" == "test_remote_repo2" ]]
+    output_log="$(git log --oneline)"
+    output_commits="$(git log --oneline | wc -l)"
+    echo ""
+
+    # we test that the number of commits is now the number that we made in our local
+    # repo (2: the original, and the libfile) plus the initial commit of test_remote_repo2
+    # so should be three
+    [[ "$output_commits" == "3" ]]
+    [[ "$output_log" == *"libfile1"* ]]
+    [[ "$output_log" == *"initial commit for test_remote_repo"* ]]
+    [[ "$output_log" == *"initial commit for test_remote_repo2"* ]]
+}
