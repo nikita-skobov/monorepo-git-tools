@@ -65,6 +65,48 @@ impl<'a> Runner<'a> {
             }
         }
     }
+
+    // get the current ref that this git repo is pointing to
+    // save it for later
+    pub fn save_current_ref(mut self) -> Self {
+        self.repo_original_ref = match self.repo {
+            Some(ref repo) => git_helpers::get_current_ref(repo),
+            None => None,
+        };
+        self
+    }
+
+    pub fn rebase(self) -> Self {
+        let upstream_branch = match self.repo_original_ref {
+            Some(ref branch) => branch,
+            None => {
+                println!("Failed to get repo original ref. Not going to rebase");
+                return self;
+            },
+        };
+
+        if self.verbose {
+            println!("rebasing onto {}", upstream_branch);
+        }
+        if self.dry_run {
+            // since we are already on the rebase_from_branch
+            // we dont need to specify that in the git command
+            // the below command implies: apply rebased changes in
+            // the branch we are already on
+            println!("git rebase {}", upstream_branch);
+            return self
+        }
+
+        let args = [
+            "git", "rebase", upstream_branch.as_str(),
+        ];
+        match exec_helpers::execute(&args) {
+            Err(e) => println!("Failed to rebase: {}", e),
+            Ok(_) => (),
+        };
+        self
+    }
+
     pub fn get_repo_file(mut self) -> Self {
         let repo_file_name = self.matches.value_of(REPO_FILE_ARG).unwrap();
         self.repo_file = repo_file::parse_repo_file(repo_file_name);

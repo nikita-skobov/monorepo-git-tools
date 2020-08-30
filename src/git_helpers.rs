@@ -113,6 +113,13 @@ pub fn make_orphan_branch_and_checkout(
     checkout_to_branch(branch_ref.as_str(), repo)
 }
 
+pub fn get_current_ref(repo: &git2::Repository) -> Option<String> {
+    match get_current_branch(repo) {
+        Err(_) => None,
+        Ok(s) => Some(s),
+    }
+}
+
 pub fn checkout_to_branch(
     branch_name: &str,
     repo: &Repository,

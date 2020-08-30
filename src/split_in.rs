@@ -15,8 +15,6 @@ pub trait SplitIn {
     fn generate_arg_strings(self) -> Self;
     fn make_and_checkout_output_branch(self) -> Self;
     fn populate_empty_branch_with_remote_commits(self) -> Self;
-    fn rebase(self) -> Self;
-    fn save_current_ref(self) -> Self;
     fn topbase(self) -> Self;
 }
 
@@ -70,16 +68,6 @@ impl<'a> SplitIn for Runner<'a> {
         panic_if_array_invalid(&self.repo_file.include, true, "include");
         panic_if_array_invalid(&self.repo_file.include_as, false, "include_as");
 
-        self
-    }
-
-    // get the current ref that this git repo is pointing to
-    // save it for later
-    fn save_current_ref(mut self) -> Self {
-        self.repo_original_ref = match self.repo {
-            Some(ref repo) => get_current_ref(repo),
-            None => None,
-        };
         self
     }
 
@@ -162,44 +150,13 @@ impl<'a> SplitIn for Runner<'a> {
         self
     }
 
-    fn rebase(self) -> Self {
-        let upstream_branch = match self.repo_original_ref {
-            Some(ref branch) => branch,
-            None => {
-                println!("Failed to get repo original ref. Not going to rebase");
-                return self;
-            },
-        };
-
-        if self.verbose {
-            println!("rebasing onto {}", upstream_branch);
-        }
-        if self.dry_run {
-            // since we are already on the rebase_from_branch
-            // we dont need to specify that in the git command
-            // the below command implies: apply rebased changes in
-            // the branch we are already on
-            println!("git rebase {}", upstream_branch);
-            return self
-        }
-
-        let args = [
-            "git", "rebase", upstream_branch.as_str(),
-        ];
-        match exec_helpers::execute(&args) {
-            Err(e) => println!("Failed to rebase: {}", e),
-            Ok(_) => (),
-        };
-        self
-    }
-
     fn topbase(self) -> Self {
         let repo = match self.repo {
             Some(ref r) => r,
             None => panic!("failed to get repo?"),
         };
 
-        let current_branch = match get_current_ref(repo) {
+        let current_branch = match git_helpers::get_current_ref(repo) {
             Some(s) => s,
             None => {
                 println!("Failed to get current branch. not going to rebase");
@@ -303,14 +260,6 @@ impl<'a> SplitIn for Runner<'a> {
         };
         self
     }
-}
-
-pub fn get_current_ref(repo: &git2::Repository) -> Option<String> {
-    let current_branch_res = git_helpers::get_current_branch(repo);
-    if let Err(e) = current_branch_res {
-        panic!("Failed to get current branch: {}", e);
-    }
-    Some(current_branch_res.unwrap())
 }
 
 // return true if the given tree entry exists
