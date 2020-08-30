@@ -26,7 +26,7 @@ const SPLIT_IN_AS_DESCRIPTION: &'static str = "fetch the entirety of a remote re
 const REPO_FILE_DESCRIPTION: &'static str = "path to file that contains instructions of how to split a repository";
 const REPO_URI_DESCRIPTION: &'static str = "a valid git url of the repository to split in";
 const AS_SUBDIR_DESCRIPTION: &'static str = "path relative to root of the local repository that will contain the entire repository being split in";
-const REBASE_DESCRIPTION: &'static str = "after generating a branch with rewritten history, rebase that branch such that it can be fast forwarded back into your starting branch";
+const REBASE_DESCRIPTION: &'static str = "after generating a branch with rewritten history, rebase that branch such that it can be fast forwarded back into the comparison branch. For split-in, the comparison branch is the branch you started on. For split-out, the comparison branch is the remote branch";
 const TOPBASE_DESCRIPTION: &'static str = "like rebase, but it finds a fork point to only take the top commits from the created branch that dont exist in your starting branch";
 
 #[derive(Clone)]
@@ -94,6 +94,13 @@ fn base_command<'a, 'b>(cmd: CommandName) -> App<'a, 'b> {
                 .help("show more detailed logs")
         )
         .arg(
+            Arg::with_name(REBASE_ARG[0])
+                .long(REBASE_ARG[0])
+                .short(REBASE_ARG[1])
+                .help(REBASE_DESCRIPTION)
+                .conflicts_with(TOPBASE_ARG[0])
+        )
+        .arg(
             Arg::with_name(OUTPUT_BRANCH_ARG[0])
                 .long(OUTPUT_BRANCH_ARG[0])
                 .short(OUTPUT_BRANCH_ARG[1])
@@ -112,13 +119,6 @@ pub fn split_in<'a, 'b>() -> App<'a, 'b> {
                 .takes_value(true)
                 .value_name(INPUT_BRANCH_NAME)
                 .help("split in from a local branch in this repository")
-        )
-        .arg(
-            Arg::with_name(REBASE_ARG[0])
-                .long(REBASE_ARG[0])
-                .short(REBASE_ARG[1])
-                .help(REBASE_DESCRIPTION)
-                .conflicts_with(TOPBASE_ARG[0])
         )
         .arg(
             Arg::with_name(TOPBASE_ARG[0])
