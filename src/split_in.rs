@@ -14,7 +14,6 @@ pub trait SplitIn {
     fn validate_repo_file(self) -> Self;
     fn generate_arg_strings(self) -> Self;
     fn make_and_checkout_output_branch(self) -> Self;
-    fn populate_empty_branch_with_remote_commits(self) -> Self;
     fn topbase(self) -> Self;
 }
 
@@ -99,27 +98,6 @@ impl<'a> SplitIn for Runner<'a> {
         let output_branch_name = self.output_branch.clone().unwrap();
 
         self.make_and_checkout_orphan_branch(output_branch_name.as_str())
-    }
-
-    fn populate_empty_branch_with_remote_commits(self) -> Self {
-        let remote_repo = self.repo_file.remote_repo.clone();
-        let remote_branch: Option<&str> = match &self.repo_file.remote_branch {
-            Some(branch_name) => Some(branch_name.as_str()),
-            None => None,
-        };
-
-        match self.repo {
-            None => panic!("Failed to find repo?"),
-            Some(ref r) => {
-                match (self.dry_run, &self.input_branch) {
-                    (true, Some(branch_name)) => println!("git merge {}", branch_name),
-                    (true, None) => println!("git pull {}", remote_repo.unwrap()),
-                    (false, Some(branch_name)) => { git_helpers::merge_branches(&r, &branch_name[..], None); },
-                    (false, None) => { git_helpers::pull(&r, &remote_repo.unwrap()[..], remote_branch); },
-                };
-            },
-        };
-        self
     }
 
     fn topbase(self) -> Self {
