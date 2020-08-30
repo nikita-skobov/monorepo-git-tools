@@ -3,6 +3,7 @@ use std::{io::Error, process::Stdio, ffi::OsStr};
 
 pub struct CommandOutput {
     pub stdout: String,
+    pub stderr: String,
     pub status: i32,
 }
 
@@ -39,10 +40,12 @@ pub fn execute_with_env(
     match output {
         Err(e) => Err(e),
         Ok(out) => {
+            let errput_str_cow = String::from_utf8_lossy(&out.stderr);
             let output_str_cow = String::from_utf8_lossy(&out.stdout);
             Ok(
                 CommandOutput {
                     stdout: output_str_cow.into_owned(),
+                    stderr: errput_str_cow.into_owned(),
                     status: out.status.code().unwrap_or(1),
                 }
             )
