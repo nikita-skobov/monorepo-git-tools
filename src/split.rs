@@ -230,6 +230,23 @@ impl<'a> Runner<'a> {
         let current_branch = current_branch.replace("refs/heads/", "");
         let upstream_branch = upstream_branch.replace("refs/heads/", "");
 
+        if num_commits_to_take == 0 {
+            println!("{}most recent commit of {} exists in {}. rebasing non-interactively", self.log_p, current_branch, upstream_branch);
+            if self.dry_run {
+                println!("git rebase {}", upstream_branch);
+                return self;
+            }
+
+            let args = [
+                "git", "rebase", upstream_branch.as_str(),
+            ];
+            match exec_helpers::execute(&args) {
+                Err(e) => panic!("Failed to rebase: {}", e),
+                Ok(_) => (),
+            };
+            return self;
+        }
+
         if self.dry_run || self.verbose {
             // since we are already on the rebase_from_branch
             // we dont need to specify that in the git command
