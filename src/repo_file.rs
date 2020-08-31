@@ -272,7 +272,6 @@ pub fn parse_repo_file_from_lines(lines: Vec<String>) -> RepoFile {
             current_variable.complete = false;
         }
     }
-    println!("repo file obj: {:?}", repofile_obj);
     return repofile_obj;
 }
 

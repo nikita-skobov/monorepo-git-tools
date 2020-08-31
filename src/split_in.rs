@@ -182,7 +182,12 @@ pub fn run_split_in(matches: &ArgMatches) {
         .change_to_repo_root()
         .make_and_checkout_output_branch()
         .populate_empty_branch_with_remote_commits()
-        .generate_arg_strings()
+        .generate_arg_strings();
+
+    let log_p = runner.log_p.clone();
+    let temp_branch = runner.output_branch.clone().unwrap_or("\"\"".into());
+    println!("{}Running filter commands on temporary branch: {}", log_p, temp_branch);
+    let runner = runner
         .filter_exclude()
         .filter_include_as()
         .filter_include();
@@ -192,10 +197,14 @@ pub fn run_split_in(matches: &ArgMatches) {
     // our in-memory repository representation does not know about
     // idk if this is the best way to do it, but its simplest
     if runner.should_topbase {
+        println!("{}Topbasing", log_p);
         runner.get_repository_from_current_dir().topbase();
     } else if runner.should_rebase {
+        println!("{}Rebasing", log_p);
         runner.get_repository_from_current_dir().rebase();
     }
+
+    println!("{}Success!", log_p);
 }
 
 pub fn run_split_in_as(matches: &ArgMatches) {
@@ -216,16 +225,25 @@ pub fn run_split_in_as(matches: &ArgMatches) {
         .change_to_repo_root()
         .make_and_checkout_output_branch()
         .populate_empty_branch_with_remote_commits()
-        .generate_arg_strings()
+        .generate_arg_strings();
+
+    let log_p = runner.log_p.clone();
+    let temp_branch = runner.output_branch.clone().unwrap_or("\"\"".into());
+    println!("{}Running filter commands on temporary branch: {}", log_p, temp_branch);
+    let runner = runner
         .filter_exclude()
         .filter_include_as()
         .filter_include();
 
     if runner.should_topbase {
+        println!("{}Topbasing", log_p);
         runner.get_repository_from_current_dir().topbase();
     } else if runner.should_rebase {
+        println!("{}Rebasing", log_p);
         runner.get_repository_from_current_dir().rebase();
     }
+
+    println!("{}Success!", log_p);
 }
 
 

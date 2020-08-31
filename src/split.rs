@@ -121,8 +121,14 @@ impl<'a> Runner<'a> {
                 match (self.dry_run, &self.input_branch) {
                     (true, Some(branch_name)) => println!("git merge {}", branch_name),
                     (true, None) => println!("git pull {}", remote_repo.unwrap()),
-                    (false, Some(branch_name)) => { git_helpers::merge_branches(&r, &branch_name[..], None); },
-                    (false, None) => { git_helpers::pull(&r, &remote_repo.unwrap()[..], remote_branch); },
+                    (false, Some(branch_name)) => {
+                        println!("{}Merging {}", self.log_p, branch_name);
+                        git_helpers::merge_branches(&r, &branch_name[..], None);
+                    },
+                    (false, None) => {
+                        println!("{}Pulling from {} {}", self.log_p, remote_repo.clone().unwrap_or("?".into()), remote_branch.clone().unwrap_or("".into()));
+                        git_helpers::pull(&r, &remote_repo.unwrap()[..], remote_branch);
+                    },
                 };
             },
         };
@@ -276,7 +282,7 @@ impl<'a> Runner<'a> {
         let repo_file_name = self.matches.value_of(REPO_FILE_ARG).unwrap();
         self.repo_file = repo_file::parse_repo_file(repo_file_name);
         if self.verbose {
-            println!("{}repo file: {}", self.log_p, repo_file_name);
+            println!("{}got repo file: {}", self.log_p, repo_file_name);
         }
         self
     }

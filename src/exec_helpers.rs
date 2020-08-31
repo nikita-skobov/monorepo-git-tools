@@ -34,7 +34,6 @@ pub fn execute_with_env(
     }
 
     proc.stdin(Stdio::null());
-    proc.stderr(Stdio::null());
     let output = proc.output();
 
     match output {

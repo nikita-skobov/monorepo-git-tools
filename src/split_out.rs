@@ -206,7 +206,7 @@ pub fn generate_split_out_arg_exclude(repofile: &RepoFile) -> String {
 }
 
 pub fn run_split_out(matches: &ArgMatches) {
-    let mut runner = Runner::new(matches)
+    let runner = Runner::new(matches)
         .get_repo_file()
         .verify_dependencies()
         .validate_repo_file()
@@ -214,7 +214,12 @@ pub fn run_split_out(matches: &ArgMatches) {
         .get_repository_from_current_dir()
         .change_to_repo_root()
         .generate_arg_strings()
-        .make_and_checkout_output_branch()
+        .make_and_checkout_output_branch();
+
+    let log_p = runner.log_p.clone();
+    let temp_branch = runner.output_branch.clone().unwrap_or("\"\"".into());
+    println!("{}Running filter commands on temporary branch: {}", log_p, temp_branch);
+    let mut runner = runner
         .filter_include()
         .filter_exclude()
         .filter_include_as();
@@ -236,10 +241,14 @@ pub fn run_split_out(matches: &ArgMatches) {
             .checkout_output_branch();
 
         if runner.should_rebase {
+            println!("{}Rebasing", log_p);
             runner.rebase().delete_branch(tmp_remote_branch);
         } else if runner.should_topbase {
+            println!("{}Topbasing", log_p);
             runner.topbase().delete_branch(tmp_remote_branch);
         }
+
+        println!("{}Success!", log_p);
     }
 }
 
