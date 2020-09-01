@@ -1,57 +1,56 @@
-# git-monorepo-tools
+# mgt (monorepo-git-tools)
 
-> A collection of custom git commands that I use to maintain my monorepo.
+> Git tools that enable easy bidirectional sync between multiple repositories
 
 ## Table of contents
 
-* [Prerequisites](#prerequisites)
 * [What does it do?](#what-does-it-do)
+* [How does it work?](#how-does-it-work)
+* [Prerequisites](#prerequisites)
 * [Installation](#installation)
 * [What is a "repo file"?](#what-is-a-repo-file)
-* [Development](#development)
-
-## Prerequisites
-
-These git commands are just "porcelain" commands built on top of the real "plumbing" capabilities of [git-filter-repo](https://github.com/newren/git-filter-repo).
-
-You must have `git-filter-repo` available on your path prior to using the tools in this repository.
 
 ## What does it do?
 
-The main tool provided in this project is `git split` which can push out your monorepo into smaller subprojects, as well as bring in changes from your subprojects into your monorepo. Along with `git split` is provided `git topbase` which makes it easier to rebase changes from your subprojects back into your monorepo.
+`mgt` has several features that make it easy to collaborate with
+projects outside of your repository. It works by rewriting
+your git history onto a temporary branch in a way such that the branch
+can be easily merged into another repository.
 
-For a more in-depth explanation, the full manuals can be found here:
+Some features that `mgt` provides are:
 
-- [git-split](https://htmlpreview.github.io/?https://github.com/nikita-skobov/git-monorepo-tools/blob/master/dist/git-split.html)
-- [git-topbase](https://htmlpreview.github.io/?https://github.com/nikita-skobov/git-monorepo-tools/blob/master/dist/git-topbase.html)
+- splitting your private repository into subrepositories that only contain files/folders that you want to share publically
+- bidirectional sync between repositories via transient branches that are formatted to be rebased
+- checking updates of multiple subrepositories (TODO)
+- filtering out specific text/commits before sharing publically (TODO)
+
+## How does it work?
+
+`mgt` knows how to rewrite your history based on files contain information on how to rewrite the history.
+These files are called `repo_file`s, and some common things that would
+go in a `repo_file` are:
+
+- including files/folders
+- renaming files/folders
+- excluding files/folders
+- specifying repository URL(s) to use as the destination
+
+When you run `mgt`, you typically provide a path to the `repo_file`, eg: `mgt split-out my_repo_file.txt`
+
+## Prerequisites
+
+These commands are just "porcelain" commands built on top of the real "plumbing" capabilities of [git-filter-repo](https://github.com/newren/git-filter-repo).
+
+You must have `git-filter-repo` available on your path prior to using the tools in this repository.
+
 
 ## Installation
 
-This repository will contain periodic stable builds of the source code. The builds will be located in the `dist/` directory. The files in the `dist/` directory are bash shell scripts, and are named according to how git handles subcommands, ie: `git-<subcommand>`. 
-
-The proper way to install these git commands is to put them in the directory of all of the other git commands. You can check this by running `git --exec-path`
-
-Then simply copy the contents of `dist/` to this directory. In my case, it is `/usr/lib/git-core`:
-
-```sh
-git clone https://github.com/nikita-skobov/git-monorepo-tools
-cd git-monorepo-tools
-
-# replace /usr/lib/git-core with whatever the
-# output of 'git --exec-path' is on your system
-# !(*.*) will match all files without an extension
-sudo cp dist/!(*.*) /usr/lib/git-core
-# OR you can just manually copy them:
-# sudo cp dist/git-split /usr/lib/git-core
-# sudo cp dist/git-topbase /usr/lib/git-core
-
-# to install the man pages:
-sudo cp dist/*.gz /usr/share/man/man1
-```
+TODO
 
 ## What is a "repo file"?
 
-I created these tools with the intention of defining `repo_file`s that contain information on how to split out/in local repositories back and forth from remote repositories. A `repo_file` is just a shell script that contains some variables. It is sourced by commands in this repository, and the variables that it sources are used to do the splitting out/in.
+I created these tools with the intention of defining `repo_file`s that contain information on how to split out/in local repositories back and forth from remote repositories. A `repo_file` is just a text file that contains some variables in a very limited bash syntax. 
 
 Here is a commented `repo_file` that explains what some of the common variables do. For a full explanation, see the [repo file explanation section of the manual](https://htmlpreview.github.io/?https://github.com/nikita-skobov/git-monorepo-tools/blob/master/dist/git-split.html#ABOUT%20THE%20REPO%20FILE)
 
@@ -69,10 +68,6 @@ remote_branch="feature/X"
 # and `username` IS PROVIDED, then `git split in`
 # will use https://github.com/$username/$repo_name
 repo_name="git-monorepo-tools"
-
-# if remote_repo is not provided,
-# use this as the GitHub username when pulling
-username="nikita-skobov"
 
 # includes the source repository files/directories
 # exactly as is, without changing the paths
@@ -110,39 +105,4 @@ exclude=(
     "lib/secret_file.txt"
     "old/embarassing/project/"
 )
-```
-
-## Development
-
-This project uses my library: [bash-source-combine](https://github.com/nikita-skobov/bash-source-combine). Bash source combine lets you write relatively neat and compact bash code in seperate files using an import syntax. These files are then combined into one single output. The files in this repository are mostly `.bsc` files, which stands for bash source combine.
-
-If you want to develop on this project, please do not make any changes
-to the `dist/` directory, as these are the built files. Instead, edit any of the `.bsc` files. And then to compile/run them, you will need to install bash-source-combine.
-
-To generate the output script, simply run:
-
-```sh
-source_combine git-split.bsc > dist/git-split
-```
-
-Or, to compile and run in place:
-
-```sh
-run_source_combine git-split.bsc --any-args-you-want
-```
-
-To run the tests:
-
-```sh
-# make sure you are in the root of the repository
-# you need bats installed, see test/README.md
-./test/run_tests.sh
-```
-
-To generate up to date man pages:
-
-```sh
-# make sure you are in the root of the repository
-# you need groff, and gzip installed
-./doc/run_docs.sh
 ```
