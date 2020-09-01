@@ -1,0 +1,12 @@
+# Repo File
+
+I created `mgt` with the intention of defining `repo_files`
+that contain information on how to split out/in local repositories back
+and forth between remote repositories. A `repo_file` is just a text file
+that has variables that describe how your repository should be split. The
+syntax is bash-like and only supports variables, strings, lists of strings,
+and comments.
+
+The following is a list of all valid variables you can use in your repo file.
+
+
