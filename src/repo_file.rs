@@ -4,10 +4,12 @@ use std::io::{BufRead, BufReader};
 
 #[derive(Debug, PartialEq)]
 pub struct RepoFile {
+    /// ## repo_name
     /// The name of the remote repository <br/>
     /// This will be the branch name when mgt creates a temporary branch. <br/>
     /// Required only if `remote_repo` is not specified.
     pub repo_name: Option<String>,
+    /// ## remote_repo
     /// A valid git repo uri. Can be a local file location, remote url, ssh url, etc. <br/>
     /// For `split-in` the git history of `remote_repo` is rewritten to match this local repo's history. <br/>
     /// For `split-out` the git history of this local repository is rewritten to match the `remote_repo`. <br/>
@@ -17,6 +19,7 @@ pub struct RepoFile {
     /// using `--topbase` or `--rebase`) use the HEAD of the `remote_repo`, but you can specify a specific
     /// branch to use instead.
     /// Optional.
+    /// ## remote_branch
     pub remote_branch: Option<String>,
     /// A list of paths where even-indexed paths are the sources, and odd-indexed paths are the destinations. <br/>
     /// The source is a path to a file/folder in this local repository, and the destination is
@@ -42,6 +45,7 @@ pub struct RepoFile {
     /// and it will take the entire folder `lib/project/` and make that the root of the split out repository.
     /// NOTE that when specifying directories, you MUST include a trailing slash. And if you wish to make a subdirectory
     /// the root of the split repository, the correct syntax is a single empty space: `" "`.
+    /// ## include_as
     pub include_as: Option<Vec<String>>,
     /// A list of paths to include. Unlike `include_as`, this does not allow for renaming.
     /// There is no source/destination here, it is just a list of paths to keep exactly as they are.
@@ -59,6 +63,7 @@ pub struct RepoFile {
     /// include=("lib/")
     /// ```
     /// Both of the above are valid. `include` can be a single string if you only have one path to include.
+    /// ## include
     pub include: Option<Vec<String>>,
     /// A list of paths to exclude. This is useful if you want a folder, but don't want some of the
     /// subfolders.
@@ -83,6 +88,7 @@ pub struct RepoFile {
     /// nothing about the `remotefile.txt` (because there isn't one).<br/>
     /// If the remote repository has a `remotefile.txt` then that file will be excluded when running `split-in`. <br/>
     /// NOTE: in the future there might be an `exclude_local` and `exclude_remote` to avoid these ambiguities.
+    /// ## exclude
     pub exclude: Option<Vec<String>>,
 }
 
