@@ -4,11 +4,85 @@ use std::io::{BufRead, BufReader};
 
 #[derive(Debug, PartialEq)]
 pub struct RepoFile {
+    /// The name of the remote repository <br/>
+    /// This will be the branch name when mgt creates a temporary branch. <br/>
+    /// Required only if `remote_repo` is not specified.
     pub repo_name: Option<String>,
+    /// A valid git repo uri. Can be a local file location, remote url, ssh url, etc. <br/>
+    /// For `split-in` the git history of `remote_repo` is rewritten to match this local repo's history. <br/>
+    /// For `split-out` the git history of this local repository is rewritten to match the `remote_repo`. <br/>
+    /// Required for `split-in`, only required for `split-out` if using `--topbase` or `--rebase`.
     pub remote_repo: Option<String>,
+    /// A name of a branch available on the `remote_repo`. By default `split-in` (and `split-out` if 
+    /// using `--topbase` or `--rebase`) use the HEAD of the `remote_repo`, but you can specify a specific
+    /// branch to use instead.
+    /// Optional.
     pub remote_branch: Option<String>,
+    /// A list of paths where even-indexed paths are the sources, and odd-indexed paths are the destinations. <br/>
+    /// The source is a path to a file/folder in this local repository, and the destination is
+    /// a path to a file/folder in the remote repository. <br/>
+    /// This is so that you can use the same `repo_file` for both splitting in and out.
+    /// 
+    /// Examples:
+    /// ```
+    /// include_as=("my_markdown_notes/002-notes-on-this-thing.md" "README.md")
+    /// ```
+    /// When running `split-out` this will rewrite the users repository
+    /// and only keep the file: `my_markdown_notes/002-notes-on-this-thing.md`, however
+    /// when it rewrites the history, it will also rename the file to be `README.md`.
+    /// When running `split-in` this will take the `README.md` file from the `remote_repo`
+    /// and rename it to be `my_markdown_notes/002-notes-on-this-thing.md`
+    /// ```
+    /// include_as=(
+    ///     "lib/file1.txt" "file1.txt"
+    ///     "lib/project/" " "
+    /// )
+    /// ``` 
+    /// For `split-out` this will rename the local repository's `lib/file1.txt` to just `file1.txt`
+    /// and it will take the entire folder `lib/project/` and make that the root of the split out repository.
+    /// NOTE that when specifying directories, you MUST include a trailing slash. And if you wish to make a subdirectory
+    /// the root of the split repository, the correct syntax is a single empty space: `" "`.
     pub include_as: Option<Vec<String>>,
+    /// A list of paths to include. Unlike `include_as`, this does not allow for renaming.
+    /// There is no source/destination here, it is just a list of paths to keep exactly as they are.
+    ///
+    /// Examples:
+    /// ```
+    /// include=(
+    ///    "README.md"
+    ///    "LICENSE"
+    /// )
+    /// ```
+    /// This will only take the `README.md` and `LICENSE` files at the root level, and ignore everything else.
+    /// ```
+    /// include="lib/"
+    /// include=("lib/")
+    /// ```
+    /// Both of the above are valid. `include` can be a single string if you only have one path to include.
     pub include: Option<Vec<String>>,
+    /// A list of paths to exclude. This is useful if you want a folder, but don't want some of the
+    /// subfolders.
+    ///
+    /// Examples:
+    /// ```
+    /// include="lib/"
+    /// exclude=("lib/private/" "lib/README.md")
+    /// ```
+    /// For `split-in` this will take the entirety of the `lib/` folder, but will not take `lib/README.md` and
+    /// will not take the entire subfolder `lib/private/`. Note that `exclude` does not make sense for both `split-out`
+    /// and `split-in`. In the above example, if you use this same `repo_file` again to `split-out` your changes,
+    /// you do not have a `lib/private` or a `lib/README.md`, so this `exclude` statement will not do anything.
+    /// This means you can specify both local paths to exclude and remote paths to exclude:
+    /// ```
+    /// exclude=(
+    ///    "localfile.txt"
+    ///    "remotefile.txt"
+    /// )
+    /// ```
+    /// If your local repository has a `localfile.txt` then `split-out` will not include it, and `split-out` will do
+    /// nothing about the `remotefile.txt` (because there isn't one).<br/>
+    /// If the remote repository has a `remotefile.txt` then that file will be excluded when running `split-in`. <br/>
+    /// NOTE: in the future there might be an `exclude_local` and `exclude_remote` to avoid these ambiguities.
     pub exclude: Option<Vec<String>>,
 }
 
