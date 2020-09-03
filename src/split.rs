@@ -198,6 +198,7 @@ impl<'a> Runner<'a> {
             Err(e) => panic!("Failed to get all commits! {}", e),
         };
 
+        let num_commits_of_current = all_commits_of_current.len();
         let mut num_commits_to_take = 0;
         let mut rebase_data = vec![];
         // for every commit in the current branch (the branch going to be rebased)
@@ -230,8 +231,20 @@ impl<'a> Runner<'a> {
         let current_branch = current_branch.replace("refs/heads/", "");
         let upstream_branch = upstream_branch.replace("refs/heads/", "");
 
+        // log the special cases
         if num_commits_to_take == 0 {
+            // if we have found that the most recent commit of current_branch already exists
+            // on the upstream branch, we should just rebase normally (so that the branch can be fast-forwardable)
+            // instead of rebasing interactively
             println!("{}most recent commit of {} exists in {}. rebasing non-interactively", self.log_p, current_branch, upstream_branch);
+        } else if num_commits_to_take == num_commits_of_current {
+            // if we are trying to topbase on a branch that hasnt been rebased yet,
+            // we dont need to topbase, and instead we need to do a regular rebase
+            println!("{}no commit of {} exists in {}. rebasing non-interactively", self.log_p, current_branch, upstream_branch);
+        }
+
+        // either of the above special cases will do the same thing: rebase non-interactively
+        if num_commits_to_take == num_commits_of_current || num_commits_to_take == 0 {
             if self.dry_run {
                 println!("git rebase {}", upstream_branch);
                 return self;
