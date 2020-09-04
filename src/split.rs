@@ -2,6 +2,7 @@
 // and running a split-X command
 use std::env;
 use std::path::PathBuf;
+use std::path::MAIN_SEPARATOR;
 use clap::ArgMatches;
 
 use super::commands::REPO_FILE_ARG;
@@ -476,7 +477,7 @@ pub fn generate_filter_arg_vec<'a>(
 }
 
 fn get_string_after_last_slash(s: String) -> String {
-    let mut pieces = s.rsplit('/');
+    let mut pieces = s.rsplit(MAIN_SEPARATOR);
     match pieces.next() {
         Some(p) => p.into(),
         None => s.into(),
@@ -512,10 +513,10 @@ pub fn try_get_repo_name_from_remote_repo(remote_repo: String) -> String {
     if !is_valid_remote_repo(&remote_repo) {
         out_str = "".into();
     }
-    if out_str.ends_with("/") {
+    if out_str.ends_with(MAIN_SEPARATOR) {
         out_str.pop();
     }
-    if !out_str.contains("/") {
+    if !out_str.contains(MAIN_SEPARATOR) {
         out_str = "".into();
     }
     out_str = get_string_after_last_slash(out_str);
