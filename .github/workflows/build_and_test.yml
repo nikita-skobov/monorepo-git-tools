@@ -4,10 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       name:
-        # this doesnt actually get used here, but keep it as a reference...
-        description: 'unused'
+        description: 'release tag version'
         default: 'vX.Y.Z'
-        required: false
+        required: true
 
 jobs:
   build_test:
@@ -71,3 +70,39 @@ jobs:
         run: bash -c "bats test/general"
         env:
           PROGRAM_PATH: mgt
+      - name: upload_artifact
+        uses: actions/upload-artifact@v2.1.4
+        with:
+          name: mgt-${{ matrix.job.target }}
+          path: ./target/${{ matrix.job.target }}/release/
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: download_windows_artifact
+        uses: actions/download-artifact@v2.0.5
+      - name: lstest
+        run: ls -l
+#       - name: create release
+#         id: create_release
+#         uses: actions/create-release@v1
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#         with:
+#           tag_name: ${{ github.event.inputs.name }}
+#           release_name: ${{ github.event.inputs.name }}
+#           body: |
+#             test release
+#           draft: false
+#           prerelease: true
+#       - name: make asset
+#         run: ls -l && zip --junk-paths my-artifact README.md
+#       - name: upload asset
+#         id: upload-asset
+#         uses: actions/upload-release-asset@v1
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#         with: 
+#           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+#           asset_path: ./my-artifact.zip
+#           asset_name: my-artifact2.zip
+#           asset_content_type: application/zip
