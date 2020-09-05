@@ -128,3 +128,13 @@ jobs:
           asset_path: ./mgt-linux-32.zip
           asset_name: mgt-${{ github.event.inputs.name }}-linux-32.zip
           asset_content_type: application/zip
+  publish_docs:
+    runs-on: ubuntu-latest
+    needs: release
+    steps:
+      - name: checkout_code
+        uses: actions/checkout@v2.3.2
+      - name: update_docs
+        run: ./doc/gen_docs.sh
+      - name: commit_and_push_new_docs
+        run: git add doc/ && git commit -m "updates docs for ${{ github.event.inputs.name }}" && git push
