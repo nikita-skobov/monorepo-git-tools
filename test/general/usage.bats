@@ -12,6 +12,15 @@ function make_temp_repo() {
     fi
 }
 
+function set_seperator() {
+    # I wanna use these tests for both windows (git bash)
+    # and linux, so I need to change the separator
+    if [[ -d /c/ ]]; then
+        SEP="\\"
+    else
+        SEP="/"
+    fi
+}
 
 function teardown() {
     cd $BATS_TMPDIR
@@ -65,21 +74,24 @@ function teardown() {
 }
 
 @test 'can use dry run as -d or --dry-run' {
+    set_seperator
     make_temp_repo test_remote_repo
+    test_remote_repo="test_remote_repo"
     make_temp_repo test_remote_repo2
+    test_remote_repo2="test_remote_repo2"
     cd $BATS_TMPDIR/test_remote_repo
-    run $PROGRAM_PATH split-in-as "$BATS_TMPDIR/test_remote_repo2" --as somesubdir --dry-run
+    run $PROGRAM_PATH split-in-as "..$SEP$test_remote_repo2" --as somesubdir --dry-run
     echo "$output"
 
     # some pattern matching test to make sure it outputs git commands in the dry run output
-    [[ $output == *"git pull /tmp"* ]]
+    [[ $output == *"git pull ..$SEP$test_remote_repo2"* ]]
     [[ $status == "0" ]]
 
     # now do the same but with -d
-    run $PROGRAM_PATH split-in-as "$BATS_TMPDIR/test_remote_repo2" --as somesubdir -d
+    run $PROGRAM_PATH split-in-as "..$SEP$test_remote_repo2" --as somesubdir -d
     echo "$output"
 
     # some pattern matching test to make sure it outputs git commands in the dry run output
-    [[ $output == *"git pull /tmp"* ]]
+    [[ $output == *"git pull ..$SEP$test_remote_repo2"* ]]
     [[ $status == "0" ]]
 }
