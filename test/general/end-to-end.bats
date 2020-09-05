@@ -12,9 +12,22 @@ function make_temp_repo() {
     fi
 }
 
+function set_seperator() {
+    # I wanna use these tests for both windows (git bash)
+    # and linux, so I need to change the separator
+    if [[ -d /c/ ]]; then
+        SEP="\\"
+    else
+        SEP="/"
+    fi
+}
+
 function setup() {
+    set_seperator
     make_temp_repo test_remote_repo
+    test_remote_repo="test_remote_repo"
     make_temp_repo test_remote_repo2
+    test_remote_repo2="test_remote_repo2"
     cd $BATS_TMPDIR/test_remote_repo
 }
 
@@ -30,7 +43,7 @@ function teardown() {
 
 @test 'can use same repo_file for split-in and split-out' {
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include_as=(
         \"this/path/will/be/created/\" \" \"
     )
@@ -66,7 +79,7 @@ function teardown() {
 
 @test 'split-in by default should fail if the output branch it wants to create already exists' {
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include_as=(
         \"this/path/will/be/created/\" \" \"
     )
@@ -95,7 +108,7 @@ function teardown() {
 
 @test 'split-out by default should fail if the output branch it wants to create already exists' {
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include=\"test_remote_repo.txt\"
     "
 

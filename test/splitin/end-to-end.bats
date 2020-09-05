@@ -12,9 +12,22 @@ function make_temp_repo() {
     fi
 }
 
+function set_seperator() {
+    # I wanna use these tests for both windows (git bash)
+    # and linux, so I need to change the separator
+    if [[ -d /c/ ]]; then
+        SEP="\\"
+    else
+        SEP="/"
+    fi
+}
+
 function setup() {
+    set_seperator
     make_temp_repo test_remote_repo
+    test_remote_repo="test_remote_repo"
     make_temp_repo test_remote_repo2
+    test_remote_repo2="test_remote_repo2"
     cd $BATS_TMPDIR/test_remote_repo
 }
 
@@ -30,7 +43,7 @@ function teardown() {
 
 @test 'can split in a remote_repo uri' {
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include_as=(
         \"this/path/will/be/created/\" \" \"
     )
@@ -87,7 +100,7 @@ function teardown() {
 
 @test 'can split in to a specific output branch' {
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include_as=(
         \"this/path/will/be/created/\" \" \"
     )
@@ -114,7 +127,7 @@ function teardown() {
 
 @test 'can split in a remote_repo with a specific remote_branch' {
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     remote_branch=\"test-branch\"
     include_as=(
         \"this/path/will/be/created/\" \" \"
@@ -163,7 +176,7 @@ function teardown() {
 
     repo_file_contents="
     repo_name=\"doesnt_matter\"
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include_as=(
         \"locallib/\" \"lib/\"
     )
@@ -202,7 +215,7 @@ function teardown() {
 
     repo_file_contents="
     repo_name=\"doesnt_matter\"
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include=\"lib/libfile1.txt\"
     "
 
@@ -241,7 +254,7 @@ function teardown() {
 
     repo_file_contents="
     repo_name=\"doesnt_matter\"
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include=(\"src/\" \"lib\")
     "
 
@@ -283,7 +296,7 @@ function teardown() {
 
     repo_file_contents="
     repo_name=\"doesnt_matter\"
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include=\"lib/\"
     exclude=\"lib/test/\"
     "
@@ -325,7 +338,7 @@ function teardown() {
     cd "$curr_dir"
 
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include=\"lib/\"
     "
 
@@ -369,7 +382,7 @@ function teardown() {
     echo "$(git log --oneline)"
 
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include=\"file1.txt\"
     "
     echo "$repo_file_contents" > repo_file.sh
@@ -396,7 +409,7 @@ function teardown() {
     echo "$(git log --oneline)"
 
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include=\"file1.txt\"
     "
     echo "$repo_file_contents" > repo_file.sh

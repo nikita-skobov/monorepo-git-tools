@@ -12,9 +12,22 @@ function make_temp_repo() {
     fi
 }
 
+function set_seperator() {
+    # I wanna use these tests for both windows (git bash)
+    # and linux, so I need to change the separator
+    if [[ -d /c/ ]]; then
+        SEP="\\"
+    else
+        SEP="/"
+    fi
+}
+
 function setup() {
+    set_seperator
     make_temp_repo test_remote_repo
+    test_remote_repo="test_remote_repo"
     make_temp_repo test_remote_repo2
+    test_remote_repo2="test_remote_repo2"
     cd $BATS_TMPDIR/test_remote_repo
 }
 
@@ -30,11 +43,13 @@ function teardown() {
 
 @test 'capable of only including certain files' {
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include=\"a.txt\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
+    echo "repo file contents:"
+    cat repo_file.sh
 
     echo "b" > b.txt
     echo "a" > a.txt
@@ -59,7 +74,7 @@ function teardown() {
 
 @test 'capable of only including certain folders' {
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include=\"a\"
     "
 
@@ -94,7 +109,7 @@ function teardown() {
 
 @test 'works for both folders and files' {
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include=(
         \"a\"
         \"b/b1.txt\"
@@ -134,7 +149,7 @@ function teardown() {
 
 @test 'works for recursive folders' {
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include=(
         \"a/a1\"
     )
@@ -180,7 +195,7 @@ function teardown() {
 
 @test 'can split out to a specific output branch' {
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include_as=(
         \"a.txt\"
         \"new_a.txt\"
@@ -212,7 +227,7 @@ function teardown() {
 
 @test 'can only include_as a single file' {
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include_as=(
         \"a.txt\"
         \"new_a.txt\"
@@ -243,7 +258,7 @@ function teardown() {
 
 @test 'can only include_as a single folder' {
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include_as=(
         \"a\"
         \"new_a\"
@@ -282,7 +297,7 @@ function teardown() {
 
 @test 'can include_as to rename a nested folder but keep everything else' {
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include=\"a\"
     include_as=(
         \"a/old_a\"
@@ -319,7 +334,7 @@ function teardown() {
 
 @test 'can include_as include and exclude a specific directory structure' {
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include_as=(\"a/a1\" \"lib\")
     exclude=(
         \"a/a1/b\"
@@ -361,7 +376,7 @@ function teardown() {
     # from test_remote_repo, we split out the file test_remote_repo.txt
     # and into a repo called test_remote_repo2:
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include=\"test_remote_repo.txt\"
     "
 
@@ -381,7 +396,7 @@ function teardown() {
 
 @test 'can optionally rebase new branch onto original' {
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include=(\"lib/\" \"test_remote_repo.txt\")
     "
     echo "$repo_file_contents" > repo_file.sh
@@ -412,7 +427,7 @@ function teardown() {
 
 @test 'rebasing new branch onto original should not leave temporary branch' {
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include=(\"lib/\" \"test_remote_repo.txt\")
     "
     echo "$repo_file_contents" > repo_file.sh
@@ -442,7 +457,7 @@ function teardown() {
 
 @test 'can topbase new branch onto original branch' {
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include=(\"lib/\")
     "
     echo "$repo_file_contents" > repo_file.sh

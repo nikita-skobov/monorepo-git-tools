@@ -12,9 +12,22 @@ function make_temp_repo() {
     fi
 }
 
+function set_seperator() {
+    # I wanna use these tests for both windows (git bash)
+    # and linux, so I need to change the separator
+    if [[ -d /c/ ]]; then
+        SEP="\\"
+    else
+        SEP="/"
+    fi
+}
+
 function setup() {
+    set_seperator
     make_temp_repo test_remote_repo
+    test_remote_repo="test_remote_repo"
     make_temp_repo test_remote_repo2
+    test_remote_repo2="test_remote_repo2"
     cd $BATS_TMPDIR/test_remote_repo
 }
 
@@ -38,7 +51,7 @@ function teardown() {
     # a directory called this should not exist at first
     [[ ! -d this ]]
 
-    run $PROGRAM_PATH split-in-as "$BATS_TMPDIR/test_remote_repo2" --as this/path/will/be/created/ --verbose
+    run $PROGRAM_PATH split-in-as "..$SEP$test_remote_repo2" --as this/path/will/be/created/ --verbose
     echo "$output"
     echo "$(find . -not -path '*/\.*')"
     [[ $status == "0" ]]
@@ -71,7 +84,7 @@ function teardown() {
     ((made_commits += 1))
     cd "$curr_dir"
 
-    run $PROGRAM_PATH split-in-as "$BATS_TMPDIR/test_remote_repo2" --as abc/ --verbose --rebase
+    run $PROGRAM_PATH split-in-as "..$SEP$test_remote_repo2" --as abc/ --verbose --rebase
     echo "$output"
     [[ $status == "0" ]]
     [[ "$(git branch --show-current)" == "test_remote_repo2" ]]
@@ -117,7 +130,7 @@ function teardown() {
     ((made_commits += 1))
     cd "$curr_dir"
 
-    run $PROGRAM_PATH split-in-as "$BATS_TMPDIR/test_remote_repo2" --as abc/ --verbose --rebase
+    run $PROGRAM_PATH split-in-as "..$SEP$test_remote_repo2" --as abc/ --verbose --rebase
     echo "$output"
     [[ $status == "0" ]]
     [[ "$(git branch --show-current)" == "test_remote_repo2" ]]
@@ -146,7 +159,7 @@ function teardown() {
     git branch -D test_remote_repo2
     latest_commit="$(git log --oneline -n 1)"
     
-    run $PROGRAM_PATH split-in-as "$BATS_TMPDIR/test_remote_repo2" --as abc/ --verbose --rebase
+    run $PROGRAM_PATH split-in-as "..$SEP$test_remote_repo2" --as abc/ --verbose --rebase
     echo "$output"
     new_latest_commit="$(git log --oneline -n 1)"
     [[ $status == "0" ]]
@@ -159,7 +172,7 @@ function teardown() {
 # with this when there are squash commits
 @test 'can get latest changes using \"topbase\"' {
     repo_file_contents="
-    remote_repo=\"$BATS_TMPDIR/test_remote_repo2\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
     include_as=(\"lib/\" \" \")
     "
     echo "$repo_file_contents" > repo_file.sh
