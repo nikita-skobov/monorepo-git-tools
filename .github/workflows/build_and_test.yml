@@ -92,7 +92,7 @@ jobs:
           tag_name: ${{ github.event.inputs.name }}
           release_name: ${{ github.event.inputs.name }}
           body: |
-            test release
+            TODO: fill this in
           draft: false
           prerelease: true
       - name: pack_asset_windows_64
