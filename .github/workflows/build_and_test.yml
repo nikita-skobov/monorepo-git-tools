@@ -139,6 +139,10 @@ jobs:
           path: ./target/release
       - name: lstest
         run: ls -l ./target/release/mgt
+      - name: make_mgt_executable
+        run: chmod +x ./target/release/mgt
+      - name: helptest
+        run: ./target/release/mgt --help
       - name: checkout_code
         uses: actions/checkout@v2.3.2
       - name: update_docs
