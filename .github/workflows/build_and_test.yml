@@ -76,6 +76,7 @@ jobs:
           name: mgt-${{ matrix.job.target }}
           path: ./target/${{ matrix.job.target }}/release/
   release:
+    needs: build_test
     runs-on: ubuntu-latest
     steps:
       - name: download_windows_artifact
