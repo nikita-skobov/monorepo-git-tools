@@ -49,5 +49,23 @@ The full command line usage documentation can be found [here](./doc/README.md)
 
 ## Installation
 
-TODO
+### From source
 
+You will need rust installed
+
+```
+git clone https://github.com/nikita-skobov/monorepo-git-tools
+cd monorepo-git-tools
+cargo build --release
+chmod +x ./target/release/mgt
+cp ./target/release/mgt /usr/bin/mgt
+```
+
+### From binary
+
+This project builds and tests every release on [github](https://github.com/nikita-skobov/monorepo-git-tools)
+
+To install from latest binary, go to [the release page](https://github.com/nikita-skobov/monorepo-git-tools/releases) and download
+the asset that is appropriate for your machine.
+
+To install it, simply copy it to a directory that is on your system's path.
