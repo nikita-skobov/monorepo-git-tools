@@ -136,5 +136,7 @@ jobs:
         uses: actions/checkout@v2.3.2
       - name: update_docs
         run: ./doc/gen_docs.sh
+      - name: git_config
+        run: git config --local user.name "github_CI" && git config --local user.email "github_CI"
       - name: commit_and_push_new_docs
         run: git add doc/ && git commit -m "updates docs for ${{ github.event.inputs.name }}" && git push
