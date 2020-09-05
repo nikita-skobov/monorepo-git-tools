@@ -7,5 +7,5 @@ and run:
 ./test/run_tests.sh
 ```
 
-which will compile the current library into dist/
+which will compile the current library
 and then run tests on the compiled library
