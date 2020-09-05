@@ -79,7 +79,7 @@ jobs:
     needs: build_test
     runs-on: ubuntu-latest
     steps:
-      - name: download_windows_artifact
+      - name: download_all_artifacts
         uses: actions/download-artifact@v2.0.5
       - name: lstest
         run: ls -l
@@ -104,5 +104,27 @@ jobs:
         with: 
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
           asset_path: ./mgt-windows-64.zip
-          asset_name: mgt-windows-64
+          asset_name: mgt-${{ github.event.inputs.name }}-windows-64.zip
+          asset_content_type: application/zip
+      - name: pack_asset_linux_64
+        run: zip -j mgt-linux-64 ./mgt-x86_64-unknown-linux-gnu/mgt
+      - name: upload_asset_linux_64
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with: 
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+          asset_path: ./mgt-linux-64.zip
+          asset_name: mgt-${{ github.event.inputs.name }}-linux-64.zip
+          asset_content_type: application/zip
+      - name: pack_asset_linux_32
+        run: zip -j mgt-linux-32 ./mgt-i686-unknown-linux-gnu/mgt
+      - name: upload_asset_linux_32
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with: 
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+          asset_path: ./mgt-linux-32.zip
+          asset_name: mgt-${{ github.event.inputs.name }}-linux-32.zip
           asset_content_type: application/zip
