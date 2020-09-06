@@ -2,6 +2,7 @@
 // and running a split-X command
 use std::env;
 use std::path::PathBuf;
+use std::collections::HashSet;
 use std::path::MAIN_SEPARATOR;
 use clap::ArgMatches;
 
@@ -201,6 +202,8 @@ impl<'a> Runner<'a> {
 
         let num_commits_of_current = all_commits_of_current.len();
         let mut num_commits_to_take = 0;
+        let mut commit_blob_set = HashSet::new();
+        let mut num_commits_added_to_set = 0;
         let mut rebase_data = vec![];
         // for every commit in the current branch (the branch going to be rebased)
         // check if every single tree of every commit exists in the upstream branch.
@@ -210,7 +213,7 @@ impl<'a> Runner<'a> {
         for c in all_commits_of_current {
             match c.tree() {
                 Ok(tree) => {
-                    if all_trees_exist(&tree, &all_commits_of_upstream) {
+                    if all_blobs_exist(repo, &tree, &all_commits_of_upstream, &mut commit_blob_set, &mut num_commits_added_to_set) {
                         break;
                     }
                     num_commits_to_take += 1;
@@ -424,41 +427,90 @@ impl<'a> Runner<'a> {
     }
 }
 
-// return true if the given tree entry exists
-// in any of the commits
-pub fn tree_entry_exists_in_commits(
-    te: &git2::TreeEntry,
-    commits: &Vec<git2::Commit>,
-) -> bool {
-    for c in commits {
-        match c.tree() {
-            Ok(ctree) => {
-                for cte in ctree.iter() {
-                    if te.id() == cte.id() {
-                        return true;
-                    }
-                }
+// recurse through a tree object to get all of its end blobs
+// and append them to the blobs vector passed by reference
+pub fn get_all_blobs<'a>(
+    repo: &'a git2::Repository,
+    tree: &git2::Tree,
+    blobs: &mut HashSet<git2::Oid>,
+) -> Result<(), git2::Error> {
+    for t in tree.iter() {
+        let t_obj = t.to_object(repo)?;
+        match t_obj.kind().unwrap() {
+            git2::ObjectType::Blob => {
+                blobs.insert(t_obj.id());
+            },
+            git2::ObjectType::Tree => {
+                let t_next = match t_obj.into_tree() {
+                    Ok(tn) => tn,
+                    _ => panic!("Failed to turn tree into tree"),
+                };
+                get_all_blobs(repo, &t_next, blobs)?;
             },
             _ => (),
         }
     }
 
-    false
+    Ok(())
 }
 
-// check if ALL of the given tree entries
-// in the tree exist SOMEWHERE in the vec of commits
-pub fn all_trees_exist(
+// check if ALL of the blobs from this
+// tree exist SOMEWHERE in the vec of commits
+pub fn all_blobs_exist(
+    repo: &git2::Repository,
     tree: &git2::Tree,
     commits: &Vec<git2::Commit>,
+    commit_blob_set: &mut HashSet<git2::Oid>,
+    num_commits_added_to_set: &mut usize,
 ) -> bool {
-    for te in tree.iter() {
-        if ! tree_entry_exists_in_commits(&te, commits) {
+    let mut blob_set = HashSet::new();
+    let res = get_all_blobs(repo, tree, &mut blob_set);
+    if res.is_err() {
+        return false;
+    }
+
+    // as we iterate over the blobs from the tree,
+    // we check if the blob id exists in the commit_blob_set
+    // if we dont find a match, then we should add more commits
+    // blobs to the commit blob set and check again. repeat this
+    // until we have all of the commit blobs in the commit blob set
+    // let mut num_commits_added_to_set = 0;
+    let max_commits = commits.len();
+    let mut cbs = commit_blob_set;
+    for i in blob_set {
+        if cbs.contains(&i) {
+            continue;
+        }
+        let mut i_exists_in_blob_set = false;
+        while *num_commits_added_to_set < max_commits {
+            let ref commit = commits[*num_commits_added_to_set];
+            match commit.tree() {
+                Ok(ctree) => {
+                    let res = get_all_blobs(repo, &ctree, &mut cbs);
+                    if res.is_err() {
+                        println!("error getting commit blobs");
+                        return false;
+                    }
+                },
+                _ => (),
+            }
+            *num_commits_added_to_set += 1;
+
+            // now that we added some blobs to the blob set,
+            // check if i exists in it.
+            if cbs.contains(&i) {
+                i_exists_in_blob_set = true;
+                break;
+            }
+        }
+
+        if i_exists_in_blob_set {
+            continue;
+        } else {
             return false;
         }
     }
-
-    true
+    return true;
 }
 
 pub fn generate_filter_arg_vec<'a>(
