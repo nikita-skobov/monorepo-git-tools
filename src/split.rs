@@ -2,6 +2,7 @@
 // and running a split-X command
 use std::env;
 use std::path::PathBuf;
+use std::collections::HashSet;
 use std::path::MAIN_SEPARATOR;
 use clap::ArgMatches;
 
@@ -190,10 +191,7 @@ impl<'a> Runner<'a> {
             },
         };
 
-        let all_commits_of_upstream = match git_helpers::get_all_commits_from_ref(repo, upstream_branch.as_str()) {
-            Ok(v) => v,
-            Err(e) => panic!("Failed to get all commits! {}", e),
-        };
+        let all_upstream_blobs = get_all_blobs_in_branch(upstream_branch.as_str());
         let all_commits_of_current = match git_helpers::get_all_commits_from_ref(repo, current_branch.as_str()) {
             Ok(v) => v,
             Err(e) => panic!("Failed to get all commits! {}", e),
@@ -203,25 +201,34 @@ impl<'a> Runner<'a> {
         let mut num_commits_to_take = 0;
         let mut rebase_data = vec![];
         // for every commit in the current branch (the branch going to be rebased)
-        // check if every single tree of every commit exists in the upstream branch.
-        // as soon as we a tree of this current branch that exists
-        // in upstream, then we break, and run out interactive rebase that we
+        // check if every single blob of every commit exists in the upstream branch.
+        // as soon as we a commit of this current branch that has all of its blobs
+        // exists in upstream, then we break, and run out interactive rebase that we
         // are building
         for c in all_commits_of_current {
-            match c.tree() {
-                Ok(tree) => {
-                    if all_trees_exist(&tree, &all_commits_of_upstream) {
-                        break;
-                    }
-                    num_commits_to_take += 1;
-                    let rebase_interactive_entry = format!("pick {} {}\n", c.id(), c.summary().unwrap());
-                    rebase_data.push(rebase_interactive_entry);
-                },
-                _ => (),
-            };
+            // I think we want to skip merge commits, because thats what git rebase
+            // interactive does by default. also, is it safe to assume
+            // any commit with > 1 parent is a merge commit?
+            if c.parent_count() > 1 {
+                continue;
+            }
+
+            let mut current_commit_blobs = HashSet::new();
+            get_all_blobs_from_commit(&c.id().to_string()[..], &mut current_commit_blobs);
+            let mut all_blobs_exist = true;
+            for b in current_commit_blobs {
+                if ! all_upstream_blobs.contains(&b) {
+                    all_blobs_exist = false;
+                    break;
+                }
+            }
+            if all_blobs_exist {
+                break;
+            }
+            num_commits_to_take += 1;
+            let rebase_interactive_entry = format!("pick {} {}\n", c.id(), c.summary().unwrap());
+            rebase_data.push(rebase_interactive_entry);
         }
-        // idk some weird borrow/lifetime issue. i have to drop this here...
-        drop(all_commits_of_upstream);
 
         // need to reverse it because git rebase interactive
         // takes commits in order of oldest to newest, but
@@ -424,41 +431,77 @@ impl<'a> Runner<'a> {
     }
 }
 
-// return true if the given tree entry exists
-// in any of the commits
-pub fn tree_entry_exists_in_commits(
-    te: &git2::TreeEntry,
-    commits: &Vec<git2::Commit>,
-) -> bool {
-    for c in commits {
-        match c.tree() {
-            Ok(ctree) => {
-                for cte in ctree.iter() {
-                    if te.id() == cte.id() {
-                        return true;
-                    }
-                }
-            },
-            _ => (),
+// run a git diff-tree on the commit id, and parse the output
+// and insert every blob id into the provided blob hash set
+pub fn get_all_blobs_from_commit(
+    commit_id: &str,
+    blob_set: &mut HashSet<String>,
+) {
+    // the diff filter is VERY important... A (added), M (modified), C (copied)
+    // theres a few more like D (deleted), but I don't think we want the D because
+    // *I think* we only care about blobs that EXIST at a given point in time...
+    // maybe this might change later
+    let args = [
+        "git", "diff-tree", commit_id, "-r", "--root",
+        "--diff-filter=AMC", "--pretty=oneline"
+    ];
+    match exec_helpers::execute(&args) {
+        Err(e) => panic!("Failed to get blobs from commit {} : {}", commit_id, e),
+        Ok(out) => {
+            if out.status != 0 { panic!("Failed to get blobs from commit {} : {}", commit_id, out.stderr); }
+            for l in out.stdout.lines() {
+                // lines starting with colons are the lines
+                // that contain blob ids
+                if ! l.starts_with(':') { continue; }
+                let items = l.split_whitespace().collect::<Vec<&str>>();
+                // there are technically 6 items from this output:
+                // the last item (items[5]) is a path to the file that this blob
+                // is for (and the array could have more than 6 if file names
+                // have spaces in them). But we only care about the first 5:
+                let (
+                    mode_prev, mode_next,
+                    blob_prev, blob_next,
+                    diff_type
+                ) = (items[0], items[1], items[2], items[3], items[4]);
+                // now blob_prev will be all zeros if diff_type is A
+                // however, for other diff_types, it will be a valid blob.
+                // it is my assumption that we don't need it because
+                // it probably exists in one of the other commits as a blob_next.
+                // maybe this will need to change, but for now, I think it is
+                // sufficient to just get the blob_next
+                blob_set.insert(blob_next.into());
+            }
         }
-    }
-
-    false
+    };
 }
 
-// check if ALL of the given tree entries
-// in the tree exist SOMEWHERE in the vec of commits
-pub fn all_trees_exist(
-    tree: &git2::Tree,
-    commits: &Vec<git2::Commit>,
-) -> bool {
-    for te in tree.iter() {
-        if ! tree_entry_exists_in_commits(&te, commits) {
-            return false;
-        }
+// perform a rev-list of the branch name to get a list of all commits
+// then get every single blob from every single commit, and return
+// a hash set containing unique blob ids
+pub fn get_all_blobs_in_branch(branch_name: &str) -> HashSet<String> {
+    // first get all commits from this branch:
+    let args = [
+        "git", "rev-list", branch_name,
+    ];
+
+    // need the stdout to live outside the match so that the vec of strings
+    // lives outside the match
+    let mut out_stdout = "".into();
+    let commit_ids = match exec_helpers::execute(&args) {
+        Err(e) => panic!("Failed to get all blobs of {} : {}", branch_name, e),
+        Ok(out) => {
+            if out.status != 0 { panic!("Failed to get all blobs of {} : {}", branch_name, out.stderr); }
+            out_stdout = out.stdout;
+            out_stdout.split_whitespace().collect::<Vec<&str>>()
+        },
+    };
+
+    let mut blob_set = HashSet::new();
+    for commit_id in commit_ids.iter() {
+        get_all_blobs_from_commit(commit_id, &mut blob_set);
     }
 
-    true
+    return blob_set;
 }
 
 pub fn generate_filter_arg_vec<'a>(
