@@ -73,8 +73,3 @@ jobs:
         run: bash -c "bats test/general"
         env:
           PROGRAM_PATH: mgt
-      - name: upload_artifact
-        uses: actions/upload-artifact@v2.1.4
-        with:
-          name: mgt-${{ matrix.job.target }}
-          path: ./target/${{ matrix.job.target }}/release/
