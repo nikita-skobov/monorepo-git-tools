@@ -1,0 +1,80 @@
+name: Build, and Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: 'run manual test'
+        default: 'manual'
+        required: false
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build_test:
+    # The type of runner that the job will run on
+    runs-on: ${{ matrix.job.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - { os: ubuntu-18.04 , target: i686-unknown-linux-gnu , usecross: true }
+          - { os: ubuntu-18.04 , target: x86_64-unknown-linux-gnu , usecross: false }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc, usecross: false }
+    steps:
+      - name: install_rust
+        uses: actions-rs/toolchain@v1.0.6
+        with:
+          toolchain: stable
+          target: ${{ matrix.job.target }}
+          profile: minimal
+      - name: install_bats
+        uses: mig4/setup-bats@v1.0.1
+      - name: checkout_code
+        uses: actions/checkout@v2.3.2
+      - name: install_git_filter_repo
+        run: bash .github/install-git-filter-repo.sh ${{ matrix.job.os }}
+      - name: build_executable
+        uses: actions-rs/cargo@ae10961054e4aa8b4aa7dffede299aaf087aa33b
+        with:
+          use-cross: ${{ matrix.job.usecross }}
+          command: build
+          args: --release --target=${{ matrix.job.target }}
+      - name: make_mgt_executable
+        run: bash .github/make-mgt-executable.sh ${{ matrix.job.target }}
+
+      # this works on linux but not windows for some reason...
+      #       - name: echotest222
+      #         run: echo ::set-env name=PROGRAM_PATH::$(realpath ./target/${{ matrix.job.target }}/release/mgt)
+
+      # just a sanity check that it is executable...
+      - name: program_help_test
+        run: mgt -h
+      - name: unit_test
+        uses: actions-rs/cargo@ae10961054e4aa8b4aa7dffede299aaf087aa33b
+        with:
+          use-cross: ${{ matrix.job.usecross }}
+          command: test
+          args: --release --target=${{ matrix.job.target }}
+      - name: e2e_test_general
+        run: bash -c "bats test/general"
+        env:
+          PROGRAM_PATH: mgt
+      - name: e2e_test_splitout
+        run: bash -c "bats test/general"
+        env:
+          PROGRAM_PATH: mgt
+      - name: e2e_test_splitin
+        run: bash -c "bats test/general"
+        env:
+          PROGRAM_PATH: mgt
+      - name: e2e_test_splitinas
+        run: bash -c "bats test/general"
+        env:
+          PROGRAM_PATH: mgt
+      - name: upload_artifact
+        uses: actions/upload-artifact@v2.1.4
+        with:
+          name: mgt-${{ matrix.job.target }}
+          path: ./target/${{ matrix.job.target }}/release/
