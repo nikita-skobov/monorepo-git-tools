@@ -6,6 +6,8 @@ use super::exec_helpers;
 use super::split::Runner;
 use super::commands::TOPBASE_CMD_BASE;
 use super::commands::TOPBASE_CMD_TOP;
+use super::commands::VERBOSE_ARG;
+use super::commands::DRY_RUN_ARG;
 
 pub trait Topbase {
     fn topbase(self) -> Self;
@@ -289,8 +291,7 @@ pub fn run_topbase(matches: &ArgMatches) {
         runner.topbase_top_ref = Some(t.to_string());
     }
 
-    let runner = runner
-        .save_current_dir()
+    runner.save_current_dir()
         .get_repository_from_current_dir()
         .topbase();
 }

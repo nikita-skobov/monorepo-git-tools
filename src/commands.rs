@@ -205,6 +205,18 @@ pub fn topbase<'a, 'b>() -> App<'a, 'b> {
     return SubCommand::with_name(name)
         .about(cmd.description())
         .arg(
+            Arg::with_name(DRY_RUN_ARG[0])
+                .long(DRY_RUN_ARG[0])
+                .short(DRY_RUN_ARG[1])
+                .help("Print out the steps taken, but don't actually run or change anything.")
+        )
+        .arg(
+            Arg::with_name(VERBOSE_ARG[0])
+                .long(VERBOSE_ARG[0])
+                .short(VERBOSE_ARG[1])
+                .help("show more detailed logs")
+        )
+        .arg(
             Arg::with_name(TOPBASE_CMD_BASE)
                 .required(true)
                 .help(TOPBASE_BASE_DESCRIPTION)

@@ -203,3 +203,39 @@ function teardown() {
     # (merge commit auto generates "Merge branch 'merged_branch' into top_branch")
     [[ "$git_log_after_topbase" != *"merged_branch"* ]]
 }
+
+@test 'dry-run should not modify anything' {
+    git checkout -b top_branch
+    # make commits that would separate top_branch from master
+    echo "q" > q.txt && git add q.txt && git commit -m "_q"
+    echo "u" > u.txt && git add u.txt && git commit -m "_u"
+    echo "v" > v.txt && git add v.txt && git commit -m "_v"
+    # now make a commit that master will also have
+    # the topbase will detect this as the fork point
+    echo "a" > a.txt && git add a.txt && git commit -m "_a"
+    # make the commit(s) that will actually be rebased:
+    echo "x" > x.txt && git add x.txt && git commit -m "_x"
+
+    git checkout master
+    # make a commit that has the same blob(s) as the top_branch,
+    # so it can be topbased on top of this commit
+    echo "a" > a.txt && git add a.txt && git commit -m "_a"
+
+    git checkout top_branch
+    git_log_before_topbase="$(git log --oneline)"
+    # topbase dry run. dont actually change anything
+    run mgt topbase master --dry-run
+    echo "$output"
+    git_log_after_topbase="$(git log --oneline)"
+    echo "git log before:"
+    echo "$git_log_before_topbase"
+    echo "git log after:"
+    echo "$git_log_after_topbase"
+    [[ "$git_log_after_topbase" == "$git_log_before_topbase" ]]
+    [[ $status == 0 ]]
+}
+
+# TODO:
+# add test that a dry-run will output steps that,
+# if evaluated, will leave the user in exactly the same
+# state as if the user ran mgt without dry run
