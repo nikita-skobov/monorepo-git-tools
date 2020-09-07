@@ -251,8 +251,42 @@ impl<'a> Runner<'a> {
             println!("{}no commit of {} exists in {}. rebasing non-interactively", self.log_p, current_branch, upstream_branch);
         }
 
-        // either of the above special cases will do the same thing: rebase non-interactively
-        if num_commits_to_take == num_commits_of_current || num_commits_to_take == 0 {
+        // if there's nothing to topbase, then we want to just
+        // rebase the last commit onto the upstream branch.
+        // this will allow our current branch to be fast-forwardable
+        // onto upstream (well really its going to be the exact same branch)
+        if num_commits_to_take == 0 {
+            // if current branch only has one commit, dont use the <branch>~1
+            // git rebase syntax. it will cause git rebase to fail
+            let rebase_last_one = if num_commits_of_current > 1 {
+                "~1"
+            } else {
+                ""
+            };
+            let last_commit_arg = format!("{}{}", current_branch, rebase_last_one);
+            let args = [
+                "git", "rebase", "--onto",
+                upstream_branch.as_str(),
+                last_commit_arg.as_str(),
+                current_branch.as_str()
+            ];
+
+            if self.dry_run {
+                let arg_str = args.join(" ");
+                println!("{}", arg_str);
+                return self;
+            }
+
+            match exec_helpers::execute(&args) {
+                Err(e) => panic!("Failed to rebase: {}", e),
+                Ok(_) => (),
+            };
+            return self;
+        }
+
+        // if we need to topbase the entirety of the current branch
+        // it will be better to do a regular rebase
+        if num_commits_to_take == num_commits_of_current {
             if self.dry_run {
                 println!("git rebase {}", upstream_branch);
                 return self;

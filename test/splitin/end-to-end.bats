@@ -369,11 +369,48 @@ function teardown() {
 @test 'if topbase finds 0, it shouldnt rebase interactively' {
     curr_dir="$PWD"
     cd "$BATS_TMPDIR/test_remote_repo2"
+    # for this test, we want to ensure that the remote repo has 2 commits
+    # in its history after the rewrite:
+    echo "doesntmatter" > file1.txt
+    git add file1.txt && git commit -m "doesntmatter"
+    # now this commit matters because it should have the same blob as the local repository will
     echo "file1" > file1.txt
     git add file1.txt && git commit -m "file1"
 
     # simulate the remote repo and the local repo being
-    # up to date with each other
+    # up to date with each other (same blob as above)
+    cd "$curr_dir"
+    echo "file1" > file1.txt
+    git add file1.txt && git commit -m "file1_local"
+
+    echo "on master local:"
+    echo "$(git log --oneline)"
+
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include=\"file1.txt\"
+    "
+    echo "$repo_file_contents" > repo_file.sh
+    git_log_before="$(git log --oneline)"
+    run $PROGRAM_PATH split-in repo_file.sh -t --verbose
+    echo "$output"
+    echo "$(git log --oneline)"
+    git_log_now="$(git log --oneline)"
+    [[ $status == "0" ]]
+    [[ $output == *"rebasing non-interactively"* ]]
+    # it should still rebase because that will make the output
+    # branch fast-forwardable
+    [[ $git_log_now == $git_log_before ]]
+}
+
+@test 'if topbase finds 0 (AND remote only has one commit), it shouldnt rebase interactively' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    echo "file1" > file1.txt
+    git add file1.txt && git commit -m "file1"
+
+    # simulate the remote repo and the local repo being
+    # up to date with each other (same blob as above)
     cd "$curr_dir"
     echo "file1" > file1.txt
     git add file1.txt && git commit -m "file1_local"
