@@ -198,6 +198,7 @@ pub fn run_split_in(matches: &ArgMatches) {
     // idk if this is the best way to do it, but its simplest
     if runner.should_topbase {
         println!("{}Topbasing", log_p);
+        use super::topbase::Topbase;
         runner.get_repository_from_current_dir().topbase();
     } else if runner.should_rebase {
         println!("{}Rebasing", log_p);
@@ -237,6 +238,7 @@ pub fn run_split_in_as(matches: &ArgMatches) {
 
     if runner.should_topbase {
         println!("{}Topbasing", log_p);
+        use super::topbase::Topbase;
         runner.get_repository_from_current_dir().topbase();
     } else if runner.should_rebase {
         println!("{}Rebasing", log_p);
