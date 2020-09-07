@@ -4,6 +4,7 @@ mod commands;
 mod repo_file;
 mod split_out;
 mod split_in;
+mod topbase;
 mod split;
 mod git_helpers;
 mod exec_helpers;
@@ -17,7 +18,8 @@ fn get_cli_input<'a>() -> ArgMatches<'a> {
     base_app = base_app.subcommands(vec![
         commands::split_in(),
         commands::split_in_as(),
-        commands::split_out()
+        commands::split_out(),
+        commands::topbase(),
     ]);
 
     return base_app.get_matches();

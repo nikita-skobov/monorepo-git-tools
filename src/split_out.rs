@@ -245,6 +245,7 @@ pub fn run_split_out(matches: &ArgMatches) {
             runner.rebase().delete_branch(tmp_remote_branch);
         } else if runner.should_topbase {
             println!("{}Topbasing", log_p);
+            use super::topbase::Topbase;
             runner.topbase().delete_branch(tmp_remote_branch);
         }
 

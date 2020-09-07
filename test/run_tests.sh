@@ -61,9 +61,9 @@ run_end_to_end_tests() {
     echo "SPLIT-IN-AS:"
     PROGRAM_PATH="$PROGRAM_PATH" bats test/splitinas
     echo ""
-    # echo "GIT TOPBASE:"
-    # bats test/topbase
-    # echo ""
+    echo "GIT TOPBASE:"
+    PROGRAM_PATH="$PROGRAM_PATH" bats test/topbase
+    echo ""
 }
 
 run_all_tests() {
