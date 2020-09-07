@@ -9,6 +9,7 @@ automatically generated output of `mgt --help`
 * [split-out](./split-out.md)
 * [split-in](./split-in.md)
 * [split-in-as](./split-in-as.md)
+* [topbase](./topbase.md)
 * [repo_file](./repo_file.md)
 
 ## `mgt --help` or
