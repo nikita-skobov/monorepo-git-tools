@@ -369,11 +369,16 @@ function teardown() {
 @test 'if topbase finds 0, it shouldnt rebase interactively' {
     curr_dir="$PWD"
     cd "$BATS_TMPDIR/test_remote_repo2"
+    # for this test, we want to ensure that the remote repo has 2 commits
+    # in its history after the rewrite:
+    echo "doesntmatter" > file1.txt
+    git add file1.txt && git commit -m "doesntmatter"
+    # now this commit matters because it should have the same blob as the local repository will
     echo "file1" > file1.txt
     git add file1.txt && git commit -m "file1"
 
     # simulate the remote repo and the local repo being
-    # up to date with each other
+    # up to date with each other (same blob as above)
     cd "$curr_dir"
     echo "file1" > file1.txt
     git add file1.txt && git commit -m "file1_local"
