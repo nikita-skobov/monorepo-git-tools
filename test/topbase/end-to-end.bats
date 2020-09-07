@@ -68,3 +68,138 @@ function teardown() {
     echo "$ff_merge_log"
     [[ $ff_merge_log == "$(git log --oneline)" ]]
 }
+
+@test 'should use current branch as the top branch by default' {
+    git checkout -b top_branch
+    # make commits that would separate top_branch from master
+    echo "q" > q.txt && git add q.txt && git commit -m "_q"
+    echo "u" > u.txt && git add u.txt && git commit -m "_u"
+    echo "v" > v.txt && git add v.txt && git commit -m "_v"
+    # now make a commit that master will also have
+    # the topbase will detect this as the fork point
+    echo "a" > a.txt && git add a.txt && git commit -m "_a"
+    # make the commit(s) that will actually be rebased:
+    echo "x" > x.txt && git add x.txt && git commit -m "_x"
+
+    git checkout master
+    # make a commit that has the same blob(s) as the top_branch,
+    # so it can be topbased on top of this commit
+    echo "a" > a.txt && git add a.txt && git commit -m "_a"
+
+    git checkout top_branch
+    git_log_before_topbase="$(git log --oneline)"
+    # topbase current branch onto master
+    run mgt topbase master
+    git_log_after_topbase="$(git log --oneline)"
+    echo "$output"
+    echo "git log before:"
+    echo "$git_log_before_topbase"
+    echo "git log after:"
+    echo "$git_log_after_topbase"
+    current_branch="$(git branch --show-current)"
+    [[ "$current_branch" == "top_branch" ]]
+    [[ "$git_log_after_topbase" != "$git_log_before_topbase" ]]
+    [[ $status == 0 ]]
+    [[ "$git_log_after_topbase" == *"_a"* ]]
+    [[ "$git_log_after_topbase" == *"_x"* ]]
+    # because topbase calculates the fork point differently, anything prior to the most recent
+    # common blob (commit _a) will not be included
+    [[ "$git_log_after_topbase" != *"_q"* ]]
+}
+
+@test 'can optionally specify a top branch' {
+    git checkout -b top_branch
+    # make commits that would separate top_branch from master
+    echo "q" > q.txt && git add q.txt && git commit -m "_q"
+    echo "u" > u.txt && git add u.txt && git commit -m "_u"
+    echo "v" > v.txt && git add v.txt && git commit -m "_v"
+    # now make a commit that master will also have
+    # the topbase will detect this as the fork point
+    echo "a" > a.txt && git add a.txt && git commit -m "_a"
+    # make the commit(s) that will actually be rebased:
+    echo "x" > x.txt && git add x.txt && git commit -m "_x"
+
+    git checkout master
+    # make a commit that has the same blob(s) as the top_branch,
+    # so it can be topbased on top of this commit
+    echo "a" > a.txt && git add a.txt && git commit -m "_a"
+
+    git checkout top_branch
+    git_log_before_topbase="$(git log --oneline)"
+    git checkout master
+    master_log_before_topbase="$(git log --oneline)"
+    [[ "$(git branch --show-current)" == "master" ]]
+
+    # topbase top_branch onto master, this will move us from master to top_branch
+    echo "$(git status)"
+    run mgt topbase master top_branch
+    echo "$output"
+    echo "---"
+    echo "$(git status)"
+    current_branch="$(git branch --show-current)"
+    [[ "$current_branch" == "top_branch" ]]
+    # master's history should not have changed
+    [[ "$(git log master --oneline)" == "$master_log_before_topbase" ]]
+    git_log_after_topbase="$(git log --oneline)"
+    echo "git log before:"
+    echo "$git_log_before_topbase"
+    echo "git log after:"
+    echo "$git_log_after_topbase"
+    [[ "$git_log_after_topbase" != "$git_log_before_topbase" ]]
+    [[ $status == 0 ]]
+    [[ "$git_log_after_topbase" == *"_a"* ]]
+    [[ "$git_log_after_topbase" == *"_x"* ]]
+    # because topbase calculates the fork point differently, anything prior to the most recent
+    # common blob (commit _a) will not be included
+    [[ "$git_log_after_topbase" != *"_q"* ]]
+}
+
+@test 'doesnt include merge commits by default' {
+    git checkout -b top_branch
+    # make commits that would separate top_branch from master
+    echo "q" > q.txt && git add q.txt && git commit -m "_q"
+    echo "u" > u.txt && git add u.txt && git commit -m "_u"
+    echo "v" > v.txt && git add v.txt && git commit -m "_v"
+    # now make a commit that master will also have
+    # the topbase will detect this as the fork point
+    echo "a" > a.txt && git add a.txt && git commit -m "_a"
+    # make the commit(s) that will actually be rebased:
+    echo "x" > x.txt && git add x.txt && git commit -m "_x"
+    git checkout -b merged_branch
+    echo "y" > y.txt && git add y.txt && git commit -m "_y"
+    git checkout top_branch
+    git merge --no-edit --no-ff merged_branch
+    echo "merge log?"
+    echo "$(git log --oneline)"
+    echo "z" > z.txt && git add z.txt && git commit -m "_z"
+
+    git checkout master
+    # make a commit that has the same blob(s) as the top_branch,
+    # so it can be topbased on top of this commit
+    echo "a" > a.txt && git add a.txt && git commit -m "_a"
+
+    git checkout top_branch
+    git_log_before_topbase="$(git log --oneline)"
+    # topbase current branch onto master
+    run mgt topbase master
+    git_log_after_topbase="$(git log --oneline)"
+    echo "$output"
+    echo "git log before:"
+    echo "$git_log_before_topbase"
+    echo "git log after:"
+    echo "$git_log_after_topbase"
+    current_branch="$(git branch --show-current)"
+    [[ "$current_branch" == "top_branch" ]]
+    [[ "$git_log_after_topbase" != "$git_log_before_topbase" ]]
+    [[ $status == 0 ]]
+    [[ "$git_log_after_topbase" == *"_a"* ]]
+    [[ "$git_log_after_topbase" == *"_x"* ]]
+    [[ "$git_log_after_topbase" == *"_y"* ]]
+    [[ "$git_log_after_topbase" == *"_z"* ]]
+    # because topbase calculates the fork point differently, anything prior to the most recent
+    # common blob (commit _a) will not be included
+    [[ "$git_log_after_topbase" != *"_q"* ]]
+    # it shouldn't contain the merge commit
+    # (merge commit auto generates "Merge branch 'merged_branch' into top_branch")
+    [[ "$git_log_after_topbase" != *"merged_branch"* ]]
+}
