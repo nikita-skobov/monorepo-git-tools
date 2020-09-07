@@ -19,7 +19,6 @@ pub const REBASE_ARG: [&'static str; 2] = ["rebase", "r"];
 pub const TOPBASE_ARG: [&'static str; 2] = ["topbase", "t"];
 pub const TOPBASE_CMD_TOP: &'static str = "top";
 pub const TOPBASE_CMD_BASE: &'static str = "base";
-pub const TOPBASE_CMD_TOP_DEFAULT: &'static str = "HEAD";
 
 const SPLIT_IN_STR: &'static str = "split-in";
 const SPLIT_IN_AS_STR: &'static str = "split-in-as";
@@ -212,8 +211,6 @@ pub fn topbase<'a, 'b>() -> App<'a, 'b> {
         )
         .arg(
             Arg::with_name(TOPBASE_CMD_TOP)
-                .default_value(TOPBASE_CMD_TOP_DEFAULT)
-                .hide_default_value(true)
                 .help(TOPBASE_TOP_DESCRIPTION)
         );
 }

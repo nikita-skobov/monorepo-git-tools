@@ -4,6 +4,8 @@ use std::collections::HashSet;
 use super::git_helpers;
 use super::exec_helpers;
 use super::split::Runner;
+use super::commands::TOPBASE_CMD_BASE;
+use super::commands::TOPBASE_CMD_TOP;
 
 pub trait Topbase {
     fn topbase(self) -> Self;
@@ -16,14 +18,22 @@ impl<'a> Topbase for Runner<'a> {
             None => panic!("failed to get repo?"),
         };
 
-        let current_branch = match git_helpers::get_current_ref(repo) {
-            Some(s) => s,
-            None => {
-                println!("Failed to get current branch. not going to rebase");
-                return self;
-            },
+        // for split commands, we always use current ref,
+        // but for topbase command, we check if user provided a top branch
+        // if user provided one, we use that, otherwise we use current
+        let current_branch = if let Some(ref b) = self.topbase_top_ref {
+            b.clone()
+        } else {
+            match git_helpers::get_current_ref(repo) {
+                Some(s) => s,
+                None => {
+                    println!("Failed to get current branch. not going to rebase");
+                    return self;
+                },
+            }
         };
 
+        // upstream is base
         let upstream_branch = match self.repo_original_ref {
             Some(ref branch) => branch.clone(),
             None => {
@@ -266,5 +276,21 @@ pub fn get_all_blobs_in_branch(branch_name: &str) -> HashSet<String> {
 }
 
 pub fn run_topbase(matches: &ArgMatches) {
+    // should be safe to unwrap because its a required argument
+    let base_branch = matches.value_of(TOPBASE_CMD_BASE).unwrap();
+    let top_branch = matches.value_of(TOPBASE_CMD_TOP);
+    let mut runner = Runner::new(matches);
+    // repo_original_ref is used by the other commands (splitout/splitin)
+    // but for topbase this is really the base branch
+    runner.repo_original_ref = Some(base_branch.into());
+    // if user didnt provide top branch, topbase_top_ref stays None
+    // and then the runner.topbase will just use the current branch
+    if let Some(t) = top_branch {
+        runner.topbase_top_ref = Some(t.to_string());
+    }
 
+    let runner = runner
+        .save_current_dir()
+        .get_repository_from_current_dir()
+        .topbase();
 }
