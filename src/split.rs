@@ -256,7 +256,14 @@ impl<'a> Runner<'a> {
         // this will allow our current branch to be fast-forwardable
         // onto upstream (well really its going to be the exact same branch)
         if num_commits_to_take == 0 {
-            let last_commit_arg = format!("{}~1", current_branch);
+            // if current branch only has one commit, dont use the <branch>~1
+            // git rebase syntax. it will cause git rebase to fail
+            let rebase_last_one = if num_commits_of_current > 1 {
+                "~1"
+            } else {
+                ""
+            };
+            let last_commit_arg = format!("{}{}", current_branch, rebase_last_one);
             let args = [
                 "git", "rebase", "--onto",
                 upstream_branch.as_str(),
