@@ -3,6 +3,7 @@ use clap::{Arg, App, SubCommand, ArgMatches};
 use super::split_out::run_split_out;
 use super::split_in::run_split_in;
 use super::split_in::run_split_in_as;
+use super::topbase::run_topbase;
 
 pub const INPUT_BRANCH_ARG: &'static str = "input-branch";
 pub const INPUT_BRANCH_NAME: &'static str = "branch-name";
@@ -16,24 +17,32 @@ pub const DRY_RUN_ARG: [&'static str; 2] = ["dry-run", "d"];
 pub const VERBOSE_ARG: [&'static str; 2] = ["verbose", "v"];
 pub const REBASE_ARG: [&'static str; 2] = ["rebase", "r"];
 pub const TOPBASE_ARG: [&'static str; 2] = ["topbase", "t"];
+pub const TOPBASE_CMD_TOP: &'static str = "top";
+pub const TOPBASE_CMD_BASE: &'static str = "base";
+pub const TOPBASE_CMD_TOP_DEFAULT: &'static str = "HEAD";
 
 const SPLIT_IN_STR: &'static str = "split-in";
 const SPLIT_IN_AS_STR: &'static str = "split-in-as";
 const SPLIT_OUT_STR: &'static str = "split-out";
+const TOPBASE_CMD_STR: &'static str = "topbase";
 const SPLIT_OUT_DESCRIPTION: &'static str = "rewrite this repository history onto a new branch such that it only contains certain paths according to a repo-file";
 const SPLIT_IN_DESCRIPTION: &'static str = "fetch and rewrite a remote repository's history onto a new branch such that it only contains certain paths according to a repo-file";
 const SPLIT_IN_AS_DESCRIPTION: &'static str = "fetch the entirety of a remote repository and place it in a subdirectory of this repository";
+const TOPBASE_CMD_DESCRIPTION: &'static str = "rebases top branch onto bottom branch keeping only the first commits until it finds a commit from top where all blobs exist in the bottom branch.";
 const REPO_FILE_DESCRIPTION: &'static str = "path to file that contains instructions of how to split a repository";
 const REPO_URI_DESCRIPTION: &'static str = "a valid git url of the repository to split in";
 const AS_SUBDIR_DESCRIPTION: &'static str = "path relative to root of the local repository that will contain the entire repository being split in";
 const REBASE_DESCRIPTION: &'static str = "after generating a branch with rewritten history, rebase that branch such that it can be fast forwarded back into the comparison branch. For split-in, the comparison branch is the branch you started on. For split-out, the comparison branch is the remote branch";
 const TOPBASE_DESCRIPTION: &'static str = "like rebase, but it finds a fork point to only take the top commits from the created branch that dont exist in your starting branch";
+const TOPBASE_TOP_DESCRIPTION: &'static str = "the branch that will be rebased. defaults to current branch";
+const TOPBASE_BASE_DESCRIPTION: &'static str = "the branch to rebase onto.";
 
 #[derive(Clone)]
 pub enum CommandName {
     SplitInAs,
     SplitIn,
     SplitOut,
+    Topbase,
     UnknownCommand,
 }
 
@@ -45,6 +54,7 @@ impl From<CommandName> for &'static str {
             SplitInAs => SPLIT_IN_AS_STR,
             SplitIn => SPLIT_IN_STR,
             SplitOut => SPLIT_OUT_STR,
+            Topbase => TOPBASE_CMD_STR,
             UnknownCommand => "",
         }
     }
@@ -56,6 +66,7 @@ impl From<&str> for CommandName {
             SPLIT_IN_AS_STR => SplitInAs,
             SPLIT_IN_STR => SplitIn,
             SPLIT_OUT_STR => SplitOut,
+            TOPBASE_CMD_STR => Topbase,
             _ => UnknownCommand,
         }
     }
@@ -67,6 +78,7 @@ impl CommandName {
             SplitInAs => SPLIT_IN_AS_DESCRIPTION,
             SplitIn => SPLIT_IN_DESCRIPTION,
             SplitOut => SPLIT_OUT_DESCRIPTION,
+            Topbase => TOPBASE_CMD_DESCRIPTION,
             _ => "",
         }
     }
@@ -188,6 +200,24 @@ pub fn split_out<'a, 'b>() -> App<'a, 'b> {
     base_command(SplitOut)
 }
 
+pub fn topbase<'a, 'b>() -> App<'a, 'b> {
+    let cmd = Topbase;
+    let name = cmd.clone().into();
+    return SubCommand::with_name(name)
+        .about(cmd.description())
+        .arg(
+            Arg::with_name(TOPBASE_CMD_BASE)
+                .required(true)
+                .help(TOPBASE_BASE_DESCRIPTION)
+        )
+        .arg(
+            Arg::with_name(TOPBASE_CMD_TOP)
+                .default_value(TOPBASE_CMD_TOP_DEFAULT)
+                .hide_default_value(true)
+                .help(TOPBASE_TOP_DESCRIPTION)
+        );
+}
+
 pub fn run_command(name: &str, matches: &ArgMatches) {
     let command: CommandName = name.into();
     match command {
@@ -197,5 +227,6 @@ pub fn run_command(name: &str, matches: &ArgMatches) {
         SplitIn => run_split_in(matches.subcommand_matches(name).unwrap()),
         SplitInAs => run_split_in_as(matches.subcommand_matches(name).unwrap()),
         SplitOut => run_split_out(matches.subcommand_matches(name).unwrap()),
+        Topbase => run_topbase(matches.subcommand_matches(name).unwrap()),
     }
 }
