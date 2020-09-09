@@ -5,6 +5,7 @@
 ## Table of contents
 
 * [What does it do?](#what-does-it-do)
+* [Example](#example)
 * [How does it work?](#how-does-it-work)
 * [Prerequisites](#prerequisites)
 * [Docs](#docs)
@@ -24,9 +25,28 @@ Some features that `mgt` provides are:
 - checking updates of multiple subrepositories (TODO)
 - filtering out specific text/commits before sharing publically (TODO)
 
+## Example
+
+The following is one of the simplest uses of `mgt`. For more interesting use cases, [see the examples here (TODO)](./examples/README.md)
+
+The simplest usage of `mgt` is to take an entire remote repository and `split-in-as` into a subdirectory of your local repository. If you are in a local git repository, you can run:
+
+```sh
+mgt split-in-as https://github.com/nikita-skobov/monorepo-git-tools --as lib/mgt/ --rebase
+```
+
+This will:
+1. create a new, temporary branch (named `monorepo-git-tools`)
+2. fetch the remote repository (`https://github.com/nikita-skobov/monorepo-git-tools`) into that branch
+3. rewrite the history of this new branch such that the entire contents exist within `lib/mgt/`
+4. the `--rebase` flag tells `mgt` to then rebase that new branch onto whatever branch you started from
+
+After those steps, you will be on the `monorepo-git-tools` branch, and you can merge it however you want back into your starting branch.
+
+
 ## How does it work?
 
-`mgt` knows how to rewrite your history based on files contain information on how to rewrite the history.
+`mgt` knows how to rewrite your history based on files that contain information on how to rewrite the history.
 These files are called `repo_file`s, and some common things that would
 go in a `repo_file` are:
 
