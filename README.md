@@ -27,7 +27,7 @@ Some features that `mgt` provides are:
 
 ## Example
 
-The following is one of the simplest uses of `mgt`. For more interesting use cases, [see the examples here (TODO)](./examples/README.md)
+The following is one of the simplest uses of `mgt`. For more interesting use cases, [see the examples here](./examples/README.md)
 
 The simplest usage of `mgt` is to take an entire remote repository and `split-in-as` into a subdirectory of your local repository. If you are in a local git repository, you can run:
 
@@ -61,7 +61,7 @@ When you run `mgt`, you typically provide a path to the `repo_file`, eg: `mgt sp
 
 These commands are just "porcelain" commands built on top of the real "plumbing" capabilities of [git-filter-repo](https://github.com/newren/git-filter-repo).
 
-You must have `git-filter-repo` available on your path prior to using the tools in this repository.
+**You must have `git-filter-repo` available on your path prior to using the tools in this repository.**
 
 ## Docs
 
