@@ -9,6 +9,11 @@ use super::git_helpers;
 use super::exec_helpers;
 use super::split::try_get_repo_name_from_remote_repo;
 use super::repo_file::RepoFile;
+use std::convert::From;
+use std::fs;
+use std::path::Path;
+use std::fmt::Display;
+use std::path::PathBuf;
 
 pub trait SplitIn {
     fn validate_repo_file(self) -> Self;
@@ -163,6 +168,79 @@ pub fn generate_split_out_arg_include_as(repofile: &RepoFile) -> String {
     )
 }
 
+// given a vec of include_as pairs,
+// iterate over the odd-indexed elements.
+// if the path is a file include it as is
+// if the path is a folder, iterate over the files in that folder
+// recursively, and add a --path-rename file:file instead of folder:folder
+pub fn generate_split_arg_include_as<T: AsRef<str> + AsRef<Path> + Display>(
+    include_as: &[T]
+) -> String {
+    let sources = include_as.iter().skip(1).step_by(2);
+    let destinations = include_as.iter().skip(0).step_by(2);
+
+    let pairs = sources.zip(destinations);
+
+    let mut out_str: String = "".into();
+    for (src, dest) in pairs {
+        let src_str: &str = src.as_ref();
+        let src_pb = PathBuf::from(src_str);
+
+        out_str = format!("{}{}", out_str, match src_pb.is_file() {
+            // files can keep their existing mapping
+            true => format!("--path-rename {}:{}", src, dest),
+            // but for folders, we should iterate recursively into the
+            // folder and add every file mapping explicitly
+            false => gen_include_as_arg_files_from_folder(dest.as_ref(), src_pb),
+        });
+    }
+
+    out_str
+}
+
+pub fn get_files_recursively(dir: PathBuf, file_vec: &mut Vec<PathBuf>) -> std::io::Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let dir_entry = entry?;
+        let dir_path = dir_entry.path();
+        if dir_path.is_file() {
+            file_vec.push(dir_path.to_path_buf());
+        } else {
+            get_files_recursively(dir_path.to_path_buf(), file_vec)?;
+        }
+    }
+    Ok(())
+}
+
+pub fn gen_include_as_arg_files_from_folder(dest: &str, src: PathBuf) -> String {
+    let mut file_vec = vec![];
+    let all_files_recursively = get_files_recursively(src.clone(), &mut file_vec);
+    if all_files_recursively.is_err() {
+        panic!("Error reading dir recursively: {:?}", src);
+    }
+
+    let mut out_str: String = "".into();
+    for f in file_vec {
+        let src_str = &src.to_str().unwrap();
+        // we will replace the original src prefix
+        // with the provided dest prefix, so strip the current prefix here
+        let f_str = f.strip_prefix(&src).unwrap().to_str().unwrap();
+        let new_src = format!("{}{}", src_str, f_str);
+        let new_dest = format!("{}{}", dest, f_str);
+
+        // formatting: if there is a previous entry, add
+        // a space between prev entry and this next one
+        if out_str.len() > 0 {
+            out_str.push(' ');
+        }
+        out_str = format!("{}{}",
+            out_str,
+            format!("--path-rename {}:{}", new_src, new_dest),
+        );
+    }
+
+    out_str
+}
+
 pub fn generate_split_out_arg_exclude(repofile: &RepoFile) -> String {
     let start_with: String = "--invert-paths --path ".into();
     match &repofile.exclude {
@@ -299,6 +377,52 @@ mod test {
 
         assert_eq!(include_as_arg_str_opt.unwrap(), "--path-rename lib/:locallib/");
         assert_eq!(include_arg_str_opt.unwrap(), "--path locallib/");
+    }
+
+    // this test requires reading files/folders from the root of the
+    // repo. make sure when you run tests, you are at the root of the repo
+    #[test]
+    fn generate_split_arg_include_as_should_return_the_mapping_as_is_if_src_is_file() {
+        let include_as = vec![
+            "src/lib/Cargo.toml", "Cargo.toml",
+        ];
+        let s = generate_split_arg_include_as(&include_as);
+
+        let expected = format!("--path-rename {}:{}", include_as[1], include_as[0]);
+        assert_eq!(s, expected);
+    }
+
+    // this test requires reading files/folders from the root of the
+    // repo. make sure when you run tests, you are at the root of the repo
+    #[test]
+    fn generate_split_arg_include_as_should_iterate_over_files_in_folder() {
+        let include_as = vec![
+            "sometestlib/", "test/general/",
+        ];
+        let s = generate_split_arg_include_as(&include_as);
+
+        let expected1 = "--path-rename test/general/end-to-end.bats:sometestlib/end-to-end.bats";
+        let expected2 = "--path-rename test/general/usage.bats:sometestlib/usage.bats";
+        let expected = format!("{} {}", expected1, expected2);
+        assert_eq!(s, expected);
+    }
+
+    // this test requires reading files/folders from the root of the
+    // repo. make sure when you run tests, you are at the root of the repo
+    #[test]
+    fn generate_split_arg_include_as_should_work_for_nested_folders() {
+        let include_as = vec![
+            "sometestlib/", "test/",
+        ];
+        let s = generate_split_arg_include_as(&include_as);
+
+        let expected1 = "--path-rename test/general/end-to-end.bats:sometestlib/general/end-to-end.bats";
+        let expected2 = "--path-rename test/README.md:sometestlib/README.md";
+        let expected3 = "--path-rename test/splitout/end-to-end.bats:sometestlib/splitout/end-to-end.bats";
+        // there are a lot of paths, wont check for all of them
+        assert!(s.contains(expected1));
+        assert!(s.contains(expected2));
+        assert!(s.contains(expected3));
     }
 
     // // TODO: add this functionality. kinda annoying since it would need
