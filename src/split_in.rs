@@ -152,6 +152,8 @@ pub fn generate_split_out_arg_include_as(repofile: &RepoFile) -> String {
         return "".into();
     };
 
+    // generate_split_arg_include_as(include_as)
+
     // for split-in src/dest is reversed from spit-out
     // sources are the odd indexed elements, dest are the even
     let sources = include_as.iter().skip(1).step_by(2);
@@ -184,7 +186,11 @@ pub fn generate_split_arg_include_as<T: AsRef<str> + AsRef<Path> + Display>(
     let mut out_str: String = "".into();
     for (src, dest) in pairs {
         let src_str: &str = src.as_ref();
-        let src_pb = PathBuf::from(src_str);
+        let src_pb = if src_str == " " {
+            PathBuf::from(".")
+        } else {
+            PathBuf::from(src_str)
+        };
 
         out_str = format!("{}{}", out_str, match src_pb.is_file() {
             // files can keep their existing mapping
@@ -220,7 +226,12 @@ pub fn gen_include_as_arg_files_from_folder(dest: &str, src: PathBuf) -> String 
 
     let mut out_str: String = "".into();
     for f in file_vec {
-        let src_str = &src.to_str().unwrap();
+        let src_is_dot = src.to_str().unwrap() == ".";
+        let src_str = if ! src_is_dot {
+            &src.to_str().unwrap()
+        } else {
+            ""
+        };
         // we will replace the original src prefix
         // with the provided dest prefix, so strip the current prefix here
         let f_str = f.strip_prefix(&src).unwrap().to_str().unwrap();
@@ -424,6 +435,51 @@ mod test {
         assert!(s.contains(expected2));
         assert!(s.contains(expected3));
     }
+
+    #[test]
+    fn generate_split_arg_include_as_should_work_for_root_rename() {
+        let include_as = vec![
+            "sometestlib/", " ",
+        ];
+        let s = generate_split_arg_include_as(&include_as);
+
+        let expected1 = "--path-rename test/general/end-to-end.bats:sometestlib/test/general/end-to-end.bats";
+        let expected2 = "--path-rename test/README.md:sometestlib/test/README.md";
+        let expected3 = "--path-rename Cargo.toml:sometestlib/Cargo.toml";
+        // there are a lot of paths, wont check for all of them
+        assert!(s.contains(expected1));
+        assert!(s.contains(expected2));
+        assert!(s.contains(expected3));
+    }
+
+    // #[test]
+    // fn generate_split_arg_include_as_should_not_have_duplicates() {
+    //     let include_as = vec![
+    //         "sometestlib/", " ",
+    //         "sometestlib/somesrc", "src/",
+    //     ];
+    //     let s = generate_split_arg_include_as(&include_as);
+
+    //     let expected = "--path-rename src/main.rs:sometestlib/somesrc/main.rs"
+    //     // there are a lot of paths, wont check for all of them
+    //     assert!(s.contains(expected));
+    // }
+
+    // #[test]
+    // fn generate_split_arg_include_as_should_not_contain_gitignored_files() {
+    //     let include_as = vec![
+    //         "sometestlib/", " ",
+    //     ];
+    //     let s = generate_split_arg_include_as(&include_as);
+
+    //     let expected1 = "--path-rename test/general/end-to-end.bats:sometestlib/general/end-to-end.bats";
+    //     let expected2 = "--path-rename test/README.md:sometestlib/README.md";
+    //     let expected3 = "--path-rename test/splitout/end-to-end.bats:sometestlib/splitout/end-to-end.bats";
+    //     // there are a lot of paths, wont check for all of them
+    //     assert!(s.contains(expected1));
+    //     assert!(s.contains(expected2));
+    //     assert!(s.contains(expected3));
+    // }
 
     // // TODO: add this functionality. kinda annoying since it would need
     // // to exist across several methods...
