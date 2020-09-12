@@ -75,7 +75,7 @@ impl<'a> SplitIn for Runner<'a> {
     }
 
     fn generate_arg_strings(mut self) -> Self {
-        let include_as_arg_str = generate_split_out_arg_include_as(&self.repo_file);
+        let include_as_arg_str = generate_split_out_arg_include_as(&self.repo_file, &path_is_ignored);
         let exclude_arg_str = generate_split_out_arg_exclude(&self.repo_file);
         let include_arg_str = generate_split_out_arg_include(&self.repo_file);
 
@@ -103,6 +103,11 @@ impl<'a> SplitIn for Runner<'a> {
 
         self.make_and_checkout_orphan_branch(output_branch_name.as_str())
     }
+}
+
+pub fn path_is_ignored(path: &PathBuf) -> bool {
+    exec_helpers::executed_successfully(
+        &["git", "check-ignore", path.to_str().unwrap()])
 }
 
 // iterate over both the include, and include_as
@@ -145,14 +150,17 @@ pub fn generate_split_out_arg_include(repofile: &RepoFile) -> String {
 
 // iterate over the include_as variable, and generate a
 // string of args that can be passed to git-filter-repo
-pub fn generate_split_out_arg_include_as(repofile: &RepoFile) -> String {
+pub fn generate_split_out_arg_include_as<F: Copy>(
+    repofile: &RepoFile,
+    should_ignore: F
+) -> String
+    where F: Fn(&PathBuf) -> bool
+{
     let include_as = if let Some(include_as) = &repofile.include_as {
         include_as.clone()
     } else {
         return "".into();
     };
-
-    // generate_split_arg_include_as(include_as)
 
     // for split-in src/dest is reversed from spit-out
     // sources are the odd indexed elements, dest are the even
@@ -175,9 +183,12 @@ pub fn generate_split_out_arg_include_as(repofile: &RepoFile) -> String {
 // if the path is a file include it as is
 // if the path is a folder, iterate over the files in that folder
 // recursively, and add a --path-rename file:file instead of folder:folder
-pub fn generate_split_arg_include_as<T: AsRef<str> + AsRef<Path> + Display>(
-    include_as: &[T]
-) -> String {
+pub fn generate_split_arg_include_as<F: Copy, T: AsRef<str> + AsRef<Path> + Display>(
+    include_as: &[T],
+    should_ignore: F,
+) -> String
+    where F: Fn(&PathBuf) -> bool
+{
     let sources = include_as.iter().skip(1).step_by(2);
     let destinations = include_as.iter().skip(0).step_by(2);
 
@@ -197,29 +208,39 @@ pub fn generate_split_arg_include_as<T: AsRef<str> + AsRef<Path> + Display>(
             true => format!("--path-rename {}:{}", src, dest),
             // but for folders, we should iterate recursively into the
             // folder and add every file mapping explicitly
-            false => gen_include_as_arg_files_from_folder(dest.as_ref(), src_pb),
+            false => gen_include_as_arg_files_from_folder(dest.as_ref(), src_pb, should_ignore),
         });
     }
 
     out_str
 }
 
-pub fn get_files_recursively(dir: PathBuf, file_vec: &mut Vec<PathBuf>) -> std::io::Result<()> {
+pub fn get_files_recursively<F: Copy>(
+    dir: PathBuf, file_vec: &mut Vec<PathBuf>, should_ignore: F
+) -> std::io::Result<()>
+    where F: Fn(&PathBuf) -> bool
+{
     for entry in fs::read_dir(dir)? {
         let dir_entry = entry?;
         let dir_path = dir_entry.path();
+        if should_ignore(&dir_path.to_path_buf()) {
+            continue;
+        }
+
         if dir_path.is_file() {
             file_vec.push(dir_path.to_path_buf());
         } else {
-            get_files_recursively(dir_path.to_path_buf(), file_vec)?;
+            get_files_recursively(dir_path.to_path_buf(), file_vec, should_ignore)?;
         }
     }
     Ok(())
 }
 
-pub fn gen_include_as_arg_files_from_folder(dest: &str, src: PathBuf) -> String {
+pub fn gen_include_as_arg_files_from_folder<F: Copy>(dest: &str, src: PathBuf, should_ignore: F) -> String
+    where F: Fn(&PathBuf) -> bool
+{
     let mut file_vec = vec![];
-    let all_files_recursively = get_files_recursively(src.clone(), &mut file_vec);
+    let all_files_recursively = get_files_recursively(src.clone(), &mut file_vec, should_ignore);
     if all_files_recursively.is_err() {
         panic!("Error reading dir recursively: {:?}", src);
     }
@@ -352,44 +373,6 @@ mod test {
         runner.validate_repo_file();
     }
 
-    #[test]
-    fn should_format_include_as_correctly() {
-        let matches = ArgMatches::new();
-        let mut runner = Runner::new(&matches);
-        let mut repofile = RepoFile::new();
-        repofile.include_as = Some(vec![
-            "path/will/be/created/".into(), " ".into(),
-        ]);
-        runner.repo_file = repofile;
-        runner = runner.generate_arg_strings();
-        assert_eq!(runner.include_as_arg_str.unwrap(), "--path-rename  :path/will/be/created/");
-    }
-
-    // even if user only provides include_as, that is just for renaming
-    // we also need to translate that to an include step so that
-    // we include only the things the user specifies, otherwise
-    // we would just have renamed some folders/files
-    #[test]
-    fn generate_arg_strings_should_make_an_include_from_include_as() {
-        let matches = ArgMatches::new();
-        let mut runner = Runner::new(&matches);
-        // ensure we dont actually run anything
-        runner.dry_run = true;
-        let mut repofile = RepoFile::new();
-        // include_as has dest:src for split in
-        // because its the reverse of the split out
-        repofile.include_as = Some(vec![
-            "locallib/".into(), "lib/".into(),
-        ]);
-        runner.repo_file = repofile;
-        runner = runner.generate_arg_strings();
-        let include_arg_str_opt = runner.include_arg_str.clone();
-        let include_as_arg_str_opt = runner.include_as_arg_str.clone();
-
-        assert_eq!(include_as_arg_str_opt.unwrap(), "--path-rename lib/:locallib/");
-        assert_eq!(include_arg_str_opt.unwrap(), "--path locallib/");
-    }
-
     // this test requires reading files/folders from the root of the
     // repo. make sure when you run tests, you are at the root of the repo
     #[test]
@@ -397,7 +380,7 @@ mod test {
         let include_as = vec![
             "src/lib/Cargo.toml", "Cargo.toml",
         ];
-        let s = generate_split_arg_include_as(&include_as);
+        let s = generate_split_arg_include_as(&include_as, |_| false);
 
         let expected = format!("--path-rename {}:{}", include_as[1], include_as[0]);
         assert_eq!(s, expected);
@@ -410,7 +393,7 @@ mod test {
         let include_as = vec![
             "sometestlib/", "test/general/",
         ];
-        let s = generate_split_arg_include_as(&include_as);
+        let s = generate_split_arg_include_as(&include_as, |_| false);
 
         let expected1 = "--path-rename test/general/end-to-end.bats:sometestlib/end-to-end.bats";
         let expected2 = "--path-rename test/general/usage.bats:sometestlib/usage.bats";
@@ -425,7 +408,7 @@ mod test {
         let include_as = vec![
             "sometestlib/", "test/",
         ];
-        let s = generate_split_arg_include_as(&include_as);
+        let s = generate_split_arg_include_as(&include_as, |_| false);
 
         let expected1 = "--path-rename test/general/end-to-end.bats:sometestlib/general/end-to-end.bats";
         let expected2 = "--path-rename test/README.md:sometestlib/README.md";
@@ -441,7 +424,7 @@ mod test {
         let include_as = vec![
             "sometestlib/", " ",
         ];
-        let s = generate_split_arg_include_as(&include_as);
+        let s = generate_split_arg_include_as(&include_as, |_| false);
 
         let expected1 = "--path-rename test/general/end-to-end.bats:sometestlib/test/general/end-to-end.bats";
         let expected2 = "--path-rename test/README.md:sometestlib/test/README.md";
@@ -465,21 +448,24 @@ mod test {
     //     assert!(s.contains(expected));
     // }
 
-    // #[test]
-    // fn generate_split_arg_include_as_should_not_contain_gitignored_files() {
-    //     let include_as = vec![
-    //         "sometestlib/", " ",
-    //     ];
-    //     let s = generate_split_arg_include_as(&include_as);
+    #[test]
+    fn generate_split_arg_include_as_should_not_contain_gitignored_files() {
+        // pretend all directories are ignored to make this test east
+        let dumb_ignore = |p: &PathBuf| p.is_dir();
 
-    //     let expected1 = "--path-rename test/general/end-to-end.bats:sometestlib/general/end-to-end.bats";
-    //     let expected2 = "--path-rename test/README.md:sometestlib/README.md";
-    //     let expected3 = "--path-rename test/splitout/end-to-end.bats:sometestlib/splitout/end-to-end.bats";
-    //     // there are a lot of paths, wont check for all of them
-    //     assert!(s.contains(expected1));
-    //     assert!(s.contains(expected2));
-    //     assert!(s.contains(expected3));
-    // }
+        let include_as = vec![
+            "sometestlib/", " ",
+        ];
+        let s = generate_split_arg_include_as(&include_as, dumb_ignore);
+
+        let expected = "--path-rename Cargo.toml:sometestlib/Cargo.toml";
+        let notexpected = "src/";
+
+        // since src/ is a directory that is "ignored",
+        // it shouldnt show up in the include_as_arg_str
+        assert!(!s.contains(notexpected));
+        assert!(s.contains(expected));
+    }
 
     // // TODO: add this functionality. kinda annoying since it would need
     // // to exist across several methods...
