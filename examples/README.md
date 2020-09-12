@@ -11,6 +11,7 @@ that are interesting to you, you can use the table of contents below. Otherwise,
 * [include as root](#scenario-05-include-as-root)
 * [include as rename and move](#scenario-06-include-as-rename-and-move)
 * [split in existing code](#scenario-07-split-in-existing-code)
+* [let mgt rebase for us](#scenario-08-let-mgt-rebase-for-us)
 
 ## Purpose
 
@@ -54,7 +55,10 @@ config/
 config/example.conf
 ```
 
-Assume for all examples that we are in the root of the repository unless specified otherwise.
+Assume every file above was committed on its own. This does not need to be the case when you use `mgt`, but for these examples
+it will make the history easier to conceptualize.
+
+Also assume for all examples that we are in the root of the repository unless specified otherwise.
 
 We want to take a portion of our repository, and share it publically. We don't want to push the whole
 repository because there are parts of it that contain code that we do not want to share.
@@ -284,9 +288,6 @@ README.md
 
 ## Scenario 07 split in existing code
 
-TODO
-
-<!--
 Now let's say we are finally happy with the state of our repository, and we are ready to make it public.
 
 We will push it to our remote repository: `https://example.com/my-projects`
@@ -333,4 +334,202 @@ This is extremely useful because this enables us to use the same `repo_file` for
 
 After running the above command, we will be on the `my-projects` branch, and our repository structure will look like:
 
--->
+```
+lib/projectA/src/test.html
+lib/projectA/src/index.html
+lib/projectA/README.md
+```
+
+This is the contents of the remote repository remapped to match the structure of our original repository.
+
+## Scenario 07 split in existing code and merging
+
+So far, we have only been looking at the repository structure, but now it will be important to look at the history.
+
+Continuing from where we left off in scenario 06, let's do a git log of our current branch that was just `split-in`:
+
+(remember that originally, we made a single commit for every single file. It doesn't matter how you make your commits, but for the sake of this example it is important to point out so that we can track the commits easier as they are mapped between repositories)
+
+```
+git log my-projects --oneline
+# output:
+9c982ae (HEAD -> my-projects) testhtml
+17076f7 readme
+dd777c1 index.html
+```
+
+Let's also look at the git log for the master branch (which is the original repository)
+
+```
+git log master --oneline
+# output:
+9366b5d (master) secret
+10124ea testhtml
+4cf229f script
+3af8e40 server
+e8cc01e readme
+dbd1b52 testfilejs
+a24ad83 readme
+664977f index.html
+c61b8a2 example.config
+```
+
+There are two things to notice here:
+
+1. the branches don't have a shared root commit
+2. even the commits that are exactly the same (index.html, testhtml) have different hashes
+
+What happens if we try to merge my-projects into master?
+
+Well as it currently stands, we cannot. However, **what we CAN do is rebase our branch onto master, and THEN merge.**
+
+```
+git rebase master
+```
+
+This succeeds, and now if we log our current branch again, we will see:
+
+```
+git log my-projects --oneline
+# output
+9366b5d (HEAD -> my-projects, master) secret
+10124ea testhtml
+4cf229f script
+3af8e40 server
+e8cc01e readme
+dbd1b52 testfilejs
+a24ad83 readme
+664977f index.html
+c61b8a2 example.config
+```
+
+Now the my-projects branch is up to date, and compatible with the master branch. If we want, we can go ahead and merge the branch, but as it stands there is nothing new to merge, because they are both at the same commit. Let's simulate a scenario where there might be commits to merge back into our master.
+
+We go back to master, delete the my-projects branch:
+
+```
+git checkout master
+git branch -D my-projects
+```
+
+Now, in a seperate folder, let's clone the remote repository, make some changes, commit, and push them back up:
+
+```
+cd some-other-folder
+# we add a dot at the end to tell git to clone into our current directory
+git clone https://example.com/my-projects .
+echo "readme append" >> README.md
+git add README.md
+git commit -m "readme append"
+git push origin master
+```
+
+The log of our remote repository now looks like:
+
+```
+1387b95 (HEAD -> master) readme append
+4831d6e testhtml
+a39293a readme
+b22ba3b index.html
+```
+
+
+Now let's go back to our original repository, and see if we can pull the recent changes into our original local repository
+
+```
+cd -
+mgt split-in repo_file.txt
+```
+
+We are now in the my-projects branch, and our history looks like:
+
+```
+4ea76c9 (HEAD -> my-projects) readme append
+9c982ae testhtml
+17076f7 readme
+dd777c1 index.html
+```
+
+Again, it's important to remember that the hashes we see in the my-projects **branch** are different than the hashes we saw
+in the my-projects **repository** because even though these commits modified the same files, and have the same commit messages,
+**the files are located in different places which affects the commit hash**. But that is not important in most cases because `git rebase`
+is smart enough to figure out how to rebase for us. Let's rebase our current my-projects branch onto master and look at the log:
+
+```
+git rebase master
+git log my-projects --oneline
+# output:
+781b749 (HEAD -> my-projects) readme append
+9366b5d (master) secret
+10124ea testhtml
+4cf229f script
+3af8e40 server
+e8cc01e readme
+dbd1b52 testfilejs
+a24ad83 readme
+664977f index.html
+c61b8a2 example.config
+```
+
+This is exactly what we wanted. **We were able to use `mgt split-in` to restructure our remote repository to match the structure of our local repository** and we **used `git rebase` to make the temporary branch compatible with master so that we can merge the recent changes**. We can merge however we want, ie: a ff-merge, make a merge commit, or squash all remote commits into one.
+
+
+## Scenario 08 let mgt rebase for us
+
+Instead of merging the recent commit into master, let's demonstrate an alternate way of doing the previous scenario.
+`mgt` has a convenience option to rebase for us.
+
+We will go back to our local master branch, delete the my-projects branch, and then `split-in` again:
+
+```
+git checkout master
+git branch -D my-projects
+mgt split-in repo_file.txt --rebase
+```
+
+Notice we added an option to the `split-in` command: **`--rebase`**
+
+The `--rebase` option will add a `git rebase <starting-branch>` step after it creates the temporary branch.
+So in this example, the temporary branch is my-projects, and the branch that we started from was master. So
+`mgt` will rebase my-projects onto master. We can do a git log again:
+
+```
+32552fc (HEAD -> my-projects) readme append
+9366b5d (master) secret
+10124ea testhtml
+4cf229f script
+3af8e40 server
+e8cc01e readme
+dbd1b52 testfilejs
+a24ad83 readme
+664977f index.html
+c61b8a2 example.config
+```
+
+Here we see that our temporary branch: my-projects is already rebased on top of master, and is ready to be merged.
+
+For this, and the next example, let's use a squash merge (even though there is only one commit to squash here, but in real world
+uses you will probably be squashing more than one)
+
+```
+git checkout master
+git merge my-projects --squash
+# this leaves us in a staged state, so
+# we are ready to make our squash commit:
+git commit -m "squashed readme changes from remote"
+```
+
+Now our local repository's master git log looks like:
+
+```
+d6a5055 (master) squashed readme changes from remote
+9366b5d secret
+10124ea testhtml
+4cf229f script
+3af8e40 server
+e8cc01e readme
+dbd1b52 testfilejs
+a24ad83 readme
+664977f index.html
+c61b8a2 example.config
+```
