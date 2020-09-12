@@ -19,6 +19,7 @@ fn get_cli_input<'a>() -> ArgMatches<'a> {
         commands::split_in(),
         commands::split_in_as(),
         commands::split_out(),
+        commands::split_out_as(),
         commands::topbase(),
     ]);
 

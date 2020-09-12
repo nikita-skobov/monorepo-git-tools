@@ -23,14 +23,16 @@ pub const TOPBASE_CMD_BASE: &'static str = "base";
 const SPLIT_IN_STR: &'static str = "split-in";
 const SPLIT_IN_AS_STR: &'static str = "split-in-as";
 const SPLIT_OUT_STR: &'static str = "split-out";
+const SPLIT_OUT_AS_STR: &'static str = "split-out-as";
 const TOPBASE_CMD_STR: &'static str = "topbase";
 const SPLIT_OUT_DESCRIPTION: &'static str = "rewrite this repository history onto a new branch such that it only contains certain paths according to a repo-file";
 const SPLIT_IN_DESCRIPTION: &'static str = "fetch and rewrite a remote repository's history onto a new branch such that it only contains certain paths according to a repo-file";
 const SPLIT_IN_AS_DESCRIPTION: &'static str = "fetch the entirety of a remote repository and place it in a subdirectory of this repository";
+const SPLIT_OUT_AS_DESCRIPTION: &'static str = "make a new repository (via a branch) that only contains commits that are part of a subdirectory";
 const TOPBASE_CMD_DESCRIPTION: &'static str = "rebases top branch onto bottom branch keeping only the first commits until it finds a commit from top where all blobs exist in the bottom branch.";
 const REPO_FILE_DESCRIPTION: &'static str = "path to file that contains instructions of how to split a repository";
 const REPO_URI_DESCRIPTION: &'static str = "a valid git url of the repository to split in";
-const AS_SUBDIR_DESCRIPTION: &'static str = "path relative to root of the local repository that will contain the entire repository being split in";
+const AS_SUBDIR_DESCRIPTION: &'static str = "path relative to root of the local repository that will contain the entire repository being split";
 const REBASE_DESCRIPTION: &'static str = "after generating a branch with rewritten history, rebase that branch such that it can be fast forwarded back into the comparison branch. For split-in, the comparison branch is the branch you started on. For split-out, the comparison branch is the remote branch";
 const TOPBASE_DESCRIPTION: &'static str = "like rebase, but it finds a fork point to only take the top commits from the created branch that dont exist in your starting branch";
 const TOPBASE_TOP_DESCRIPTION: &'static str = "the branch that will be rebased. defaults to current branch";
@@ -41,6 +43,7 @@ pub enum CommandName {
     SplitInAs,
     SplitIn,
     SplitOut,
+    SplitOutAs,
     Topbase,
     UnknownCommand,
 }
@@ -53,6 +56,7 @@ impl From<CommandName> for &'static str {
             SplitInAs => SPLIT_IN_AS_STR,
             SplitIn => SPLIT_IN_STR,
             SplitOut => SPLIT_OUT_STR,
+            SplitOutAs => SPLIT_OUT_AS_STR,
             Topbase => TOPBASE_CMD_STR,
             UnknownCommand => "",
         }
@@ -65,6 +69,7 @@ impl From<&str> for CommandName {
             SPLIT_IN_AS_STR => SplitInAs,
             SPLIT_IN_STR => SplitIn,
             SPLIT_OUT_STR => SplitOut,
+            SPLIT_OUT_AS_STR => SplitOutAs,
             TOPBASE_CMD_STR => Topbase,
             _ => UnknownCommand,
         }
@@ -77,6 +82,7 @@ impl CommandName {
             SplitInAs => SPLIT_IN_AS_DESCRIPTION,
             SplitIn => SPLIT_IN_DESCRIPTION,
             SplitOut => SPLIT_OUT_DESCRIPTION,
+            SplitOutAs => SPLIT_OUT_AS_DESCRIPTION,
             Topbase => TOPBASE_CMD_DESCRIPTION,
             _ => "",
         }
@@ -158,6 +164,7 @@ pub fn split_in_as<'a, 'b>() -> App<'a, 'b> {
                 .help(REBASE_DESCRIPTION)
                 .conflicts_with(TOPBASE_ARG[0])
         )
+        // TODO: should remove topbase from split-in-as? i dont think it makes sense
         .arg(
             Arg::with_name(TOPBASE_ARG[0])
                 .long(TOPBASE_ARG[0])
@@ -165,6 +172,42 @@ pub fn split_in_as<'a, 'b>() -> App<'a, 'b> {
                 .help(TOPBASE_DESCRIPTION)
                 .conflicts_with(REBASE_ARG[0])
         )
+        .arg(
+            Arg::with_name(AS_SUBDIR_ARG)
+                .long(AS_SUBDIR_ARG)
+                .help(AS_SUBDIR_DESCRIPTION)
+                .value_name(AS_SUBDIR_ARG_NAME)
+                .required(true)
+                .takes_value(true)
+        )
+        .arg(
+            Arg::with_name(DRY_RUN_ARG[0])
+                .long(DRY_RUN_ARG[0])
+                .short(DRY_RUN_ARG[1])
+                .help("Print out the steps taken, but don't actually run or change anything.")
+        )
+        .arg(
+            Arg::with_name(VERBOSE_ARG[0])
+                .long(VERBOSE_ARG[0])
+                .short(VERBOSE_ARG[1])
+                .help("show more detailed logs")
+        )
+        .arg(
+            Arg::with_name(OUTPUT_BRANCH_ARG[0])
+                .long(OUTPUT_BRANCH_ARG[0])
+                .short(OUTPUT_BRANCH_ARG[1])
+                .takes_value(true)
+                .value_name(OUTPUT_BRANCH_NAME)
+                .help("name of branch that will be created with new split history")
+        );
+}
+
+pub fn split_out_as<'a, 'b>() -> App<'a, 'b> {
+    // split in as has specific arguments in addition to base
+    let cmd = SplitOutAs;
+    let name = cmd.clone().into();
+    return SubCommand::with_name(name)
+        .about(cmd.description())
         .arg(
             Arg::with_name(AS_SUBDIR_ARG)
                 .long(AS_SUBDIR_ARG)
@@ -236,6 +279,7 @@ pub fn run_command(name: &str, matches: &ArgMatches) {
         SplitIn => run_split_in(matches.subcommand_matches(name).unwrap()),
         SplitInAs => run_split_in_as(matches.subcommand_matches(name).unwrap()),
         SplitOut => run_split_out(matches.subcommand_matches(name).unwrap()),
+        SplitOutAs => (),
         Topbase => run_topbase(matches.subcommand_matches(name).unwrap()),
     }
 }
