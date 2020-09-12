@@ -13,7 +13,7 @@ use std::convert::From;
 use std::fs;
 use std::path::Path;
 use std::fmt::Display;
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 
 pub trait SplitIn {
     fn validate_repo_file(self) -> Self;
@@ -194,6 +194,7 @@ pub fn generate_split_arg_include_as<F: Copy, T: AsRef<str> + AsRef<Path> + Disp
 
     let pairs = sources.zip(destinations);
 
+    let mut unique_files = HashSet::new();
     let mut out_str: String = "".into();
     for (src, dest) in pairs {
         let src_str: &str = src.as_ref();
@@ -208,7 +209,12 @@ pub fn generate_split_arg_include_as<F: Copy, T: AsRef<str> + AsRef<Path> + Disp
             true => format!("--path-rename {}:{}", src, dest),
             // but for folders, we should iterate recursively into the
             // folder and add every file mapping explicitly
-            false => gen_include_as_arg_files_from_folder(dest.as_ref(), src_pb, should_ignore),
+            false => gen_include_as_arg_files_from_folder(
+                dest.as_ref(),
+                src_pb,
+                should_ignore,
+                &mut unique_files,
+            ),
         });
     }
 
@@ -236,7 +242,12 @@ pub fn get_files_recursively<F: Copy>(
     Ok(())
 }
 
-pub fn gen_include_as_arg_files_from_folder<F: Copy>(dest: &str, src: PathBuf, should_ignore: F) -> String
+pub fn gen_include_as_arg_files_from_folder<F: Copy>(
+    dest: &str,
+    src: PathBuf,
+    should_ignore: F,
+    unique_files: &mut HashSet<String>,
+) -> String
     where F: Fn(&PathBuf) -> bool
 {
     let mut file_vec = vec![];
@@ -246,7 +257,7 @@ pub fn gen_include_as_arg_files_from_folder<F: Copy>(dest: &str, src: PathBuf, s
     }
 
     let mut out_str: String = "".into();
-    for f in file_vec {
+    for f in file_vec.iter() {
         let src_is_dot = src.to_str().unwrap() == ".";
         let src_str = if ! src_is_dot {
             &src.to_str().unwrap()
@@ -256,8 +267,15 @@ pub fn gen_include_as_arg_files_from_folder<F: Copy>(dest: &str, src: PathBuf, s
         // we will replace the original src prefix
         // with the provided dest prefix, so strip the current prefix here
         let f_str = f.strip_prefix(&src).unwrap().to_str().unwrap();
+
         let new_src = format!("{}{}", src_str, f_str);
         let new_dest = format!("{}{}", dest, f_str);
+        // we only want to add unique paths, so
+        // if we already added this one, dont add it again
+        if unique_files.contains(&new_src) {
+            continue;
+        }
+        unique_files.insert(new_src.clone());
 
         // formatting: if there is a previous entry, add
         // a space between prev entry and this next one
@@ -362,6 +380,7 @@ pub fn run_split_in_as(matches: &ArgMatches) {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::collections::HashSet;
 
     #[test]
     #[should_panic(expected = "Must provide either repo_name in your repofile, or specify a")]
@@ -435,18 +454,23 @@ mod test {
         assert!(s.contains(expected3));
     }
 
-    // #[test]
-    // fn generate_split_arg_include_as_should_not_have_duplicates() {
-    //     let include_as = vec![
-    //         "sometestlib/", " ",
-    //         "sometestlib/somesrc", "src/",
-    //     ];
-    //     let s = generate_split_arg_include_as(&include_as);
+    #[test]
+    fn generate_split_arg_include_as_should_not_have_duplicates() {
+        let include_as = vec![
+            "sometestlib/", " ",
+            "sometestlib/somesrc/", "src/",
+        ];
+        let s = generate_split_arg_include_as(&include_as, |_| false);
+        let paths: Vec<&str> = s.split("--path-rename ").collect();
+        let number_of_paths = paths.len();
+        let mut unique_paths = HashSet::new();
+        for p in paths {
+            unique_paths.insert(p);
+        }
+        let number_of_unique_paths = unique_paths.len();
 
-    //     let expected = "--path-rename src/main.rs:sometestlib/somesrc/main.rs"
-    //     // there are a lot of paths, wont check for all of them
-    //     assert!(s.contains(expected));
-    // }
+        assert_eq!(number_of_paths, number_of_unique_paths);
+    }
 
     #[test]
     fn generate_split_arg_include_as_should_not_contain_gitignored_files() {
