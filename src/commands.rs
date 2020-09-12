@@ -234,6 +234,7 @@ pub fn split_out_as<'a, 'b>() -> App<'a, 'b> {
                 .short(OUTPUT_BRANCH_ARG[1])
                 .takes_value(true)
                 .value_name(OUTPUT_BRANCH_NAME)
+                .required(true)
                 .help("name of branch that will be created with new split history")
         );
 }
