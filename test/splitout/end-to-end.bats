@@ -295,6 +295,43 @@ function teardown() {
     [[ -f new_a/a1/a1.txt ]]
 }
 
+@test 'can only include_as a single to root' {
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include_as=(
+        \"a/\"
+        \" \"
+    )
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+
+    mkdir -p a
+    mkdir -p a/a1
+    mkdir -p b
+    echo "a" > a/a.txt
+    echo "a1" > a/a1/a1.txt
+    echo "ac" > a/c.txt
+    echo "b" > b/b.txt
+    git add a
+    git commit -m "a"
+    git add b
+    git commit -m "b"
+
+    run $PROGRAM_PATH split-out repo_file.sh --verbose
+
+    echo "$output"
+    [[ $status == "0" ]]
+
+    # b should not exist, and entirety of a/ should
+    # be renamed to new_a/
+    [[ ! -d a ]]
+    [[ ! -d b ]]
+    [[ -f c.txt ]]
+    [[ -f a.txt ]]
+    [[ -f a1/a1.txt ]]
+}
+
 @test 'can include_as to rename a nested folder but keep everything else' {
     repo_file_contents="
     remote_repo=\"..$SEP$test_remote_repo2\"
