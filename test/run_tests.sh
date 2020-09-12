@@ -64,6 +64,9 @@ run_end_to_end_tests() {
     echo "GIT TOPBASE:"
     PROGRAM_PATH="$PROGRAM_PATH" bats test/topbase
     echo ""
+    echo "SPLIT-OUT-AS:"
+    PROGRAM_PATH="$PROGRAM_PATH" bats test/splitoutas
+    echo ""
 }
 
 run_all_tests() {
