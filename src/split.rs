@@ -32,9 +32,9 @@ pub struct Runner<'a> {
     pub repo: Option<git2::Repository>,
     pub input_branch: Option<String>,
     pub output_branch: Option<String>,
-    pub include_arg_str: Option<String>,
-    pub include_as_arg_str: Option<String>,
-    pub exclude_arg_str: Option<String>,
+    pub include_arg_str: Option<Vec<String>>,
+    pub include_as_arg_str: Option<Vec<String>>,
+    pub exclude_arg_str: Option<Vec<String>>,
 }
 
 impl<'a> Runner<'a> {
@@ -231,8 +231,15 @@ impl<'a> Runner<'a> {
         if self.verbose {
             println!("{}", verbose_log);
         }
-        if ! exec_helpers::executed_successfully(&arg_vec) {
-            panic!("Failed to execute: \"{}\"", arg_vec.join(" "));
+        let err_msg = match exec_helpers::execute(&arg_vec) {
+            Ok(o) => match o.status {
+                0 => None,
+                _ => Some(o.stderr),
+            },
+            Err(e) => Some(format!("{}", e)),
+        };
+        if let Some(err) = err_msg {
+            panic!("Failed to execute: \"{}\"\n{}", arg_vec.join(" "), err);
         }
 
         self
@@ -247,7 +254,7 @@ impl<'a> Runner<'a> {
         let include_arg_str_opt = self.include_arg_str.clone();
         let include_arg_str = include_arg_str_opt.unwrap();
         let arg_vec = generate_filter_arg_vec(
-            include_arg_str.as_str(),
+            &include_arg_str,
             output_branch_name.as_str(),
         );
 
@@ -262,7 +269,7 @@ impl<'a> Runner<'a> {
         let include_as_arg_str_opt = self.include_as_arg_str.clone();
         let include_as_arg_str = include_as_arg_str_opt.unwrap();
         let arg_vec = generate_filter_arg_vec(
-            include_as_arg_str.as_str(),
+            &include_as_arg_str,
             output_branch_name.as_str(),
         );
 
@@ -277,7 +284,7 @@ impl<'a> Runner<'a> {
         let exclude_arg_str_opt = self.exclude_arg_str.clone();
         let exclude_arg_str = exclude_arg_str_opt.unwrap();
         let arg_vec = generate_filter_arg_vec(
-            exclude_arg_str.as_str(),
+            &exclude_arg_str,
             output_branch_name.as_str(),
         );
 
@@ -286,11 +293,11 @@ impl<'a> Runner<'a> {
 }
 
 pub fn generate_filter_arg_vec<'a>(
-    arg_str: &'a str,
-    output_branch: &'a str
+    args: &'a Vec<String>,
+    output_branch: &'a str,
 ) -> Vec<&'a str> {
     let mut arg_vec = vec!["git", "filter-repo"];
-    for arg in arg_str.split_whitespace() {
+    for arg in args {
         arg_vec.push(arg);
     }
     arg_vec.push("--refs");
