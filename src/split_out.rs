@@ -5,6 +5,8 @@ use super::split::Runner;
 use super::split::try_get_repo_name_from_remote_repo;
 use super::repo_file::RepoFile;
 use super::git_helpers;
+use super::commands::AS_SUBDIR_ARG;
+use super::commands::OUTPUT_BRANCH_ARG;
 
 pub trait SplitOut {
     fn validate_repo_file(self) -> Self;
@@ -251,6 +253,34 @@ pub fn run_split_out(matches: &ArgMatches) {
 
         println!("{}Success!", log_p);
     }
+}
+
+pub fn run_split_out_as(matches: &ArgMatches) {
+    // should be safe to unwrap because its a required argument
+    let include_as_src = matches.value_of(AS_SUBDIR_ARG).unwrap();
+    let output_branch = matches.value_of(OUTPUT_BRANCH_ARG[0]).unwrap();
+    let mut runner = Runner::new(matches);
+    runner.repo_file.include_as = Some(vec![
+        include_as_src.into(), " ".into(),
+    ]);
+    runner.repo_file.repo_name = Some(output_branch.into());
+
+    let runner = runner.save_current_dir()
+        .get_repository_from_current_dir()
+        .verify_dependencies()
+        .validate_repo_file()
+        .change_to_repo_root()
+        .generate_arg_strings()
+        .make_and_checkout_output_branch();
+
+    let log_p = runner.log_p.clone();
+    let temp_branch = runner.output_branch.clone().unwrap_or("\"\"".into());
+    println!("{}Running filter commands on temporary branch: {}", log_p, temp_branch);
+    runner.filter_include()
+        .filter_exclude()
+        .filter_include_as();
+
+    println!("{}Success!", log_p);
 }
 
 

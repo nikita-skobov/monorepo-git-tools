@@ -1,6 +1,7 @@
 use clap::{Arg, App, SubCommand, ArgMatches};
 
 use super::split_out::run_split_out;
+use super::split_out::run_split_out_as;
 use super::split_in::run_split_in;
 use super::split_in::run_split_in_as;
 use super::topbase::run_topbase;
@@ -280,7 +281,7 @@ pub fn run_command(name: &str, matches: &ArgMatches) {
         SplitIn => run_split_in(matches.subcommand_matches(name).unwrap()),
         SplitInAs => run_split_in_as(matches.subcommand_matches(name).unwrap()),
         SplitOut => run_split_out(matches.subcommand_matches(name).unwrap()),
-        SplitOutAs => (),
+        SplitOutAs => run_split_out_as(matches.subcommand_matches(name).unwrap()),
         Topbase => run_topbase(matches.subcommand_matches(name).unwrap()),
     }
 }
