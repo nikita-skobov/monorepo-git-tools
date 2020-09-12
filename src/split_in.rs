@@ -106,6 +106,11 @@ impl<'a> SplitIn for Runner<'a> {
 }
 
 pub fn path_is_ignored(path: &PathBuf) -> bool {
+    let path_str = format!("{:?}", path);
+    if path.starts_with(".git") || path.starts_with("./.git") {
+        return true;
+    }
+
     exec_helpers::executed_successfully(
         &["git", "check-ignore", path.to_str().unwrap()])
 }
@@ -162,20 +167,7 @@ pub fn generate_split_out_arg_include_as<F: Copy>(
         return "".into();
     };
 
-    // for split-in src/dest is reversed from spit-out
-    // sources are the odd indexed elements, dest are the even
-    let sources = include_as.iter().skip(1).step_by(2);
-    let destinations = include_as.iter().skip(0).step_by(2);
-    assert_eq!(sources.len(), destinations.len());
-
-    let pairs = sources.zip(destinations);
-    // pairs is a vec of tuples: (src, dest)
-    // when mapping, x.0 is src, x.1 is dest
-    format!("--path-rename {}",
-        pairs.map(|x| format!("{}:{}", x.0, x.1))
-            .collect::<Vec<String>>()
-            .join(" --path-rename ")
-    )
+    generate_split_arg_include_as(&include_as, should_ignore)
 }
 
 // given a vec of include_as pairs,
@@ -204,9 +196,17 @@ pub fn generate_split_arg_include_as<F: Copy, T: AsRef<str> + AsRef<Path> + Disp
             PathBuf::from(src_str)
         };
 
-        out_str = format!("{}{}", out_str, match src_pb.is_file() {
+        let seperator = if out_str == "" {
+            ""
+        } else {
+            " "
+        };
+        out_str = format!("{}{}{}", out_str, seperator, match src_pb.is_file() {
             // files can keep their existing mapping
-            true => format!("--path-rename {}:{}", src, dest),
+            true => {
+                unique_files.insert(src.to_string());
+                format!("--path-rename {}:{}", src, dest)
+            },
             // but for folders, we should iterate recursively into the
             // folder and add every file mapping explicitly
             false => gen_include_as_arg_files_from_folder(
