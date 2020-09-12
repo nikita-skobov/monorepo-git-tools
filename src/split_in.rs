@@ -75,7 +75,7 @@ impl<'a> SplitIn for Runner<'a> {
     }
 
     fn generate_arg_strings(mut self) -> Self {
-        let include_as_arg_str = generate_split_out_arg_include_as(&self.repo_file, &path_is_ignored);
+        let include_as_arg_str = generate_split_out_arg_include_as(&self.repo_file);
         let exclude_arg_str = generate_split_out_arg_exclude(&self.repo_file);
         let include_arg_str = generate_split_out_arg_include(&self.repo_file);
 
@@ -113,6 +113,31 @@ pub fn path_is_ignored(path: &PathBuf) -> bool {
 
     exec_helpers::executed_successfully(
         &["git", "check-ignore", path.to_str().unwrap()])
+}
+
+/// get a vector of paths of files that git knows about
+/// starting from the root of the repo
+pub fn get_commited_paths() -> Vec<PathBuf> {
+    let data = exec_helpers::execute(&["git", "ls-files"]);
+    let data = match data {
+        Err(e) => panic!("Failed to list git committed files: {}", e),
+        Ok(d) => {
+            if d.status != 0 {
+                panic!("Failed to list git committed files: {}", d.stderr);
+            }
+            d.stdout
+        },
+    };
+
+    let mut out_vec: Vec<PathBuf> = vec![];
+    for f in data.split('\n').into_iter() {
+        let pathbuf_with_file = PathBuf::from(f);
+        let mut pathbuf_without_file = pathbuf_with_file.clone();
+        pathbuf_without_file.pop();
+        out_vec.push(pathbuf_with_file);
+        out_vec.push(pathbuf_without_file);
+    }
+    out_vec
 }
 
 // iterate over both the include, and include_as
@@ -155,19 +180,18 @@ pub fn generate_split_out_arg_include(repofile: &RepoFile) -> String {
 
 // iterate over the include_as variable, and generate a
 // string of args that can be passed to git-filter-repo
-pub fn generate_split_out_arg_include_as<F: Copy>(
+pub fn generate_split_out_arg_include_as(
     repofile: &RepoFile,
-    should_ignore: F
-) -> String
-    where F: Fn(&PathBuf) -> bool
-{
+) -> String {
     let include_as = if let Some(include_as) = &repofile.include_as {
         include_as.clone()
     } else {
         return "".into();
     };
 
-    generate_split_arg_include_as(&include_as, should_ignore)
+    let valid_git_files = get_commited_paths();
+
+    generate_split_arg_include_as(&include_as, valid_git_files)
 }
 
 // given a vec of include_as pairs,
@@ -175,12 +199,10 @@ pub fn generate_split_out_arg_include_as<F: Copy>(
 // if the path is a file include it as is
 // if the path is a folder, iterate over the files in that folder
 // recursively, and add a --path-rename file:file instead of folder:folder
-pub fn generate_split_arg_include_as<F: Copy, T: AsRef<str> + AsRef<Path> + Display>(
+pub fn generate_split_arg_include_as<T: AsRef<str> + AsRef<Path> + Display>(
     include_as: &[T],
-    should_ignore: F,
-) -> String
-    where F: Fn(&PathBuf) -> bool
-{
+    valid_files: Vec<PathBuf>
+) -> String {
     let sources = include_as.iter().skip(1).step_by(2);
     let destinations = include_as.iter().skip(0).step_by(2);
 
@@ -212,7 +234,7 @@ pub fn generate_split_arg_include_as<F: Copy, T: AsRef<str> + AsRef<Path> + Disp
             false => gen_include_as_arg_files_from_folder(
                 dest.as_ref(),
                 src_pb,
-                should_ignore,
+                &valid_files,
                 &mut unique_files,
             ),
         });
@@ -242,15 +264,23 @@ pub fn get_files_recursively<F: Copy>(
     Ok(())
 }
 
-pub fn gen_include_as_arg_files_from_folder<F: Copy>(
+pub fn gen_include_as_arg_files_from_folder(
     dest: &str,
     src: PathBuf,
-    should_ignore: F,
+    valid_files: &Vec<PathBuf>,
     unique_files: &mut HashSet<String>,
-) -> String
-    where F: Fn(&PathBuf) -> bool
-{
+) -> String {
+    println!("VALID FILES: {:?}", valid_files);
     let mut file_vec = vec![];
+    // ignore any file that isn't in the list of valid files
+    let should_ignore = |p: &PathBuf| {
+        let mut use_p = p.clone();
+        if p.starts_with("./") {
+            use_p = use_p.strip_prefix("./").unwrap().to_path_buf();
+        }
+        !valid_files.contains(&use_p)
+    };
+
     let all_files_recursively = get_files_recursively(src.clone(), &mut file_vec, should_ignore);
     if all_files_recursively.is_err() {
         panic!("Error reading dir recursively: {:?}", src);
@@ -382,6 +412,23 @@ mod test {
     use super::*;
     use std::collections::HashSet;
 
+    // this test assumes theres a target/ directory with rust builds
+    // this is gitignored, so shouldnt show up on git ls-files
+    #[test]
+    fn get_commited_paths_should_not_contain_ignored_files() {
+        let files = get_commited_paths();
+        assert!(files.contains(&PathBuf::from("Cargo.toml")));
+        assert!(files.contains(&PathBuf::from("src/split_in.rs")));
+        assert!(!files.contains(&PathBuf::from("target/release/mgt")));
+    }
+    #[test]
+    fn get_commited_paths_should_contain_the_folder_leading_to_the_file() {
+        let files = get_commited_paths();
+        assert!(files.contains(&PathBuf::from("test/")));
+        assert!(files.contains(&PathBuf::from("test/general/")));
+        assert!(files.contains(&PathBuf::from("test/general/end-to-end.bats")));
+    }
+
     #[test]
     #[should_panic(expected = "Must provide either repo_name in your repofile, or specify a")]
     fn should_panic_if_missing_input_branch_and_remote_repo() {
@@ -399,7 +446,10 @@ mod test {
         let include_as = vec![
             "src/lib/Cargo.toml", "Cargo.toml",
         ];
-        let s = generate_split_arg_include_as(&include_as, |_| false);
+        let pathbufs = vec![
+            PathBuf::from("Cargo.toml")
+        ];
+        let s = generate_split_arg_include_as(&include_as, pathbufs);
 
         let expected = format!("--path-rename {}:{}", include_as[1], include_as[0]);
         assert_eq!(s, expected);
@@ -412,7 +462,11 @@ mod test {
         let include_as = vec![
             "sometestlib/", "test/general/",
         ];
-        let s = generate_split_arg_include_as(&include_as, |_| false);
+        let pathbufs = vec![
+            PathBuf::from("test/general/end-to-end.bats"),
+            PathBuf::from("test/general/usage.bats"),
+        ];
+        let s = generate_split_arg_include_as(&include_as, pathbufs);
 
         let expected1 = "--path-rename test/general/end-to-end.bats:sometestlib/end-to-end.bats";
         let expected2 = "--path-rename test/general/usage.bats:sometestlib/usage.bats";
@@ -427,12 +481,21 @@ mod test {
         let include_as = vec![
             "sometestlib/", "test/",
         ];
-        let s = generate_split_arg_include_as(&include_as, |_| false);
+        // there are a lot of paths, wont check for all of them
+        let pathbufs = vec![
+            PathBuf::from("test/general/"),
+            PathBuf::from("test/general/end-to-end.bats"),
+            PathBuf::from("test/general/usage.bats"),
+            PathBuf::from("test/README.md"),
+            PathBuf::from("test/splitout/end-to-end.bats"),
+            PathBuf::from("test/splitout/"),
+        ];
+        let s = generate_split_arg_include_as(&include_as, pathbufs);
+        println!("S: {}", s);
 
         let expected1 = "--path-rename test/general/end-to-end.bats:sometestlib/general/end-to-end.bats";
         let expected2 = "--path-rename test/README.md:sometestlib/README.md";
         let expected3 = "--path-rename test/splitout/end-to-end.bats:sometestlib/splitout/end-to-end.bats";
-        // there are a lot of paths, wont check for all of them
         assert!(s.contains(expected1));
         assert!(s.contains(expected2));
         assert!(s.contains(expected3));
@@ -443,7 +506,18 @@ mod test {
         let include_as = vec![
             "sometestlib/", " ",
         ];
-        let s = generate_split_arg_include_as(&include_as, |_| false);
+        let pathbufs = vec![
+            PathBuf::from("."),
+            PathBuf::from("test/"),
+            PathBuf::from("test/general/"),
+            PathBuf::from("test/general/end-to-end.bats"),
+            PathBuf::from("test/general/usage.bats"),
+            PathBuf::from("test/README.md"),
+            PathBuf::from("test/splitout/"),
+            PathBuf::from("test/splitout/end-to-end.bats"),
+            PathBuf::from("Cargo.toml"),
+        ];
+        let s = generate_split_arg_include_as(&include_as, pathbufs);
 
         let expected1 = "--path-rename test/general/end-to-end.bats:sometestlib/test/general/end-to-end.bats";
         let expected2 = "--path-rename test/README.md:sometestlib/test/README.md";
@@ -460,7 +534,9 @@ mod test {
             "sometestlib/", " ",
             "sometestlib/somesrc/", "src/",
         ];
-        let s = generate_split_arg_include_as(&include_as, |_| false);
+        // this ones better to test with the real thing:
+        let valid_files = get_commited_paths();
+        let s = generate_split_arg_include_as(&include_as, valid_files);
         let paths: Vec<&str> = s.split("--path-rename ").collect();
         let number_of_paths = paths.len();
         let mut unique_paths = HashSet::new();
@@ -474,13 +550,15 @@ mod test {
 
     #[test]
     fn generate_split_arg_include_as_should_not_contain_gitignored_files() {
-        // pretend all directories are ignored to make this test east
-        let dumb_ignore = |p: &PathBuf| p.is_dir();
-
         let include_as = vec![
             "sometestlib/", " ",
         ];
-        let s = generate_split_arg_include_as(&include_as, dumb_ignore);
+        let pathbufs = vec![
+            // pretend that only Cargo.toml is not gitignored
+            PathBuf::from("Cargo.toml"),
+        ];
+        let s = generate_split_arg_include_as(&include_as, pathbufs);
+        println!("S: {}", s);
 
         let expected = "--path-rename Cargo.toml:sometestlib/Cargo.toml";
         let notexpected = "src/";
