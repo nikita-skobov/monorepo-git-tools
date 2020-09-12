@@ -243,7 +243,7 @@ function teardown() {
     [[ -f lib/src/libfile1.txt ]]
     [[ -f lib/src/libfile2.txt ]]
     [[ -f lib/src/srcfile1.txt ]]
-    [[ -f lib/src/srcfile2txt ]]
+    [[ -f lib/src/srcfile2.txt ]]
     [[ -f lib/rootfile1.txt ]]
 }
 
