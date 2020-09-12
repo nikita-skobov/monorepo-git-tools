@@ -270,7 +270,6 @@ pub fn gen_include_as_arg_files_from_folder(
     valid_files: &Vec<PathBuf>,
     unique_files: &mut HashSet<String>,
 ) -> String {
-    println!("VALID FILES: {:?}", valid_files);
     let mut file_vec = vec![];
     // ignore any file that isn't in the list of valid files
     let should_ignore = |p: &PathBuf| {
@@ -470,8 +469,8 @@ mod test {
 
         let expected1 = "--path-rename test/general/end-to-end.bats:sometestlib/end-to-end.bats";
         let expected2 = "--path-rename test/general/usage.bats:sometestlib/usage.bats";
-        let expected = format!("{} {}", expected1, expected2);
-        assert_eq!(s, expected);
+        assert!(s.contains(expected1));
+        assert!(s.contains(expected2));
     }
 
     // this test requires reading files/folders from the root of the
