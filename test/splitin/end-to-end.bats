@@ -200,6 +200,47 @@ function teardown() {
     [[ ! -f rootfile1.txt ]]
 }
 
+@test 'works when sources have spaces in them' {
+    # save current dir to cd back to later
+    curr_dir="$PWD"
+    # setup the test remote repo:
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    mkdir -p "my lib"
+    echo "rootfile1.txt" > rootfile1.txt
+    echo "libfile1.txt" > "my lib/libfile1.txt"
+    echo "libfile2.txt" > "my lib/libfile2.txt"
+    git add .
+    git commit -m "adds 2 lib files and 1 root file"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    repo_name=\"doesnt_matter\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include_as=(
+        \"locallib/\" \"my lib/\"
+    )
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+    echo "$(git split in repo_file.sh --dry-run)"
+
+    run $PROGRAM_PATH split-in repo_file.sh --verbose
+    [[ $status == "0" ]]
+    echo "$output"
+    echo "$(find . -not -path '*/\.*')"
+
+    # since we excluded lib, it shouldnt be there
+    # but rootfile1 should
+    [[ -d locallib ]]
+    [[ ! -d "my lib/" ]]
+
+    [[ -f locallib/libfile1.txt ]]
+    [[ -f locallib/libfile2.txt ]]
+    [[ ! -f libfile1.txt ]]
+    [[ ! -f rootfile1.txt ]]
+}
+
+
 @test 'properly handles nested folder renames/moves' {
     # save current dir to cd back to later
     curr_dir="$PWD"
