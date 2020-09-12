@@ -222,11 +222,9 @@ function teardown() {
     "
 
     echo "$repo_file_contents" > repo_file.sh
-    echo "$(git split in repo_file.sh --dry-run)"
-
     run $PROGRAM_PATH split-in repo_file.sh --verbose
-    [[ $status == "0" ]]
     echo "$output"
+    [[ $status == "0" ]]
     echo "$(find . -not -path '*/\.*')"
 
     # since we excluded lib, it shouldnt be there
