@@ -77,3 +77,7 @@ jobs:
         run: bash -c "bats test/splitinas"
         env:
           PROGRAM_PATH: mgt
+      - name: e2e_test_topbase
+        run: bash -c "bats test/topbase"
+        env:
+          PROGRAM_PATH: mgt
