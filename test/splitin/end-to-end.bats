@@ -200,6 +200,45 @@ function teardown() {
     [[ ! -f rootfile1.txt ]]
 }
 
+@test 'works when sources have spaces in them' {
+    # save current dir to cd back to later
+    curr_dir="$PWD"
+    # setup the test remote repo:
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    mkdir -p "my lib"
+    echo "rootfile1.txt" > rootfile1.txt
+    echo "libfile1.txt" > "my lib/libfile1.txt"
+    echo "libfile2.txt" > "my lib/libfile2.txt"
+    git add .
+    git commit -m "adds 2 lib files and 1 root file"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    repo_name=\"doesnt_matter\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include_as=(
+        \"locallib/\" \"my lib/\"
+    )
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+    run $PROGRAM_PATH split-in repo_file.sh --verbose
+    echo "$output"
+    [[ $status == "0" ]]
+    echo "$(find . -not -path '*/\.*')"
+
+    # since we excluded lib, it shouldnt be there
+    # but rootfile1 should
+    [[ -d locallib ]]
+    [[ ! -d "my lib/" ]]
+
+    [[ -f locallib/libfile1.txt ]]
+    [[ -f locallib/libfile2.txt ]]
+    [[ ! -f libfile1.txt ]]
+    [[ ! -f rootfile1.txt ]]
+}
+
+
 @test 'properly handles nested folder renames/moves' {
     # save current dir to cd back to later
     curr_dir="$PWD"
@@ -504,4 +543,54 @@ function teardown() {
     git_log_now="$(git log --oneline)"
     [[ $status == "0" ]]
     [[ $output == *"rebasing non-interactively"* ]]
+}
+
+@test 'can rename weird file and folder names' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+
+    echo "a" > a.txt
+    git add a.txt && git commit -m "a"
+    echo "b" > "du[mbfile.txt"
+    git add . && git commit -m "dumbfile"
+    mkdir -p "dum'lib"
+    echo "lib" > "dum'lib/lib.txt"
+    git add . && git commit -m "dumblib"
+
+    echo "$(find . -type f -not -path '*/\.*')"
+
+    [[ -f a.txt ]]
+    [[ -f "du[mbfile.txt" ]]
+    [[ -d "dum'lib/" ]]
+
+    cd "$curr_dir"
+
+    # I originally wanted to also maybe support files with \ in
+    # them, but i think it'd be too difficult due to multiple levels of
+    # escaping, and also it being treated differently on windows vs linux
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include_as=(
+        \"dumbfile.txt\" \"du[mbfile.txt\"
+        \"spaghetti/\" \"dum'lib/\"
+    )
+    "
+    echo "$repo_file_contents" > repo_file.sh
+    echo "repo file contents:"
+    cat repo_file.sh
+
+    [[ ! -f "dumbfile.txt" ]]
+
+    run $PROGRAM_PATH split-in repo_file.sh --verbose
+
+    echo "$(find . -type f -not -path '*/\.*')"
+
+    echo "$output"
+    [[ $status == "0" ]]
+
+    [[ ! -f a.txt ]]
+    [[ -f "dumbfile.txt" ]]
+    [[ -d spaghetti/ ]]
+    [[ ! -d "dum'lib/" ]]
+    [[ -f "spaghetti/lib.txt" ]]
 }

@@ -54,18 +54,18 @@ impl<'a> SplitOut for Runner<'a> {
         let include_as_arg_str = generate_split_out_arg_include_as(&self.repo_file);
         let exclude_arg_str = generate_split_out_arg_exclude(&self.repo_file);
         if self.verbose {
-            println!("{}include_arg_str: {}", self.log_p, include_arg_str);
-            println!("{}include_as_arg_str: {}", self.log_p, include_as_arg_str);
-            println!("{}exclude_arg_str: {}", self.log_p, exclude_arg_str);
+            println!("{}include_arg_str: {}", self.log_p, include_arg_str.join(" "));
+            println!("{}include_as_arg_str: {}", self.log_p, include_as_arg_str.join(" "));
+            println!("{}exclude_arg_str: {}", self.log_p, exclude_arg_str.join(" "));
         }
 
-        if include_arg_str != "" {
+        if include_arg_str.len() != 0 {
             self.include_arg_str = Some(include_arg_str);
         }
-        if include_as_arg_str != "" {
+        if include_as_arg_str.len() != 0 {
             self.include_as_arg_str = Some(include_as_arg_str);
         }
-        if exclude_arg_str != "" {
+        if exclude_arg_str.len() != 0 {
             self.exclude_arg_str = Some(exclude_arg_str);
         }
         self
@@ -145,43 +145,49 @@ impl<'a> SplitOut for Runner<'a> {
 // repofile variables, and generate an overall
 // include string that can be passed to
 // git-filter-repo
-pub fn generate_split_out_arg_include(repofile: &RepoFile) -> String {
-    let start_with: String = "--path ".into();
-    let include_str = match &repofile.include {
-        Some(v) => format!("{}{}", start_with.clone(), v.join(" --path ")),
-        None => "".to_string(),
+pub fn generate_split_out_arg_include(repofile: &RepoFile) -> Vec<String> {
+    let include = if let Some(include) = &repofile.include {
+        include.clone()
+    } else {
+        vec![]
+    };
+    let include_as = if let Some(include_as) = &repofile.include_as {
+        include_as.clone()
+    } else {
+        vec![]
     };
 
+    let mut out_vec = vec![];
+    for path in include {
+        out_vec.push("--path".to_string());
+        if path == " " {
+            out_vec.push("".into());
+        } else {
+            out_vec.push(path);
+        }
+    }
     // include_as is more difficult because the indices matter
     // for splitting out, the even indices are the local
     // paths, so those are the ones we want to include
-    let include_as_str = match &repofile.include_as {
-        Some(v) => format!("{}{}",
-            start_with.clone(),
-            v.iter().step_by(2)
-                .cloned().collect::<Vec<String>>()
-                .join(" --path "),
-        ),
-        None => "".to_string(),
-    };
+    for path in include_as.iter().step_by(2) {
+        out_vec.push("--path".to_string());
+        if path == " " {
+            out_vec.push("".into())
+        } else {
+            out_vec.push(path.into());
+        }
+    }
 
-    // include a space between them if include_str isnt empty
-    let seperator: String = if include_str.is_empty() {
-        "".into()
-    } else {
-        " ".into()
-    };
-
-    format!("{}{}{}", include_str, seperator, include_as_str)
+    out_vec
 }
 
 // iterate over the include_as variable, and generate a
 // string of args that can be passed to git-filter-repo
-pub fn generate_split_out_arg_include_as(repofile: &RepoFile) -> String {
+pub fn generate_split_out_arg_include_as(repofile: &RepoFile) -> Vec<String> {
     let include_as = if let Some(include_as) = &repofile.include_as {
         include_as.clone()
     } else {
-        return "".into();
+        return vec![];
     };
 
     // sources are the even indexed elements, dest are the odd
@@ -192,18 +198,37 @@ pub fn generate_split_out_arg_include_as(repofile: &RepoFile) -> String {
     let pairs = sources.zip(destinations);
     // pairs is a vec of tuples: (src, dest)
     // when mapping, x.0 is src, x.1 is dest
-    format!("--path-rename {}",
-        pairs.map(|x| format!("{}:{}", x.0, x.1))
-            .collect::<Vec<String>>()
-            .join(" --path-rename ")
-    )
+    let mut out_vec = vec![];
+    for (src, dest) in pairs {
+        out_vec.push("--path-rename".to_string());
+
+        // if user provided a single space to indicate
+        // move to root, then git-filter-repo wants that
+        // as an emptry string
+        let use_src = if src == " " { "" } else { src };
+        let use_dest = if dest == " " { "" } else { dest };
+
+        out_vec.push(format!("{}:{}", use_src, use_dest));
+    }
+    out_vec
 }
 
-pub fn generate_split_out_arg_exclude(repofile: &RepoFile) -> String {
-    let start_with: String = "--invert-paths --path ".into();
+pub fn generate_split_out_arg_exclude(repofile: &RepoFile) -> Vec<String> {
+    let mut out_vec = vec![];
     match &repofile.exclude {
-        Some(v) => format!("{}{}", start_with.clone(), v.join(" --path ")),
-        None => "".to_string(),
+        None => return out_vec,
+        Some(v) => {
+            out_vec.push("--invert-paths".to_string());
+            for path in v {
+                out_vec.push("--path".to_string());
+                if path == " " {
+                    out_vec.push("".into());
+                } else {
+                    out_vec.push(path.clone());
+                }
+            }
+            out_vec
+        },
     }
 }
 
@@ -305,7 +330,7 @@ mod test {
         ]);
         repofile.include = Some(vec!["123".into()]);
         let filter_args = generate_split_out_arg_include(&repofile);
-        assert_eq!(filter_args, "--path 123 --path abc --path xyz");
+        assert_eq!(filter_args.join(" "), "--path 123 --path abc --path xyz");
     }
 
     #[test]
@@ -315,7 +340,7 @@ mod test {
             "one".into(),
         ]);
         let filter_args = generate_split_out_arg_exclude(&repofile);
-        assert_eq!(filter_args, "--invert-paths --path one");
+        assert_eq!(filter_args.join(" "), "--invert-paths --path one");
     }
 
     #[test]
@@ -325,7 +350,7 @@ mod test {
             "one".into(), "two".into(), "three".into(),
         ]);
         let filter_args = generate_split_out_arg_exclude(&repofile);
-        assert_eq!(filter_args, "--invert-paths --path one --path two --path three");
+        assert_eq!(filter_args.join(" "), "--invert-paths --path one --path two --path three");
     }
 
     // not sure how to test this. I want to test if
@@ -346,20 +371,20 @@ mod test {
     // }
 
     #[test]
-    fn should_generate_empty_strings_for_generating_args_of_none() {
+    fn should_generate_empty_vecs_for_generating_args_of_none() {
         let mut repofile = RepoFile::new();
         repofile.exclude = None;
         repofile.include = None;
         repofile.include_as = None;
 
         let filter_exclude_args = generate_split_out_arg_exclude(&repofile);
-        assert_eq!(filter_exclude_args, "");
+        assert_eq!(filter_exclude_args.len(), 0);
 
         let filter_include_args = generate_split_out_arg_include(&repofile);
-        assert_eq!(filter_include_args, "");
+        assert_eq!(filter_include_args.len(), 0);
 
         let filter_include_as_args = generate_split_out_arg_include_as(&repofile);
-        assert_eq!(filter_include_as_args, "");
+        assert_eq!(filter_include_as_args.len(), 0);
     }
 
     // similarly to the above test, if the actual generate_split_out_arg_include_as
@@ -394,7 +419,7 @@ mod test {
             "xyz-src".into(), "xyz-dest".into(),
         ]);
         let filter_args = generate_split_out_arg_include_as(&repofile);
-        assert_eq!(filter_args, "--path-rename abc-src:abc-dest --path-rename xyz-src:xyz-dest");
+        assert_eq!(filter_args.join(" "), "--path-rename abc-src:abc-dest --path-rename xyz-src:xyz-dest");
     }
 
     // if include_as is None, it shouldnt fail, but rather
@@ -403,7 +428,7 @@ mod test {
     fn gen_split_out_arg_include_as_should_not_fail_if_no_include_as() {
         let repofile = RepoFile::new();
         let filter_args = generate_split_out_arg_include_as(&repofile);
-        assert_eq!(filter_args, "");
+        assert_eq!(filter_args.len(), 0);
     }
 
     #[test]

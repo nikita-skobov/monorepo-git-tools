@@ -80,18 +80,18 @@ impl<'a> SplitIn for Runner<'a> {
         let include_arg_str = generate_split_out_arg_include(&self.repo_file);
 
         if self.verbose {
-            println!("{}include_arg_str: {}", self.log_p, include_arg_str);
-            println!("{}include_as_arg_str: {}", self.log_p, include_as_arg_str);
-            println!("{}exclude_arg_str: {}", self.log_p, exclude_arg_str);
+            println!("{}include_arg_str: {}", self.log_p, include_arg_str.join(" "));
+            println!("{}include_as_arg_str: {}", self.log_p, include_as_arg_str.join(" "));
+            println!("{}exclude_arg_str: {}", self.log_p, exclude_arg_str.join(" "));
         }
 
-        if include_arg_str != "" {
+        if include_arg_str.len() != 0 {
             self.include_arg_str = Some(include_arg_str);
         }
-        if include_as_arg_str != "" {
+        if include_as_arg_str.len() != 0 {
             self.include_as_arg_str = Some(include_as_arg_str);
         }
-        if exclude_arg_str != "" {
+        if exclude_arg_str.len() != 0 {
             self.exclude_arg_str = Some(exclude_arg_str);
         }
 
@@ -147,34 +147,40 @@ pub fn get_commited_paths() -> Vec<PathBuf> {
 // include gets taken as is, but for include_as, we only care about
 // what the destination is because we will run
 // the include filter after we rename, so we want the renamed versions
-pub fn generate_split_out_arg_include(repofile: &RepoFile) -> String {
-    let start_with: String = "--path ".into();
-    let include_str = match &repofile.include {
-        Some(v) => format!("{}{}", start_with.clone(), v.join(" --path ")),
-        None => "".to_string(),
+pub fn generate_split_out_arg_include(repofile: &RepoFile) -> Vec<String> {
+    let include = if let Some(include) = &repofile.include {
+        include.clone()
+    } else {
+        vec![]
+    };
+    let include_as = if let Some(include_as) = &repofile.include_as {
+        include_as.clone()
+    } else {
+        vec![]
     };
 
+    let mut out_vec = vec![];
+    for path in include {
+        out_vec.push("--path".to_string());
+        if path == " " {
+            out_vec.push("".into());
+        } else {
+            out_vec.push(path);
+        }
+    }
     // include_as is more difficult because the indices matter
     // for splitting out, the even indices are the local
     // paths, so those are the ones we want to include
-    let include_as_str = match &repofile.include_as {
-        Some(v) => format!("{}{}",
-            start_with.clone(),
-            v.iter().step_by(2)
-                .cloned().collect::<Vec<String>>()
-                .join(" --path "),
-        ),
-        None => "".to_string(),
-    };
+    for path in include_as.iter().step_by(2) {
+        out_vec.push("--path".to_string());
+        if path == " " {
+            out_vec.push("".into())
+        } else {
+            out_vec.push(path.into());
+        }
+    }
 
-    // include a space between them if include_str isnt empty
-    let seperator: String = if include_str.is_empty() {
-        "".into()
-    } else {
-        " ".into()
-    };
-
-    format!("{}{}{}", include_str, seperator, include_as_str)
+    out_vec
 }
 
 
@@ -182,11 +188,11 @@ pub fn generate_split_out_arg_include(repofile: &RepoFile) -> String {
 // string of args that can be passed to git-filter-repo
 pub fn generate_split_out_arg_include_as(
     repofile: &RepoFile,
-) -> String {
+) -> Vec<String> {
     let include_as = if let Some(include_as) = &repofile.include_as {
         include_as.clone()
     } else {
-        return "".into();
+        return vec![];
     };
 
     let valid_git_files = get_commited_paths();
@@ -202,14 +208,14 @@ pub fn generate_split_out_arg_include_as(
 pub fn generate_split_arg_include_as<T: AsRef<str> + AsRef<Path> + Display>(
     include_as: &[T],
     valid_files: Vec<PathBuf>
-) -> String {
+) -> Vec<String> {
     let sources = include_as.iter().skip(1).step_by(2);
     let destinations = include_as.iter().skip(0).step_by(2);
 
     let pairs = sources.zip(destinations);
 
     let mut unique_files = HashSet::new();
-    let mut out_str: String = "".into();
+    let mut out_vec = vec![];
     for (src, dest) in pairs {
         let src_str: &str = src.as_ref();
         let src_pb = if src_str == " " {
@@ -218,29 +224,30 @@ pub fn generate_split_arg_include_as<T: AsRef<str> + AsRef<Path> + Display>(
             PathBuf::from(src_str)
         };
 
-        let seperator = if out_str == "" {
-            ""
-        } else {
-            " "
-        };
-        out_str = format!("{}{}{}", out_str, seperator, match src_pb.is_file() {
+        match src_pb.is_file() {
             // files can keep their existing mapping
             true => {
                 unique_files.insert(src.to_string());
-                format!("--path-rename {}:{}", src, dest)
+                out_vec.push("--path-rename".into());
+                out_vec.push(format!("{}:{}", src, dest));
             },
             // but for folders, we should iterate recursively into the
             // folder and add every file mapping explicitly
-            false => gen_include_as_arg_files_from_folder(
-                dest.as_ref(),
-                src_pb,
-                &valid_files,
-                &mut unique_files,
-            ),
-        });
+            false => {
+                let paths = gen_include_as_arg_files_from_folder(
+                    dest.as_ref(),
+                    src_pb,
+                    &valid_files,
+                    &mut unique_files
+                );
+                for p in paths {
+                    out_vec.push(p);
+                }
+            },
+        }
     }
 
-    out_str
+    out_vec
 }
 
 pub fn get_files_recursively<F: Copy>(
@@ -269,7 +276,7 @@ pub fn gen_include_as_arg_files_from_folder(
     src: PathBuf,
     valid_files: &Vec<PathBuf>,
     unique_files: &mut HashSet<String>,
-) -> String {
+) -> Vec<String> {
     let mut file_vec = vec![];
     // ignore any file that isn't in the list of valid files
     let should_ignore = |p: &PathBuf| {
@@ -285,7 +292,7 @@ pub fn gen_include_as_arg_files_from_folder(
         panic!("Error reading dir recursively: {:?}", src);
     }
 
-    let mut out_str: String = "".into();
+    let mut out_vec = vec![];
     for f in file_vec.iter() {
         let src_is_dot = src.to_str().unwrap() == ".";
         let src_str = if ! src_is_dot {
@@ -314,25 +321,29 @@ pub fn gen_include_as_arg_files_from_folder(
         }
         unique_files.insert(new_src.clone());
 
-        // formatting: if there is a previous entry, add
-        // a space between prev entry and this next one
-        if out_str.len() > 0 {
-            out_str.push(' ');
-        }
-        out_str = format!("{}{}",
-            out_str,
-            format!("--path-rename {}:{}", new_src, new_dest),
-        );
+        out_vec.push("--path-rename".into());
+        out_vec.push(format!("{}:{}", new_src, new_dest));
     }
 
-    out_str
+    out_vec
 }
 
-pub fn generate_split_out_arg_exclude(repofile: &RepoFile) -> String {
-    let start_with: String = "--invert-paths --path ".into();
+pub fn generate_split_out_arg_exclude(repofile: &RepoFile) -> Vec<String> {
+    let mut out_vec = vec![];
     match &repofile.exclude {
-        Some(v) => format!("{}{}", start_with.clone(), v.join(" --path ")),
-        None => "".to_string(),
+        None => return out_vec,
+        Some(v) => {
+            out_vec.push("--invert-paths".to_string());
+            for path in v {
+                out_vec.push("--path".to_string());
+                if path == " " {
+                    out_vec.push("".into());
+                } else {
+                    out_vec.push(path.clone());
+                }
+            }
+            out_vec
+        },
     }
 }
 
@@ -459,7 +470,7 @@ mod test {
         let s = generate_split_arg_include_as(&include_as, pathbufs);
 
         let expected = format!("--path-rename {}:{}", include_as[1], include_as[0]);
-        assert_eq!(s, expected);
+        assert_eq!(s.join(" "), expected);
     }
 
     // this test requires reading files/folders from the root of the
@@ -473,7 +484,8 @@ mod test {
             PathBuf::from("test/general/end-to-end.bats"),
             PathBuf::from("test/general/usage.bats"),
         ];
-        let s = generate_split_arg_include_as(&include_as, pathbufs);
+        let s_vec = generate_split_arg_include_as(&include_as, pathbufs);
+        let s = s_vec.join(" ");
 
         let expected1 = "--path-rename test/general/end-to-end.bats:sometestlib/end-to-end.bats";
         let expected2 = "--path-rename test/general/usage.bats:sometestlib/usage.bats";
@@ -497,7 +509,8 @@ mod test {
             PathBuf::from("test/splitout/end-to-end.bats"),
             PathBuf::from("test/splitout/"),
         ];
-        let s = generate_split_arg_include_as(&include_as, pathbufs);
+        let s_vec = generate_split_arg_include_as(&include_as, pathbufs);
+        let s = s_vec.join(" ");
         println!("S: {}", s);
 
         let expected1 = "--path-rename test/general/end-to-end.bats:sometestlib/general/end-to-end.bats";
@@ -524,7 +537,8 @@ mod test {
             PathBuf::from("test/splitout/end-to-end.bats"),
             PathBuf::from("Cargo.toml"),
         ];
-        let s = generate_split_arg_include_as(&include_as, pathbufs);
+        let s_vec = generate_split_arg_include_as(&include_as, pathbufs);
+        let s = s_vec.join(" ");
 
         let expected1 = "--path-rename test/general/end-to-end.bats:sometestlib/test/general/end-to-end.bats";
         let expected2 = "--path-rename test/README.md:sometestlib/test/README.md";
@@ -543,16 +557,16 @@ mod test {
         ];
         // this ones better to test with the real thing:
         let valid_files = get_commited_paths();
-        let s = generate_split_arg_include_as(&include_as, valid_files);
-        let paths: Vec<&str> = s.split("--path-rename ").collect();
-        let number_of_paths = paths.len();
+        let paths = generate_split_arg_include_as(&include_as, valid_files);
+        println!("S: {}", paths.join(" "));
         let mut unique_paths = HashSet::new();
-        for p in paths {
+        // we go every other one because there are a lot of entries
+        // that are just --path-rename, and that would get filtered out by the hash set
+        // otherwise
+        for p in paths.iter().skip(1).step_by(2) {
+            assert!(!unique_paths.contains(&p));
             unique_paths.insert(p);
         }
-        let number_of_unique_paths = unique_paths.len();
-
-        assert_eq!(number_of_paths, number_of_unique_paths);
     }
 
     #[test]
@@ -564,7 +578,8 @@ mod test {
             // pretend that only Cargo.toml is not gitignored
             PathBuf::from("Cargo.toml"),
         ];
-        let s = generate_split_arg_include_as(&include_as, pathbufs);
+        let s_vec = generate_split_arg_include_as(&include_as, pathbufs);
+        let s = s_vec.join(" ");
         println!("S: {}", s);
 
         let expected = "--path-rename Cargo.toml:sometestlib/Cargo.toml";
