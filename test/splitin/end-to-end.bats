@@ -200,6 +200,53 @@ function teardown() {
     [[ ! -f rootfile1.txt ]]
 }
 
+@test 'properly handles nested folder renames/moves' {
+    # save current dir to cd back to later
+    curr_dir="$PWD"
+    # setup the test remote repo:
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    mkdir -p lib
+    echo "rootfile1.txt" > rootfile1.txt
+    echo "libfile1.txt" > lib/libfile1.txt
+    echo "libfile2.txt" > lib/libfile2.txt
+    echo "srcfile1.txt" > srcfile1.txt
+    echo "srcfile2.txt" > lib/srcfile2.txt
+    git add .
+    git commit -m "adds files"
+    echo "repo2 dir:"
+    echo "$(find . -type f -not -path '*/\.*')"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    repo_name=\"doesnt_matter\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include_as=(
+        \"lib/src/srcfile1.txt\" \"srcfile1.txt\"
+        \"lib/src/\" \"lib/\"
+        \"lib/\" \" \"
+    )
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+    echo "$(git split in repo_file.sh --dry-run)"
+
+    run $PROGRAM_PATH split-in repo_file.sh --verbose
+    echo "$output"
+    echo "local repo dir after split:"
+    echo "$(find . -type f -not -path '*/\.*')"
+
+    [[ $status == "0" ]]
+
+    [[ -d lib ]]
+    [[ ! -d lib/lib ]]
+    [[ -d lib/src ]]
+    [[ -f lib/src/libfile1.txt ]]
+    [[ -f lib/src/libfile2.txt ]]
+    [[ -f lib/src/srcfile1.txt ]]
+    [[ -f lib/src/srcfile2.txt ]]
+    [[ -f lib/rootfile1.txt ]]
+}
+
 @test 'can include without renaming' {
     # save current dir to cd back to later
     curr_dir="$PWD"
