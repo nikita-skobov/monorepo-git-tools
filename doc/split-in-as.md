@@ -20,7 +20,7 @@ FLAGS:
 
 OPTIONS:
         --as <subdirectory>              path relative to root of the local repository that will contain the entire
-                                         repository being split in
+                                         repository being split
     -o, --output-branch <branch-name>    name of branch that will be created with new split history
 
 ARGS:
