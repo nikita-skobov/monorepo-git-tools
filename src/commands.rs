@@ -5,6 +5,7 @@ use super::split_out::run_split_out_as;
 use super::split_in::run_split_in;
 use super::split_in::run_split_in_as;
 use super::topbase::run_topbase;
+use super::check_updates::run_check_updates;
 
 pub const INPUT_BRANCH_ARG: &'static str = "input-branch";
 pub const INPUT_BRANCH_NAME: &'static str = "branch-name";
@@ -289,22 +290,23 @@ pub fn check_updates<'a, 'b>() ->App<'a, 'b> {
     return SubCommand::with_name(name)
         .about(cmd.description())
         .arg(
-            Arg::with_name(REPO_URI_ARG)
-                .help(REPO_URI_DESCRIPTION)
+            Arg::with_name(REPO_FILE_ARG)
+                .help(REPO_FILE_DESCRIPTION)
                 .required(true)
-                .multiple(true)
         )
         .arg(
             Arg::with_name(REMOTE_ARG[0])
                 .help(REMOTE_ARG_DESCRIPTION)
                 .long(REMOTE_ARG[0])
                 .short(REMOTE_ARG[1])
+                .conflicts_with(LOCAL_ARG[0])
         )
         .arg(
             Arg::with_name(LOCAL_ARG[0])
                 .help(LOCAL_ARG_DESCRIPTION)
                 .long(LOCAL_ARG[0])
                 .short(LOCAL_ARG[1])
+                .conflicts_with(REMOTE_ARG[0])
         );
 }
 
@@ -319,6 +321,6 @@ pub fn run_command(name: &str, matches: &ArgMatches) {
         SplitOut => run_split_out(matches.subcommand_matches(name).unwrap()),
         SplitOutAs => run_split_out_as(matches.subcommand_matches(name).unwrap()),
         Topbase => run_topbase(matches.subcommand_matches(name).unwrap()),
-        CheckUpdates => (),
+        CheckUpdates => run_check_updates(matches.subcommand_matches(name).unwrap()),
     }
 }
