@@ -59,15 +59,23 @@ jobs:
         env:
           PROGRAM_PATH: mgt
       - name: e2e_test_splitout
-        run: bash -c "bats test/general"
+        run: bash -c "bats test/splitout"
+        env:
+          PROGRAM_PATH: mgt
+      - name: e2e_test_splitoutas
+        run: bash -c "bats test/splitoutas"
         env:
           PROGRAM_PATH: mgt
       - name: e2e_test_splitin
-        run: bash -c "bats test/general"
+        run: bash -c "bats test/splitin"
         env:
           PROGRAM_PATH: mgt
       - name: e2e_test_splitinas
-        run: bash -c "bats test/general"
+        run: bash -c "bats test/splitinas"
+        env:
+          PROGRAM_PATH: mgt
+      - name: e2e_test_topbase
+        run: bash -c "bats test/topbase"
         env:
           PROGRAM_PATH: mgt
       - name: upload_artifact
