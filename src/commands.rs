@@ -23,6 +23,8 @@ pub const TOPBASE_CMD_TOP: &'static str = "top";
 pub const TOPBASE_CMD_BASE: &'static str = "base";
 pub const LOCAL_ARG: [&'static str; 2] = ["local", "l"];
 pub const REMOTE_ARG: [&'static str; 2] = ["remote", "r"];
+pub const REMOTE_BRANCH_ARG: [&'static str; 2] = ["remote-branch", "b"];
+pub const LOCAL_BRANCH_ARG: &'static str = "local-branch";
 
 const SPLIT_IN_STR: &'static str = "split-in";
 const SPLIT_IN_AS_STR: &'static str = "split-in-as";
@@ -45,6 +47,8 @@ const TOPBASE_TOP_DESCRIPTION: &'static str = "the branch that will be rebased. 
 const TOPBASE_BASE_DESCRIPTION: &'static str = "the branch to rebase onto.";
 const LOCAL_ARG_DESCRIPTION: &'static str = "check if the local branch has commits not present in remote";
 const REMOTE_ARG_DESCRIPTION: &'static str = "check if the remote has commits not present in this local branch. This is the default";
+const REMOTE_BRANCH_ARG_DESCRIPTION: &'static str = "check updates to/from a specific remote branch instead of what's in the repo file";
+const LOCAL_BRANCH_ARG_DESCRIPTION: &'static str = "check updates to/from a specific local branch instead of the current HEAD";
 
 #[derive(Clone)]
 pub enum CommandName {
@@ -307,6 +311,19 @@ pub fn check_updates<'a, 'b>() ->App<'a, 'b> {
                 .long(LOCAL_ARG[0])
                 .short(LOCAL_ARG[1])
                 .conflicts_with(REMOTE_ARG[0])
+        )
+        .arg(
+            Arg::with_name(REMOTE_BRANCH_ARG[0])
+                .help(REMOTE_BRANCH_ARG_DESCRIPTION)
+                .long(REMOTE_BRANCH_ARG[0])
+                .short(REMOTE_BRANCH_ARG[1])
+                .takes_value(true)
+        )
+        .arg(
+            Arg::with_name(LOCAL_BRANCH_ARG)
+                .help(LOCAL_BRANCH_ARG_DESCRIPTION)
+                .long(LOCAL_BRANCH_ARG)
+                .takes_value(true)
         );
 }
 

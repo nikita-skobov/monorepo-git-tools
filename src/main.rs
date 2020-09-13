@@ -5,6 +5,7 @@ mod repo_file;
 mod split_out;
 mod split_in;
 mod topbase;
+mod check_updates;
 mod split;
 mod git_helpers;
 mod exec_helpers;
