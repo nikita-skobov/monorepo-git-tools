@@ -297,8 +297,16 @@ pub fn gen_include_as_arg_files_from_folder(
         // with the provided dest prefix, so strip the current prefix here
         let f_str = f.strip_prefix(&src).unwrap().to_str().unwrap();
 
+        // the replace here will prevent properly including
+        // any files that have a backslash in them. I think
+        // it would be too difficult to support such files for now.
+        // also this replacement will still work on windows because
+        // git-filter-repo actually expects the paths to have
+        // unix-like path separators
         let new_src = format!("{}{}", src_str, f_str);
+        let new_src = new_src.replace("\\", "/");
         let new_dest = format!("{}{}", dest, f_str);
+        let new_dest = new_dest.replace("\\", "/");
         // we only want to add unique paths, so
         // if we already added this one, dont add it again
         if unique_files.contains(&new_src) {
