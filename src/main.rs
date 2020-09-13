@@ -21,6 +21,7 @@ fn get_cli_input<'a>() -> ArgMatches<'a> {
         commands::split_out(),
         commands::split_out_as(),
         commands::topbase(),
+        commands::check_updates(),
     ]);
 
     return base_app.get_matches();
