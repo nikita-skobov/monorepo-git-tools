@@ -23,7 +23,7 @@ pub trait CheckUpdates {
 }
 
 impl<'a> CheckUpdates for Runner<'a> {
-    // check if current branch needs to get updates from upstream
+    // check if upstream branch needs to get updates from current
     fn check_updates(
         self,
         upstream_branch: &str,
@@ -125,21 +125,23 @@ pub fn topbase_check_alg<F>(
 // command, and fetch it appropriately. it will return the name of the upstream branch
 // and the name of the current branch to pass on to the actual check_updates method above
 fn setup_check_updates(runner: &Runner) -> (String, String) {
-    let mut is_remote = true;
+    // 'current' is the branch that potentially
+    // has the most recent updates
+    let mut current_is_remote = true;
     if runner.matches.is_present(LOCAL_ARG[0]) {
-        is_remote = false;
+        current_is_remote = false;
     }
-
-    let (current, upstream, upstream_is_remote) = match is_remote {
-        true => (get_local_branch(runner), get_remote_branch(runner), true),
-        false => (get_remote_branch(runner), get_local_branch(runner), false),
-    };
     // nice variable name... easier to read imo
-    let current_is_remote = ! upstream_is_remote;
+    let upstream_is_remote = ! current_is_remote;
+
+    let (current, upstream) = match current_is_remote {
+        true => (get_remote_branch(runner), get_local_branch(runner)),
+        false => (get_local_branch(runner), get_remote_branch(runner)),
+    };
 
     // whichever is the remote one will be in the format of <uri>?<ref>
     // so we need to know which to be able to split by :
-    println!("Checking if {} should get updates from {}", current, upstream);
+    println!("Checking if {} should get updates from {}", upstream, current);
 
     // probably want to have two modes eventually:
     // default is to fetch entire remote branch and then run the git diff-tree, and rev-list
