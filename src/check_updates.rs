@@ -13,29 +13,24 @@ use super::topbase::get_all_blobs_from_commit;
 use std::{collections::HashSet, path::PathBuf};
 
 pub trait CheckUpdates {
-    fn check_updates<F>(
+    fn check_updates(
         self,
         upstream_branch: &str,
         current_branch: &str,
         should_clean_fetch_head: bool,
         should_summarize: bool,
-        cb: F,
-    ) -> Self
-        where F: Fn(&git2::Commit);
+    ) -> Self;
 }
 
 impl<'a> CheckUpdates for Runner<'a> {
     // check if current branch needs to get updates from upstream
-    fn check_updates<F>(
+    fn check_updates(
         self,
         upstream_branch: &str,
         current_branch: &str,
         should_clean_fetch_head: bool,
         should_summarize: bool,
-        cb: F,
-    ) -> Self
-        where F: Fn(&git2::Commit)
-    {
+    ) -> Self {
         let repo = if let Some(ref r) = self.repo {
             r
         } else {
@@ -49,8 +44,6 @@ impl<'a> CheckUpdates for Runner<'a> {
         // println!("GOT ALL UPSTREAM BLOBS: {}", all_upstream_blobs.len());
         // println!("GOT ALL CURRENT COMMITS: {}", all_commits_of_current.len());
 
-        // we have our own callback that wraps the user's callback (if provided)
-        // our callback is to build a summary after we use whatever checking algorithm
         let mut commits_to_take = vec![];
         let mut commits_summaries = vec![];
         let mut summarize_cb = |c: &git2::Commit| {
@@ -58,7 +51,6 @@ impl<'a> CheckUpdates for Runner<'a> {
                 commits_to_take.push(c.id());
                 commits_summaries.push(c.summary().unwrap().to_string());
             }
-            cb(c);
         };
         // TODO: maybe have different algorithms for checking if theres updates?
         topbase_check_alg(all_commits_of_current, all_upstream_blobs, &mut summarize_cb);
@@ -265,5 +257,5 @@ pub fn run_check_updates(matches: &ArgMatches) {
 
     // have to call it with an empty callback...
     // idk how to make it an option, I get weird dyn errors
-    runner.check_updates(&upstream[..], &current[..], true, true, |_|{});
+    runner.check_updates(&upstream[..], &current[..], true, true);
 }
