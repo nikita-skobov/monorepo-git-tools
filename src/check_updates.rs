@@ -33,9 +33,59 @@ impl<'a> CheckUpdates for Runner<'a> {
 
         println!("Checking if {} should get updates from {}", current, upstream);
 
+        // probably want to have two modes eventually:
+        // default is to fetch entire remote branch and then run the git diff-tree, and rev-list
+        // to determine if theres updates
+        // but optionally it would be nice to do an iterative fetch where it just fetches
+        // one commit at a time via --deepen=1 (initially it needs to be --depth=1)
+        // and then checks the diff-tree on that commit.
 
+        let (remote, branch) = match upstream_is_remote {
+            true => get_branch_and_remote_from_str(upstream.as_str()),
+            false => get_branch_and_remote_from_str(current.as_str()),
+        };
+
+        println!("REMOTE AND BRANCH: {}, {}", remote, branch);
+        // fetch_branch(remote, branch);
 
         self
+    }
+}
+
+fn get_branch_and_remote_from_str(branch_and_remote: &str) -> (&str, &str) {
+    let len = branch_and_remote.len();
+    let mut last_question_index = len;
+    for c in branch_and_remote.chars().rev() {
+        if c == '?' {
+            break;
+        }
+        last_question_index -= 1;
+    }
+    let remote = branch_and_remote.get(0..last_question_index - 1);
+    let branch = branch_and_remote.get(last_question_index..len);
+    (remote.unwrap(), branch.unwrap())
+}
+
+pub fn fetch_branch(remote: &str, branch: &str) {
+    let args = [
+        "git", "fetch",
+        remote, branch,
+        "--no-tags",
+    ];
+
+    let err_msg = match exec_helpers::execute(&args) {
+        Err(e) => Some(format!("{}", e)),
+        Ok(o) => match o.status {
+            0 => {
+                println!("SUCCESS!");
+                println!("{}", o.stdout);
+                None
+            },
+            _ => Some(o.stderr),
+        },
+    };
+    if let Some(err) = err_msg {
+        panic!("Error fetching {} {}\n{}", remote, branch, err);
     }
 }
 

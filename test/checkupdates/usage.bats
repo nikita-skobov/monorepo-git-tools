@@ -98,4 +98,3 @@ function setup() {
     echo "$output"
     [[ "$output" == *"HEAD should get updates from ..$SEP$test_remote_repo2?HEAD"* ]]
 }
-
