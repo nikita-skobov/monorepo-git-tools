@@ -87,5 +87,5 @@ function setup() {
     run $PROGRAM_PATH check-updates repo_file.sh
     echo "$output"
     [[ $status == "0" ]]
-    [[ $output == "up to date" ]]
+    [[ $output == *"up to date"* ]]
 }
