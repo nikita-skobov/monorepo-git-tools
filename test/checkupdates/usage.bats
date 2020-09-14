@@ -61,12 +61,14 @@ function setup() {
 
     run $PROGRAM_PATH check-updates repo_file.sh
     echo "$output"
-    [[ "$output" == *"HEAD should get updates from ..$SEP$test_remote_repo2?somebranch"* ]]
+    [[ "$output" == *"Upstream: HEAD"* ]]
+    [[ "$output" == *"Current: ..$SEP$test_remote_repo2 somebranch"* ]]
 
     # if we specify --remote otherbranch, it should override the default
     run $PROGRAM_PATH check-updates repo_file.sh --remote -b other
     echo "$output"
-    [[ "$output" == *"HEAD should get updates from ..$SEP$test_remote_repo2?other"* ]]
+    [[ "$output" == *"Upstream: HEAD"* ]]
+    [[ "$output" == *"Current: ..$SEP$test_remote_repo2 other"* ]]
 }
 
 @test 'can optionally specify a local branch to check from/to' {
@@ -78,11 +80,13 @@ function setup() {
 
     run $PROGRAM_PATH check-updates repo_file.sh --local
     echo "$output"
-    [[ "$output" == *"..$SEP$test_remote_repo2?HEAD should get updates from HEAD"* ]]
+    [[ "$output" == *"Current: HEAD"* ]]
+    [[ "$output" == *"Upstream: ..$SEP$test_remote_repo2"* ]]
 
     run $PROGRAM_PATH check-updates repo_file.sh --local --local-branch other
     echo "$output"
-    [[ "$output" == *"..$SEP$test_remote_repo2?HEAD should get updates from other"* ]]
+    [[ "$output" == *"Current: other"* ]]
+    [[ "$output" == *"Upstream: ..$SEP$test_remote_repo2"* ]]
 }
 
 
@@ -96,5 +100,6 @@ function setup() {
 
     run $PROGRAM_PATH check-updates repo_file.sh
     echo "$output"
-    [[ "$output" == *"HEAD should get updates from ..$SEP$test_remote_repo2?HEAD"* ]]
+    [[ "$output" == *"Upstream: HEAD"* ]]
+    [[ "$output" == *"Current: ..$SEP$test_remote_repo2"* ]]
 }

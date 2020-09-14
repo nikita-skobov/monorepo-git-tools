@@ -83,7 +83,7 @@ pub fn summarize_updates(
     match commits_to_take.len() {
         0 => println!("You are up to date. Latest commit in upstream exists in current"),
         _ => {
-            println!("upstream has {} commits for us to take:", commits_to_take.len());
+            println!("upstream can take {} commit(s) from current:", commits_to_take.len());
             for i in 0..commits_to_take.len() {
                 let id = commits_to_take[i];
                 let summary = &commit_summaries[i];
@@ -150,7 +150,9 @@ fn setup_check_updates(runner: &Runner) -> (String, String) {
 
     // whichever is the remote one will be in the format of <uri>?<ref>
     // so we need to know which to be able to split by :
-    println!("Checking if {} should get updates from {}", upstream, current);
+    // checking if upstream should get updates from current
+    println!("Current: {}", get_formatted_remote_or_branch_str(&current, current_is_remote));
+    println!("Upstream: {}", get_formatted_remote_or_branch_str(&upstream, upstream_is_remote));
 
     // probably want to have two modes eventually:
     // default is to fetch entire remote branch and then run the git diff-tree, and rev-list
@@ -176,6 +178,20 @@ fn setup_check_updates(runner: &Runner) -> (String, String) {
     };
 
     (upstream_branch, current_branch)
+}
+
+fn get_formatted_remote_or_branch_str(branch_and_remote: &str, is_remote: bool) -> String {
+    match is_remote {
+        false => branch_and_remote.clone().to_string(),
+        true => {
+            let (remote, branch) = get_branch_and_remote_from_str(branch_and_remote);
+            if branch == "HEAD" {
+                remote.to_string()
+            } else {
+                [remote, branch].join(" ")
+            }
+        },
+    }
 }
 
 fn get_branch_and_remote_from_str(branch_and_remote: &str) -> (&str, &str) {
