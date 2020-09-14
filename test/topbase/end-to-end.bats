@@ -235,6 +235,44 @@ function teardown() {
     [[ $status == 0 ]]
 }
 
+@test 'can detect delete commits' {
+    git checkout -b top_branch
+    # make commits that would separate top_branch from master
+    echo "q" > q.txt && git add q.txt && git commit -m "_q"
+    echo "u" > u.txt && git add u.txt && git commit -m "_u"
+    echo "v" > v.txt && git add v.txt && git commit -m "_v"
+    # now make a commit that master will also have
+    # the topbase will detect this as the fork point
+    echo "a" > a.txt && git add a.txt && git commit -m "_a"
+    # make the commit(s) that will actually be rebased:
+    rm a.txt && git add a.txt && git commit -m "DEL_A"
+
+    git checkout master
+    echo "a" > a.txt && git add a.txt && git commit -m "_a"
+    # simulate master already having that delete:
+    rm a.txt && git add a.txt && git commit -m "MASTER_REM_A"
+
+    git checkout top_branch
+    git_log_before_topbase="$(git log --oneline)"
+    # topbase current branch onto master
+    run mgt topbase master
+    git_log_after_topbase="$(git log --oneline)"
+    echo "$output"
+    echo "git log before:"
+    echo "$git_log_before_topbase"
+    echo "git log after:"
+    echo "$git_log_after_topbase"
+    current_branch="$(git branch --show-current)"
+    [[ "$current_branch" == "top_branch" ]]
+    [[ "$git_log_after_topbase" != "$git_log_before_topbase" ]]
+    [[ $status == 0 ]]
+    [[ "$git_log_after_topbase" == *"_a"* ]]
+    [[ "$git_log_after_topbase" != *"DEL_A"* ]]
+    # because topbase calculates the fork point differently, anything prior to the most recent
+    # common blob (commit _a) will not be included
+    [[ "$git_log_after_topbase" != *"_q"* ]]
+}
+
 # TODO:
 # add test that a dry-run will output steps that,
 # if evaluated, will leave the user in exactly the same
