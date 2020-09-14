@@ -89,3 +89,31 @@ function setup() {
     [[ $status == "0" ]]
     [[ $output == *"up to date"* ]]
 }
+
+@test 'should report an update is necessary if theres one ahead' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    # this will be the common point
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    # this will be the one ahead that should be reported
+    echo "xyz" > abc.txt && git add abc.txt && git commit -m "xyz"
+    echo "REMOTE:"
+    echo "$(git log --oneline)"
+    commit_to_take="$(git log --oneline -n 1)"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    "
+    echo "$repo_file_contents" > repo_file.sh
+    # simulate a point that is 'even' with the remote
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "LOCAL:"
+    echo "$(git log --oneline)"
+
+
+    run $PROGRAM_PATH check-updates repo_file.sh
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ $output == *"$commit_to_take"* ]]
+}
