@@ -8,6 +8,7 @@ use super::commands::LOCAL_ARG;
 use super::commands::REMOTE_ARG;
 use super::commands::REMOTE_BRANCH_ARG;
 use super::commands::LOCAL_BRANCH_ARG;
+use std::path::PathBuf;
 
 pub trait CheckUpdates {
     fn check_updates(self) -> Self;
@@ -46,7 +47,16 @@ impl<'a> CheckUpdates for Runner<'a> {
         };
 
         println!("REMOTE AND BRANCH: {}, {}", remote, branch);
-        // fetch_branch(remote, branch);
+        fetch_branch(remote, branch);
+
+        // TODO
+        // match clean_fetch(&self.repo_root_dir) {
+        //     Ok(tf) => {
+        //         println!("Succesfully deleted FETCH_HEAD");
+        //         println!("git prune successful? {}", tf);
+        //     },
+        //     Err(e) => panic!("Failed to delete FETCH_HEAD:\n{}", e),
+        // };
 
         self
     }
@@ -76,17 +86,30 @@ pub fn fetch_branch(remote: &str, branch: &str) {
     let err_msg = match exec_helpers::execute(&args) {
         Err(e) => Some(format!("{}", e)),
         Ok(o) => match o.status {
-            0 => {
-                println!("SUCCESS!");
-                println!("{}", o.stdout);
-                None
-            },
+            0 => None,
             _ => Some(o.stderr),
         },
     };
     if let Some(err) = err_msg {
         panic!("Error fetching {} {}\n{}", remote, branch, err);
     }
+}
+
+// delete FETCH_HEAD and gc
+pub fn clean_fetch(path_to_repo_root: &PathBuf) -> std::io::Result<bool> {
+    let mut fetch_head = PathBuf::from(path_to_repo_root);
+    fetch_head.push(".git");
+    fetch_head.push("FETCH_HEAD");
+
+    if fetch_head.exists() {
+        // unwrap and exit... no point in trying
+        // to prune if this fails right?
+        // git prune will not prune otherwise right?
+        std::fs::remove_file(fetch_head)?;
+        return Ok(exec_helpers::executed_successfully(&["git", "prune"]));
+    }
+
+    Ok(true)
 }
 
 fn get_local_branch(runner: &Runner) -> String {
