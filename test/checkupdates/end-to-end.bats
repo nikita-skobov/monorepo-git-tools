@@ -66,3 +66,26 @@ function setup() {
     # [[ $size_git_before == $size_git_after ]]
     # [[ ! -f .git/FETCH_HEAD ]]
 # }
+
+@test 'should report up to date if latest blob of both is the same' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "REMOTE:"
+    echo "$(git log --oneline)"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    "
+    echo "$repo_file_contents" > repo_file.sh
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "LOCAL:"
+    echo "$(git log --oneline)"
+
+
+    run $PROGRAM_PATH check-updates repo_file.sh
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ $output == "up to date" ]]
+}
