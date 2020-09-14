@@ -1,6 +1,7 @@
 use clap::ArgMatches;
 
 use super::git_helpers;
+use super::git_helpers::Short;
 use super::exec_helpers;
 use super::split::Runner;
 use super::split;
@@ -45,28 +46,19 @@ impl<'a> CheckUpdates for Runner<'a> {
         // println!("GOT ALL CURRENT COMMITS: {}", all_commits_of_current.len());
 
         let mut commits_to_take = vec![];
-        let mut commits_summaries = vec![];
+        let mut commit_summaries = vec![];
         let mut summarize_cb = |c: &git2::Commit| {
             if should_summarize {
                 commits_to_take.push(c.id());
-                commits_summaries.push(c.summary().unwrap().to_string());
+                commit_summaries.push(c.summary().unwrap().to_string());
             }
         };
+
         // TODO: maybe have different algorithms for checking if theres updates?
         topbase_check_alg(all_commits_of_current, all_upstream_blobs, &mut summarize_cb);
 
         if should_summarize {
-            match commits_to_take.len() {
-                0 => println!("You are up to date. Latest commit in upstream exists in current"),
-                _ => {
-                    println!("upstream has {} commits for us to take:", commits_to_take.len());
-                    for i in 0..commits_to_take.len() {
-                        let id = commits_to_take[i];
-                        let summary = &commits_summaries[i];
-                        println!("{} {}", id, summary);
-                    }
-                }
-            }
+            summarize_updates(commits_to_take, commit_summaries);
         }
 
         if should_clean_fetch_head {
@@ -81,6 +73,23 @@ impl<'a> CheckUpdates for Runner<'a> {
         }
 
         self
+    }
+}
+
+pub fn summarize_updates(
+    commits_to_take: Vec<git2::Oid>,
+    commit_summaries: Vec<String>,
+) {
+    match commits_to_take.len() {
+        0 => println!("You are up to date. Latest commit in upstream exists in current"),
+        _ => {
+            println!("upstream has {} commits for us to take:", commits_to_take.len());
+            for i in 0..commits_to_take.len() {
+                let id = commits_to_take[i];
+                let summary = &commit_summaries[i];
+                println!("{} {}", id.short(), summary);
+            }
+        }
     }
 }
 
