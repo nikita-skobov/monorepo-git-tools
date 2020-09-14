@@ -18,6 +18,7 @@ pub trait CheckUpdates {
         upstream_branch: &str,
         current_branch: &str,
         should_clean_fetch_head: bool,
+        should_summarize: bool,
         cb: F,
     ) -> Self
         where F: Fn(&git2::Commit);
@@ -30,6 +31,7 @@ impl<'a> CheckUpdates for Runner<'a> {
         upstream_branch: &str,
         current_branch: &str,
         should_clean_fetch_head: bool,
+        should_summarize: bool,
         cb: F,
     ) -> Self
         where F: Fn(&git2::Commit)
@@ -44,37 +46,36 @@ impl<'a> CheckUpdates for Runner<'a> {
             Ok(v) => v,
             Err(e) => panic!("Failed to get all commits! {}", e),
         };
-        println!("GOT ALL UPSTREAM BLOBS: {}", all_upstream_blobs.len());
-        println!("GOT ALL CURRENT COMMITS: {}", all_commits_of_current.len());
+        // println!("GOT ALL UPSTREAM BLOBS: {}", all_upstream_blobs.len());
+        // println!("GOT ALL CURRENT COMMITS: {}", all_commits_of_current.len());
 
-        // for every commit in the current branch (the branch going to be rebased)
-        // check if every single blob of every commit exists in the upstream branch.
-        // as soon as we a commit of this current branch that has all of its blobs
-        // exists in upstream, then we break, and run out interactive rebase that we
-        // are building
-        for c in all_commits_of_current {
-            // I think we want to skip merge commits, because thats what git rebase
-            // interactive does by default. also, is it safe to assume
-            // any commit with > 1 parent is a merge commit?
-            if c.parent_count() > 1 {
-                continue;
+        // we have our own callback that wraps the user's callback (if provided)
+        // our callback is to build a summary after we use whatever checking algorithm
+        let mut commits_to_take = vec![];
+        let mut commits_summaries = vec![];
+        let mut summarize_cb = |c: &git2::Commit| {
+            if should_summarize {
+                commits_to_take.push(c.id());
+                commits_summaries.push(c.summary().unwrap().to_string());
             }
+            cb(c);
+        };
+        // TODO: maybe have different algorithms for checking if theres updates?
+        topbase_check_alg(all_commits_of_current, all_upstream_blobs, &mut summarize_cb);
 
-            let mut current_commit_blobs = HashSet::new();
-            get_all_blobs_from_commit(&c.id().to_string()[..], &mut current_commit_blobs);
-            let mut all_blobs_exist = true;
-            for b in current_commit_blobs {
-                if ! all_upstream_blobs.contains(&b) {
-                    all_blobs_exist = false;
-                    break;
+        if should_summarize {
+            match commits_to_take.len() {
+                0 => println!("You are up to date. Latest commit in upstream exists in current"),
+                _ => {
+                    println!("upstream has {} commits for us to take:", commits_to_take.len());
+                    for i in 0..commits_to_take.len() {
+                        let id = commits_to_take[i];
+                        let summary = &commits_summaries[i];
+                        println!("{} {}", id, summary);
+                    }
                 }
             }
-            if all_blobs_exist {
-                break;
-            }
-            cb(&c);
         }
-        // drop(all_commits_of_current);
 
         if should_clean_fetch_head {
             // TODO
@@ -88,6 +89,41 @@ impl<'a> CheckUpdates for Runner<'a> {
         }
 
         self
+    }
+}
+
+pub fn topbase_check_alg<F>(
+    all_commits_of_current: Vec<git2::Commit>,
+    all_upstream_blobs: HashSet<String>,
+    cb: &mut F
+)
+    where F: FnMut(&git2::Commit)
+{
+    // for every commit in the current branch
+    // check if every single blob of every commit exists in the upstream branch.
+    // as soon as we a commit of this current branch that has all of its blobs
+    // exists in upstream, then we break
+    for c in all_commits_of_current {
+        // I think we want to skip merge commits, because thats what git rebase
+        // interactive does by default. also, is it safe to assume
+        // any commit with > 1 parent is a merge commit?
+        if c.parent_count() > 1 {
+            continue;
+        }
+
+        let mut current_commit_blobs = HashSet::new();
+        get_all_blobs_from_commit(&c.id().to_string()[..], &mut current_commit_blobs);
+        let mut all_blobs_exist = true;
+        for b in current_commit_blobs {
+            if ! all_upstream_blobs.contains(&b) {
+                all_blobs_exist = false;
+                break;
+            }
+        }
+        if all_blobs_exist {
+            break;
+        }
+        cb(&c);
     }
 }
 
@@ -124,7 +160,7 @@ fn setup_check_updates(runner: &Runner) -> (String, String) {
         false => get_branch_and_remote_from_str(current.as_str()),
     };
 
-    println!("REMOTE AND BRANCH: {}, {}", remote, branch);
+    // println!("REMOTE AND BRANCH: {}, {}", remote, branch);
     fetch_branch(remote, branch);
 
     let upstream_branch = match upstream_is_remote {
@@ -229,5 +265,5 @@ pub fn run_check_updates(matches: &ArgMatches) {
 
     // have to call it with an empty callback...
     // idk how to make it an option, I get weird dyn errors
-    runner.check_updates(&upstream[..], &current[..], true, |_|{});
+    runner.check_updates(&upstream[..], &current[..], true, true, |_|{});
 }
