@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use super::git_helpers;
 use super::exec_helpers;
 use super::split::Runner;
+use super::check_updates::topbase_check_alg;
 use super::commands::TOPBASE_CMD_BASE;
 use super::commands::TOPBASE_CMD_TOP;
 use super::commands::VERBOSE_ARG;
@@ -53,35 +54,12 @@ impl<'a> Topbase for Runner<'a> {
         let num_commits_of_current = all_commits_of_current.len();
         let mut num_commits_to_take = 0;
         let mut rebase_data = vec![];
-        // for every commit in the current branch (the branch going to be rebased)
-        // check if every single blob of every commit exists in the upstream branch.
-        // as soon as we a commit of this current branch that has all of its blobs
-        // exists in upstream, then we break, and run out interactive rebase that we
-        // are building
-        for c in all_commits_of_current {
-            // I think we want to skip merge commits, because thats what git rebase
-            // interactive does by default. also, is it safe to assume
-            // any commit with > 1 parent is a merge commit?
-            if c.parent_count() > 1 {
-                continue;
-            }
-
-            let mut current_commit_blobs = HashSet::new();
-            get_all_blobs_from_commit(&c.id().to_string()[..], &mut current_commit_blobs);
-            let mut all_blobs_exist = true;
-            for b in current_commit_blobs {
-                if ! all_upstream_blobs.contains(&b) {
-                    all_blobs_exist = false;
-                    break;
-                }
-            }
-            if all_blobs_exist {
-                break;
-            }
+        let mut cb = |c: &git2::Commit| {
             num_commits_to_take += 1;
             let rebase_interactive_entry = format!("pick {} {}\n", c.id(), c.summary().unwrap());
             rebase_data.push(rebase_interactive_entry);
-        }
+        };
+        topbase_check_alg(all_commits_of_current, all_upstream_blobs, &mut cb);
 
         // need to reverse it because git rebase interactive
         // takes commits in order of oldest to newest, but
