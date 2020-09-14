@@ -8,58 +8,135 @@ use super::commands::LOCAL_ARG;
 use super::commands::REMOTE_ARG;
 use super::commands::REMOTE_BRANCH_ARG;
 use super::commands::LOCAL_BRANCH_ARG;
-use std::path::PathBuf;
+use super::topbase::get_all_blobs_in_branch;
+use super::topbase::get_all_blobs_from_commit;
+use std::{collections::HashSet, path::PathBuf};
 
 pub trait CheckUpdates {
-    fn check_updates(self) -> Self;
+    fn check_updates<F>(
+        self,
+        upstream_branch: &str,
+        current_branch: &str,
+        should_clean_fetch_head: bool,
+        cb: F,
+    ) -> Self
+        where F: Fn(&git2::Commit);
 }
 
 impl<'a> CheckUpdates for Runner<'a> {
     // check if current branch needs to get updates from upstream
-    fn check_updates(self) -> Self {
-        let mut is_remote = true;
-        if self.matches.is_present(LOCAL_ARG[0]) {
-            is_remote = false;
+    fn check_updates<F>(
+        self,
+        upstream_branch: &str,
+        current_branch: &str,
+        should_clean_fetch_head: bool,
+        cb: F,
+    ) -> Self
+        where F: Fn(&git2::Commit)
+    {
+        let repo = if let Some(ref r) = self.repo {
+            r
+        } else {
+            panic!("Failed to get repo");
+        };
+        let all_upstream_blobs = get_all_blobs_in_branch(upstream_branch);
+        let all_commits_of_current = match git_helpers::get_all_commits_from_ref(repo, current_branch) {
+            Ok(v) => v,
+            Err(e) => panic!("Failed to get all commits! {}", e),
+        };
+        println!("GOT ALL UPSTREAM BLOBS: {}", all_upstream_blobs.len());
+        println!("GOT ALL CURRENT COMMITS: {}", all_commits_of_current.len());
+
+        // for every commit in the current branch (the branch going to be rebased)
+        // check if every single blob of every commit exists in the upstream branch.
+        // as soon as we a commit of this current branch that has all of its blobs
+        // exists in upstream, then we break, and run out interactive rebase that we
+        // are building
+        for c in all_commits_of_current {
+            // I think we want to skip merge commits, because thats what git rebase
+            // interactive does by default. also, is it safe to assume
+            // any commit with > 1 parent is a merge commit?
+            if c.parent_count() > 1 {
+                continue;
+            }
+
+            let mut current_commit_blobs = HashSet::new();
+            get_all_blobs_from_commit(&c.id().to_string()[..], &mut current_commit_blobs);
+            let mut all_blobs_exist = true;
+            for b in current_commit_blobs {
+                if ! all_upstream_blobs.contains(&b) {
+                    all_blobs_exist = false;
+                    break;
+                }
+            }
+            if all_blobs_exist {
+                break;
+            }
+            cb(&c);
         }
+        // drop(all_commits_of_current);
 
-        let (current, upstream, upstream_is_remote) = match is_remote {
-            true => (get_local_branch(&self), get_remote_branch(&self), true),
-            false => (get_remote_branch(&self), get_local_branch(&self), false),
-        };
-        // nice variable name... easier to read imo
-        let current_is_remote = ! upstream_is_remote;
-
-        // whichever is the remote one will be in the format of <uri>?<ref>
-        // so we need to know which to be able to split by :
-
-        println!("Checking if {} should get updates from {}", current, upstream);
-
-        // probably want to have two modes eventually:
-        // default is to fetch entire remote branch and then run the git diff-tree, and rev-list
-        // to determine if theres updates
-        // but optionally it would be nice to do an iterative fetch where it just fetches
-        // one commit at a time via --deepen=1 (initially it needs to be --depth=1)
-        // and then checks the diff-tree on that commit.
-
-        let (remote, branch) = match upstream_is_remote {
-            true => get_branch_and_remote_from_str(upstream.as_str()),
-            false => get_branch_and_remote_from_str(current.as_str()),
-        };
-
-        println!("REMOTE AND BRANCH: {}, {}", remote, branch);
-        fetch_branch(remote, branch);
-
-        // TODO
-        // match clean_fetch(&self.repo_root_dir) {
-        //     Ok(tf) => {
-        //         println!("Succesfully deleted FETCH_HEAD");
-        //         println!("git prune successful? {}", tf);
-        //     },
-        //     Err(e) => panic!("Failed to delete FETCH_HEAD:\n{}", e),
-        // };
+        if should_clean_fetch_head {
+            // TODO
+            // match clean_fetch(&self.repo_root_dir) {
+            //     Ok(tf) => {
+            //         println!("Succesfully deleted FETCH_HEAD");
+            //         println!("git prune successful? {}", tf);
+            //     },
+            //     Err(e) => panic!("Failed to delete FETCH_HEAD:\n{}", e),
+            // };
+        }
 
         self
     }
+}
+
+// the above check_updated method will do the checking, and is useful
+// for other commands that already have the branch names, and data fetched
+// this method will get the information it needs specifically for the check-updates
+// command, and fetch it appropriately. it will return the name of the upstream branch
+// and the name of the current branch to pass on to the actual check_updates method above
+fn setup_check_updates(runner: &Runner) -> (String, String) {
+    let mut is_remote = true;
+    if runner.matches.is_present(LOCAL_ARG[0]) {
+        is_remote = false;
+    }
+
+    let (current, upstream, upstream_is_remote) = match is_remote {
+        true => (get_local_branch(runner), get_remote_branch(runner), true),
+        false => (get_remote_branch(runner), get_local_branch(runner), false),
+    };
+    // nice variable name... easier to read imo
+    let current_is_remote = ! upstream_is_remote;
+
+    // whichever is the remote one will be in the format of <uri>?<ref>
+    // so we need to know which to be able to split by :
+    println!("Checking if {} should get updates from {}", current, upstream);
+
+    // probably want to have two modes eventually:
+    // default is to fetch entire remote branch and then run the git diff-tree, and rev-list
+    // to determine if theres updates
+    // but optionally it would be nice to do an iterative fetch where it just fetches
+    // one commit at a time via --deepen=1 (initially it needs to be --depth=1)
+    // and then checks the diff-tree on that commit.
+    let (remote, branch) = match upstream_is_remote {
+        true => get_branch_and_remote_from_str(upstream.as_str()),
+        false => get_branch_and_remote_from_str(current.as_str()),
+    };
+
+    println!("REMOTE AND BRANCH: {}, {}", remote, branch);
+    fetch_branch(remote, branch);
+
+    let upstream_branch = match upstream_is_remote {
+        true => "FETCH_HEAD".to_string(),
+        false => upstream,
+    };
+    let current_branch = match current_is_remote {
+        true => "FETCH_HEAD".to_string(),
+        false => current,
+    };
+
+    (upstream_branch, current_branch)
 }
 
 fn get_branch_and_remote_from_str(branch_and_remote: &str) -> (&str, &str) {
@@ -144,8 +221,13 @@ fn get_remote_branch(runner: &Runner) -> String {
 
 pub fn run_check_updates(matches: &ArgMatches) {
     let runner = Runner::new(matches);
-    runner.save_current_dir()
+    let runner = runner.save_current_dir()
         .get_repository_from_current_dir()
-        .get_repo_file()
-        .check_updates();
+        .get_repo_file();
+
+    let (upstream, current) = setup_check_updates(&runner);
+
+    // have to call it with an empty callback...
+    // idk how to make it an option, I get weird dyn errors
+    runner.check_updates(&upstream[..], &current[..], true, |_|{});
 }
