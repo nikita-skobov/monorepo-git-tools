@@ -188,13 +188,12 @@ pub fn get_all_blobs_from_commit(
     commit_id: &str,
     blob_set: &mut HashSet<String>,
 ) {
-    // the diff filter is VERY important... A (added), M (modified), C (copied)
-    // theres a few more like D (deleted), but I don't think we want the D because
-    // *I think* we only care about blobs that EXIST at a given point in time...
-    // maybe this might change later
+    // the diff filter is VERY important...
+    // A (added), M (modified), C (copied), D (deleted)
+    // theres a few more..
     let args = [
         "git", "diff-tree", commit_id, "-r", "--root",
-        "--diff-filter=AMC", "--pretty=oneline"
+        "--diff-filter=AMCD", "--pretty=oneline"
     ];
     match exec_helpers::execute(&args) {
         Err(e) => panic!("Failed to get blobs from commit {} : {}", commit_id, e),
@@ -216,11 +215,17 @@ pub fn get_all_blobs_from_commit(
                 ) = (items[0], items[1], items[2], items[3], items[4]);
                 // now blob_prev will be all zeros if diff_type is A
                 // however, for other diff_types, it will be a valid blob.
-                // it is my assumption that we don't need it because
-                // it probably exists in one of the other commits as a blob_next.
-                // maybe this will need to change, but for now, I think it is
-                // sufficient to just get the blob_next
-                blob_set.insert(blob_next.into());
+
+                let blob_prev_not_all_zeroes = ! blob_prev.chars().all(|c| c == '0');
+                let blob_next_all_zeroes = blob_next.chars().all(|c| c == '0');
+                let is_delete_blob = blob_prev_not_all_zeroes && blob_next_all_zeroes;
+                if is_delete_blob {
+                    // in this case, we want to add the blob_prev
+                    blob_set.insert(blob_prev.into());
+                } else {
+                    // otherwhise only add blob next
+                    blob_set.insert(blob_next.into());
+                }
             }
         }
     };
