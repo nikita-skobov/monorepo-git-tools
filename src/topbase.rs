@@ -182,12 +182,37 @@ impl<'a> Topbase for Runner<'a> {
     }
 }
 
+pub enum BlobCheckValue {
+    TakeNext,
+    TakePrev,
+}
+use BlobCheckValue::*;
+pub struct BlobCheck<'a> {
+    mode_prev: &'a str,
+    mode_next: &'a str,
+    blob_prev: &'a str,
+    blob_next: &'a str,
+    path: String,
+}
+
+impl<'a> BlobCheck<'a> {
+    fn is_delete_blob(&self) -> bool {
+        let blob_prev_not_all_zeroes = ! self.blob_prev.chars().all(|c| c == '0');
+        let blob_next_all_zeroes = self.blob_next.chars().all(|c| c == '0');
+        blob_next_all_zeroes && blob_prev_not_all_zeroes
+    }
+}
+
 // run a git diff-tree on the commit id, and parse the output
-// and insert every blob id into the provided blob hash set
-pub fn get_all_blobs_from_commit(
+// and for every blob, if callback returns true,
+// insert that blob id into the provided blob hash set
+pub fn get_all_blobs_from_commit_with_callback<'a, F>(
     commit_id: &str,
     blob_set: &mut HashSet<String>,
-) {
+    should_insert: F,
+)
+    where F: Fn(&BlobCheck) -> Option<BlobCheckValue>
+{
     // the diff filter is VERY important...
     // A (added), M (modified), C (copied), D (deleted)
     // theres a few more..
@@ -207,28 +232,45 @@ pub fn get_all_blobs_from_commit(
                 // there are technically 6 items from this output:
                 // the last item (items[5]) is a path to the file that this blob
                 // is for (and the array could have more than 6 if file names
-                // have spaces in them). But we only care about the first 5:
+                // have spaces in them)
                 let (
                     mode_prev, mode_next,
                     blob_prev, blob_next,
                     diff_type
                 ) = (items[0], items[1], items[2], items[3], items[4]);
-                // now blob_prev will be all zeros if diff_type is A
-                // however, for other diff_types, it will be a valid blob.
-
-                let blob_prev_not_all_zeroes = ! blob_prev.chars().all(|c| c == '0');
-                let blob_next_all_zeroes = blob_next.chars().all(|c| c == '0');
-                let is_delete_blob = blob_prev_not_all_zeroes && blob_next_all_zeroes;
-                if is_delete_blob {
-                    // in this case, we want to add the blob_prev
-                    blob_set.insert(blob_prev.into());
-                } else {
-                    // otherwhise only add blob next
-                    blob_set.insert(blob_next.into());
+                // the path of this blob starts at index 5, but we combine the rest
+                // in case there are spaces
+                let blob_path = items[5..items.len()].join(" ");
+                let blob_check = BlobCheck {
+                    mode_prev,
+                    mode_next,
+                    blob_prev,
+                    blob_next,
+                    path: blob_path,
+                };
+                if let Some(blob_take_value) = should_insert(&blob_check) {
+                    match blob_take_value {
+                        TakeNext => blob_set.insert(blob_next.into()),
+                        TakePrev => blob_set.insert(blob_prev.into()),
+                    };
                 }
             }
         }
     };
+}
+
+pub fn get_all_blobs_from_commit<'a>(
+    commit_id: &str,
+    blob_set: &mut HashSet<String>,
+) {
+    get_all_blobs_from_commit_with_callback(
+        commit_id,
+        blob_set,
+        |blob_check| match blob_check.is_delete_blob() {
+            true => Some(TakePrev),
+            false => Some(TakeNext),
+        },
+    );
 }
 
 // perform a rev-list of the branch name to get a list of all commits
