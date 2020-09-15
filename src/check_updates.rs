@@ -22,6 +22,7 @@ pub trait CheckUpdates {
         self,
         upstream_branch: &str,
         current_branch: &str,
+        current_is_remote: bool,
         should_clean_fetch_head: bool,
         should_summarize: bool,
     ) -> Self;
@@ -33,6 +34,7 @@ impl<'a> CheckUpdates for Runner<'a> {
         self,
         upstream_branch: &str,
         current_branch: &str,
+        current_is_remote: bool,
         should_clean_fetch_head: bool,
         should_summarize: bool,
     ) -> Self {
@@ -58,7 +60,7 @@ impl<'a> CheckUpdates for Runner<'a> {
             }
         };
         let should_take_blob_cb = |c: &BlobCheck| {
-            if ! blob_path_applies_to_repo_file(&c.path, &self.repo_file) {
+            if ! blob_path_applies_to_repo_file(&c.path, &self.repo_file, current_is_remote) {
                 let blob_check_none: Option<BlobCheckValue> = None;
                 return blob_check_none;
             }
@@ -71,6 +73,7 @@ impl<'a> CheckUpdates for Runner<'a> {
             all_upstream_blobs,
             &mut summarize_cb,
             Some(&should_take_blob_cb),
+            true,
         );
 
         if should_summarize {
@@ -111,7 +114,11 @@ pub fn summarize_updates(
 
 // evaluate the include/exclude rules of the repo file
 // to see if the blob path is relevant to these rules
-pub fn blob_path_applies_to_repo_file(blob_path: &String, repo_file: &RepoFile) -> bool {
+pub fn blob_path_applies_to_repo_file(
+    blob_path: &String,
+    repo_file: &RepoFile,
+    is_remote: bool,
+) -> bool {
     let mut blob_matches_include = false;
     let empty_vec = vec![];
     let include_vec = match &repo_file.include {
@@ -127,10 +134,16 @@ pub fn blob_path_applies_to_repo_file(blob_path: &String, repo_file: &RepoFile) 
         None => &empty_vec,
     };
 
+    let skip_by = if is_remote { 1 } else { 0 };
+    let mut paths_to_include = include_vec.clone();
+    for p in include_as_vec.iter().skip(skip_by).step_by(2) {
+        paths_to_include.push(p.clone());
+    }
+    // paths_to_include
     // try to see if it matches any of the include/include_as
-    for i in include_vec {
-        println!("DOES I:{} MATCH BLOB:{}", i, blob_path);
-        if i == blob_path {
+    for i in paths_to_include.iter() {
+        // remember a single empty space means take anything here
+        if i == " " || blob_path.starts_with(i) {
             blob_matches_include = true;
             break;
         }
@@ -139,14 +152,12 @@ pub fn blob_path_applies_to_repo_file(blob_path: &String, repo_file: &RepoFile) 
     // if it matches include, make sure it doesnt match the exclude
     if blob_matches_include {
         for e in exclude_vec {
-            if e == blob_path {
+            if blob_path.starts_with(e) {
                 return false;
             }
         }
         return true;
     }
-
-    println!("");
 
     false
 }
@@ -159,6 +170,10 @@ pub fn topbase_check_alg_with_callback<F>(
     all_upstream_blobs: HashSet<String>,
     cb: &mut F,
     should_take_blob: Option<&dyn Fn(&BlobCheck) -> Option<BlobCheckValue>>,
+    // this value is here because if we have filtered out all the blobs
+    // in the above should_take_blob callback, then we want to skip this commit
+    // and not consider it...
+    should_skip_if_no_blobs: bool,
 )
     where F: FnMut(&git2::Commit)
 {
@@ -181,12 +196,20 @@ pub fn topbase_check_alg_with_callback<F>(
             should_take_blob,
         );
         let mut all_blobs_exist = true;
+        let num_blobs_in_current_commit = current_commit_blobs.len();
         for b in current_commit_blobs {
             if ! all_upstream_blobs.contains(&b) {
                 all_blobs_exist = false;
                 break;
             }
         }
+        // println!("all blobs exist in this comit? {}", all_blobs_exist);
+        // println!("num blobs in this commit? {}", num_blobs_in_current_commit);
+
+        if num_blobs_in_current_commit == 0 && should_skip_if_no_blobs {
+            continue;
+        }
+
         if all_blobs_exist {
             break;
         }
@@ -207,6 +230,7 @@ pub fn topbase_check_alg<F>(
         all_upstream_blobs,
         cb,
         None,
+        false,
     );
 }
 
@@ -215,7 +239,7 @@ pub fn topbase_check_alg<F>(
 // this method will get the information it needs specifically for the check-updates
 // command, and fetch it appropriately. it will return the name of the upstream branch
 // and the name of the current branch to pass on to the actual check_updates method above
-fn setup_check_updates(runner: &Runner) -> (String, String) {
+fn setup_check_updates(runner: &Runner) -> (String, String, bool) {
     // 'current' is the branch that potentially
     // has the most recent updates
     let mut current_is_remote = true;
@@ -259,7 +283,7 @@ fn setup_check_updates(runner: &Runner) -> (String, String) {
         false => current,
     };
 
-    (upstream_branch, current_branch)
+    (upstream_branch, current_branch, current_is_remote)
 }
 
 fn get_formatted_remote_or_branch_str(branch_and_remote: &str, is_remote: bool) -> String {
@@ -362,9 +386,9 @@ pub fn run_check_updates(matches: &ArgMatches) {
         .get_repository_from_current_dir()
         .get_repo_file();
 
-    let (upstream, current) = setup_check_updates(&runner);
+    let (upstream, current, current_is_remote) = setup_check_updates(&runner);
 
     // have to call it with an empty callback...
     // idk how to make it an option, I get weird dyn errors
-    runner.check_updates(&upstream[..], &current[..], true, true);
+    runner.check_updates(&upstream[..], &current[..], current_is_remote, true, true);
 }
