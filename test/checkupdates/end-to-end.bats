@@ -77,7 +77,7 @@ function setup() {
 
     repo_file_contents="
     remote_repo=\"..$SEP$test_remote_repo2\"
-    include=\"abx.txt\"
+    include=\"abc.txt\"
     "
     echo "$repo_file_contents" > repo_file.sh
     echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
@@ -120,7 +120,7 @@ function setup() {
     [[ $output == *"$commit_to_take"* ]]
 }
 
-@test 'should NOT report update if upstream blob isnt part of the repo_file rules' {
+@test 'should NOT report update if upstream blob isnt part of the include' {
     curr_dir="$PWD"
     cd "$BATS_TMPDIR/test_remote_repo2"
     echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
@@ -139,6 +139,67 @@ function setup() {
     "
     echo "$repo_file_contents" > repo_file.sh
     # simulate a point that is 'even' with the remote
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "LOCAL:"
+    echo "$(git log --oneline)"
+
+
+    run $PROGRAM_PATH check-updates repo_file.sh
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ $output == *"up to date"* ]]
+}
+
+@test 'should NOT report update if upstream blob isnt part of the include_as' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    echo "abc" > abcd.txt && git add abcd.txt && git commit -m "abcd"
+    echo "xy z" > "xy z.txt" && git add "xy z.txt" && git commit -m "xy z"
+    echo "REMOTE:"
+    echo "$(git log --oneline)"
+    commit_to_take="$(git log --oneline -n 1)"
+    cd "$curr_dir"
+
+    # we only care about abcd.txt <-> abc.txt
+    # the fact that remote has xyz.txt should be irrelevant
+    # to this check-updates
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include_as=(
+        \"abc.txt\" \"abcd.txt\"
+    )
+    "
+    echo "$repo_file_contents" > repo_file.sh
+    # simulate a point that is 'even' with the remote
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "LOCAL:"
+    echo "$(git log --oneline)"
+
+
+    run $PROGRAM_PATH check-updates repo_file.sh
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ $output == *"up to date"* ]]
+}
+
+@test 'should NOT report update if upstream blob is excluded' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    echo "abc" > abcd.txt && git add abcd.txt && git commit -m "abcd"
+    echo "xy z" > "xy z.txt" && git add "xy z.txt" && git commit -m "xy z"
+    echo "REMOTE:"
+    echo "$(git log --oneline)"
+    commit_to_take="$(git log --oneline -n 1)"
+    cd "$curr_dir"
+
+    # we only care about abcd.txt <-> abc.txt
+    # the fact that remote has xyz.txt should be irrelevant
+    # to this check-updates
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    exclude=(\"xy z.txt\" \"abcd.txt\")
+    "
+    echo "$repo_file_contents" > repo_file.sh
     echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
     echo "LOCAL:"
     echo "$(git log --oneline)"
