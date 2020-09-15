@@ -194,6 +194,7 @@ pub struct BlobCheck<'a> {
     blob_next: &'a str,
     path: String,
 }
+pub type BlobCheckCallback = fn(&BlobCheck) -> Option<BlobCheckValue>;
 
 impl<'a> BlobCheck<'a> {
     fn is_delete_blob(&self) -> bool {
@@ -206,13 +207,11 @@ impl<'a> BlobCheck<'a> {
 // run a git diff-tree on the commit id, and parse the output
 // and for every blob, if callback returns true,
 // insert that blob id into the provided blob hash set
-pub fn get_all_blobs_from_commit_with_callback<'a, F>(
+pub fn get_all_blobs_from_commit_with_callback(
     commit_id: &str,
     blob_set: &mut HashSet<String>,
-    should_insert: F,
-)
-    where F: Fn(&BlobCheck) -> Option<BlobCheckValue>
-{
+    insert_callback: Option<BlobCheckCallback>,
+) {
     // the diff filter is VERY important...
     // A (added), M (modified), C (copied), D (deleted)
     // theres a few more..
@@ -248,8 +247,18 @@ pub fn get_all_blobs_from_commit_with_callback<'a, F>(
                     blob_next,
                     path: blob_path,
                 };
-                if let Some(blob_take_value) = should_insert(&blob_check) {
-                    match blob_take_value {
+                // if user provided a callback, ask the user A) if they want to take this
+                // blob, and B) which one to take (next or prev)
+                // otherwise, use the default way to decide which one to take
+                let should_take = match insert_callback {
+                    Some(ref which_to_take_callback) => which_to_take_callback(&blob_check),
+                    None => match blob_check.is_delete_blob() {
+                        true => Some(TakePrev),
+                        false => Some(TakeNext),
+                    },
+                };
+                if let Some(which) = should_take {
+                    match which {
                         TakeNext => blob_set.insert(blob_next.into()),
                         TakePrev => blob_set.insert(blob_prev.into()),
                     };
@@ -263,13 +272,13 @@ pub fn get_all_blobs_from_commit<'a>(
     commit_id: &str,
     blob_set: &mut HashSet<String>,
 ) {
+    // very nice rust... you need me to tell you
+    // what KIND of NONE it is....
+    let special_none: Option<BlobCheckCallback> = None;
     get_all_blobs_from_commit_with_callback(
         commit_id,
         blob_set,
-        |blob_check| match blob_check.is_delete_blob() {
-            true => Some(TakePrev),
-            false => Some(TakeNext),
-        },
+        special_none,
     );
 }
 
