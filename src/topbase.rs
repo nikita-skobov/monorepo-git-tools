@@ -194,7 +194,6 @@ pub struct BlobCheck<'a> {
     pub blob_next: &'a str,
     pub path: String,
 }
-pub type BlobCheckCallback = fn(&BlobCheck) -> Option<BlobCheckValue>;
 
 pub fn blob_check_callback_default(blob_check: &BlobCheck) -> Option<BlobCheckValue> {
     match blob_check.is_delete_blob() {
@@ -217,7 +216,7 @@ impl<'a> BlobCheck<'a> {
 pub fn get_all_blobs_from_commit_with_callback(
     commit_id: &str,
     blob_set: &mut HashSet<String>,
-    insert_callback: Option<BlobCheckCallback>,
+    insert_callback: Option<&dyn Fn(&BlobCheck) -> Option<BlobCheckValue>>,
 ) {
     // the diff filter is VERY important...
     // A (added), M (modified), C (copied), D (deleted)
@@ -276,13 +275,10 @@ pub fn get_all_blobs_from_commit<'a>(
     commit_id: &str,
     blob_set: &mut HashSet<String>,
 ) {
-    // very nice rust... you need me to tell you
-    // what KIND of NONE it is....
-    let special_none: Option<BlobCheckCallback> = None;
     get_all_blobs_from_commit_with_callback(
         commit_id,
         blob_set,
-        special_none,
+        None,
     );
 }
 
