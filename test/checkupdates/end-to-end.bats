@@ -242,3 +242,72 @@ function setup() {
     [[ $status == "0" ]]
     [[ $output == *"up to date"* ]]
 }
+
+@test 'should report take if current blob is part of include_as path' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    mkdir -p "some path"
+    mkdir -p "some path/lib"
+    # even though this has a different path, because its specified in the include_as
+    # we should figure out that this blob applies to something in our local repo
+    echo "abc" > "some path/lib/abc.txt" && git add "some path/lib/abc.txt" && git commit -m "abc"
+    echo "xy z" > "some path/lib/xy z.txt" && git add "some path/" && git commit -m "some path"
+    echo "REMOTE:"
+    echo "$(git log --oneline)"
+    commit_to_take="$(git log --oneline -n 1)"
+    cd "$curr_dir"
+
+    # the fact that remote has xyz.txt should be irrelevant
+    # to this check-updates
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include_as=(
+        \" \" \"some path/lib/\"
+    )
+    "
+    echo "$repo_file_contents" > repo_file.sh
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "LOCAL:"
+    echo "$(git log --oneline)"
+
+
+    run $PROGRAM_PATH check-updates repo_file.sh
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ $output == *"$commit_to_take"* ]]
+}
+
+@test 'should report up-to-date if current blob is part of include_as path but is excluded' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    mkdir -p "some path"
+    mkdir -p "some path/lib"
+    # even though this has a different path, because its specified in the include_as
+    # we should figure out that this blob applies to something in our local repo
+    echo "abc" > "some path/lib/abc.txt" && git add "some path/lib/abc.txt" && git commit -m "abc"
+    echo "xy z" > "some path/lib/xy z.txt" && git add "some path/" && git commit -m "some path"
+    echo "REMOTE:"
+    echo "$(git log --oneline)"
+    commit_to_take="$(git log --oneline -n 1)"
+    cd "$curr_dir"
+
+    # the fact that remote has xyz.txt should be irrelevant
+    # to this check-updates
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include_as=(
+        \" \" \"some path/lib/\"
+    )
+    exclude=\"some path/lib/xy z.txt\"
+    "
+    echo "$repo_file_contents" > repo_file.sh
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "LOCAL:"
+    echo "$(git log --oneline)"
+
+
+    run $PROGRAM_PATH check-updates repo_file.sh
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ $output == *"up to date"* ]]
+}
