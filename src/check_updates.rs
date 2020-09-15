@@ -81,7 +81,7 @@ pub fn summarize_updates(
     commit_summaries: Vec<String>,
 ) {
     match commits_to_take.len() {
-        0 => println!("You are up to date. Latest commit in upstream exists in current"),
+        0 => println!("You are up to date. Latest commit in current exists in upstream"),
         _ => {
             println!("upstream can take {} commit(s) from current:", commits_to_take.len());
             for i in 0..commits_to_take.len() {
