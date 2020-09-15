@@ -4,13 +4,17 @@ use super::git_helpers;
 use super::git_helpers::Short;
 use super::exec_helpers;
 use super::split::Runner;
+use super::repo_file::RepoFile;
 use super::split;
 use super::commands::LOCAL_ARG;
 use super::commands::REMOTE_ARG;
 use super::commands::REMOTE_BRANCH_ARG;
 use super::commands::LOCAL_BRANCH_ARG;
 use super::topbase::get_all_blobs_in_branch;
-use super::topbase::get_all_blobs_from_commit;
+use super::topbase::get_all_blobs_from_commit_with_callback;
+use super::topbase::BlobCheckValue;
+use super::topbase::BlobCheck;
+use super::topbase::blob_check_callback_default;
 use std::{collections::HashSet, path::PathBuf};
 
 pub trait CheckUpdates {
@@ -53,9 +57,21 @@ impl<'a> CheckUpdates for Runner<'a> {
                 commit_summaries.push(c.summary().unwrap().to_string());
             }
         };
+        let should_take_blob_cb = |c: &BlobCheck| {
+            if ! blob_path_applies_to_repo_file(&c.path, &self.repo_file) {
+                let blob_check_none: Option<BlobCheckValue> = None;
+                return blob_check_none;
+            }
+            blob_check_callback_default(c)
+        };
 
         // TODO: maybe have different algorithms for checking if theres updates?
-        topbase_check_alg(all_commits_of_current, all_upstream_blobs, &mut summarize_cb);
+        topbase_check_alg_with_callback(
+            all_commits_of_current,
+            all_upstream_blobs,
+            &mut summarize_cb,
+            Some(&should_take_blob_cb),
+        );
 
         if should_summarize {
             summarize_updates(commits_to_take, commit_summaries);
@@ -93,10 +109,56 @@ pub fn summarize_updates(
     }
 }
 
-pub fn topbase_check_alg<F>(
+// evaluate the include/exclude rules of the repo file
+// to see if the blob path is relevant to these rules
+pub fn blob_path_applies_to_repo_file(blob_path: &String, repo_file: &RepoFile) -> bool {
+    let mut blob_matches_include = false;
+    let empty_vec = vec![];
+    let include_vec = match &repo_file.include {
+        Some(v) => v,
+        None => &empty_vec,
+    };
+    let include_as_vec = match &repo_file.include_as {
+        Some(v) => v,
+        None => &empty_vec,
+    };
+    let exclude_vec = match &repo_file.exclude {
+        Some(v) => v,
+        None => &empty_vec,
+    };
+
+    // try to see if it matches any of the include/include_as
+    for i in include_vec {
+        println!("DOES I:{} MATCH BLOB:{}", i, blob_path);
+        if i == blob_path {
+            blob_matches_include = true;
+            break;
+        }
+    }
+
+    // if it matches include, make sure it doesnt match the exclude
+    if blob_matches_include {
+        for e in exclude_vec {
+            if e == blob_path {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    println!("");
+
+    false
+}
+
+// actually its two callbacks... one to build the commit summary,
+// the other to decide whether or not to take a blob when
+// getting all blobs from commit
+pub fn topbase_check_alg_with_callback<F>(
     all_commits_of_current: Vec<git2::Commit>,
     all_upstream_blobs: HashSet<String>,
-    cb: &mut F
+    cb: &mut F,
+    should_take_blob: Option<&dyn Fn(&BlobCheck) -> Option<BlobCheckValue>>,
 )
     where F: FnMut(&git2::Commit)
 {
@@ -113,7 +175,11 @@ pub fn topbase_check_alg<F>(
         }
 
         let mut current_commit_blobs = HashSet::new();
-        get_all_blobs_from_commit(&c.id().to_string()[..], &mut current_commit_blobs);
+        get_all_blobs_from_commit_with_callback(
+            &c.id().to_string()[..],
+            &mut current_commit_blobs,
+            should_take_blob,
+        );
         let mut all_blobs_exist = true;
         for b in current_commit_blobs {
             if ! all_upstream_blobs.contains(&b) {
@@ -126,6 +192,22 @@ pub fn topbase_check_alg<F>(
         }
         cb(&c);
     }
+}
+
+
+pub fn topbase_check_alg<F>(
+    all_commits_of_current: Vec<git2::Commit>,
+    all_upstream_blobs: HashSet<String>,
+    cb: &mut F
+)
+    where F: FnMut(&git2::Commit),
+{
+    topbase_check_alg_with_callback(
+        all_commits_of_current,
+        all_upstream_blobs,
+        cb,
+        None,
+    );
 }
 
 // the above check_updated method will do the checking, and is useful
