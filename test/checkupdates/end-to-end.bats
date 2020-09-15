@@ -120,7 +120,7 @@ function setup() {
     [[ $output == *"$commit_to_take"* ]]
 }
 
-@test 'should NOT report update if upstream blob isnt part of the include' {
+@test 'should report up-to-date if current blob isnt part of the include' {
     curr_dir="$PWD"
     cd "$BATS_TMPDIR/test_remote_repo2"
     echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
@@ -150,7 +150,7 @@ function setup() {
     [[ $output == *"up to date"* ]]
 }
 
-@test 'should NOT report update if upstream blob isnt part of the include_as' {
+@test 'should report up-to-date if current blob isnt part of the include_as' {
     curr_dir="$PWD"
     cd "$BATS_TMPDIR/test_remote_repo2"
     echo "abc" > abcd.txt && git add abcd.txt && git commit -m "abcd"
@@ -182,7 +182,7 @@ function setup() {
     [[ $output == *"up to date"* ]]
 }
 
-@test 'should NOT report update if upstream blob is excluded' {
+@test 'should report up-to-date if current blob is excluded' {
     curr_dir="$PWD"
     cd "$BATS_TMPDIR/test_remote_repo2"
     echo "abc" > abcd.txt && git add abcd.txt && git commit -m "abcd"
@@ -211,7 +211,7 @@ function setup() {
     [[ $output == *"up to date"* ]]
 }
 
-@test 'should NOT report update if upstream blob is excluded via path' {
+@test 'should report up-to-date if current blob is excluded via path' {
     curr_dir="$PWD"
     cd "$BATS_TMPDIR/test_remote_repo2"
     echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
