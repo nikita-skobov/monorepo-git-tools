@@ -188,13 +188,20 @@ pub enum BlobCheckValue {
 }
 use BlobCheckValue::*;
 pub struct BlobCheck<'a> {
-    mode_prev: &'a str,
-    mode_next: &'a str,
-    blob_prev: &'a str,
-    blob_next: &'a str,
-    path: String,
+    pub mode_prev: &'a str,
+    pub mode_next: &'a str,
+    pub blob_prev: &'a str,
+    pub blob_next: &'a str,
+    pub path: String,
 }
 pub type BlobCheckCallback = fn(&BlobCheck) -> Option<BlobCheckValue>;
+
+pub fn blob_check_callback_default(blob_check: &BlobCheck) -> Option<BlobCheckValue> {
+    match blob_check.is_delete_blob() {
+        true => Some(TakePrev),
+        false => Some(TakeNext),
+    }
+}
 
 impl<'a> BlobCheck<'a> {
     fn is_delete_blob(&self) -> bool {
@@ -252,10 +259,7 @@ pub fn get_all_blobs_from_commit_with_callback(
                 // otherwise, use the default way to decide which one to take
                 let should_take = match insert_callback {
                     Some(ref which_to_take_callback) => which_to_take_callback(&blob_check),
-                    None => match blob_check.is_delete_blob() {
-                        true => Some(TakePrev),
-                        false => Some(TakeNext),
-                    },
+                    None => blob_check_callback_default(&blob_check),
                 };
                 if let Some(which) = should_take {
                     match which {
