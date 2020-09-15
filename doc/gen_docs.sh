@@ -8,3 +8,4 @@
 ./doc/gen_split_in.sh > doc/split-in.md
 ./doc/gen_split_in_as.sh > doc/split-in-as.md
 ./doc/gen_topbase.sh > doc/topbase.md
+./doc/gen_check_updates.sh > doc/check-updates.md
