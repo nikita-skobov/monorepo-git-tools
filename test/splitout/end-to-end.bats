@@ -72,6 +72,59 @@ function teardown() {
     [[ ! -f b.txt ]]
 }
 
+@test 'repo_file doesnt need a remote_repo if --output-branch provided' {
+    repo_file_contents="
+    include=\"b.txt\"
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+    echo "repo file contents:"
+    cat repo_file.sh
+
+    echo "b" > b.txt && git add b.txt && git commit -m "b"
+
+    run $PROGRAM_PATH split-out repo_file.sh --verbose --output-branch my-branch
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ "$(git branch --show-current)" == "my-branch" ]]
+}
+
+@test '--output-branch should override repo_name' {
+    repo_file_contents="
+    include=\"b.txt\"
+    repo_name=\"somename\"
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+    echo "repo file contents:"
+    cat repo_file.sh
+
+    echo "b" > b.txt && git add b.txt && git commit -m "b"
+
+    run $PROGRAM_PATH split-out repo_file.sh --verbose --output-branch my-branch
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ "$(git branch --show-current)" == "my-branch" ]]
+}
+
+@test '--output-branch should override remote_repo' {
+    repo_file_contents="
+    include=\"b.txt\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+    echo "repo file contents:"
+    cat repo_file.sh
+
+    echo "b" > b.txt && git add b.txt && git commit -m "b"
+
+    run $PROGRAM_PATH split-out repo_file.sh --verbose --output-branch my-branch
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ "$(git branch --show-current)" == "my-branch" ]]
+}
+
 @test 'capable of only including certain folders' {
     repo_file_contents="
     remote_repo=\"..$SEP$test_remote_repo2\"
