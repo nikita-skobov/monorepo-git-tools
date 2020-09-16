@@ -24,7 +24,7 @@ impl<'a> SplitOut for Runner<'a> {
         let missing_include_as = self.repo_file.include_as.is_none();
         let missing_include = self.repo_file.include.is_none();
     
-        if missing_remote_repo && missing_repo_name {
+        if missing_remote_repo && missing_repo_name && missing_output_branch {
             panic!("Must provide either repo_name or remote_repo in your repofile");
         }
     
@@ -32,13 +32,13 @@ impl<'a> SplitOut for Runner<'a> {
             panic!("Must provide either include or include_as in your repofile");
         }
     
-        if missing_repo_name && !missing_remote_repo && missing_output_branch {
+        if missing_output_branch && missing_repo_name && !missing_remote_repo {
             let output_branch_str = try_get_repo_name_from_remote_repo(
                 self.repo_file.remote_repo.clone().unwrap()
             );
             self.repo_file.repo_name = Some(output_branch_str.clone());
             self.output_branch = Some(output_branch_str);
-        } else if ! missing_repo_name {
+        } else if missing_output_branch && ! missing_repo_name {
             // make the repo_name the output branch name
             self.output_branch = Some(self.repo_file.repo_name.clone().unwrap());
         }
