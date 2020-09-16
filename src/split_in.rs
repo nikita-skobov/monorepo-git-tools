@@ -45,7 +45,7 @@ impl<'a> SplitIn for Runner<'a> {
         let missing_include_as = self.repo_file.include_as.is_none();
         let missing_include = self.repo_file.include.is_none();
 
-        if missing_remote_repo && missing_input_branch {
+        if missing_remote_repo && missing_input_branch && ! missing_output_branch {
             panic!("Must provide either repo_name in your repofile, or specify a --{} argument", INPUT_BRANCH_ARG);
         }
 
@@ -59,10 +59,10 @@ impl<'a> SplitIn for Runner<'a> {
             );
             self.repo_file.repo_name = Some(output_branch_str.clone());
             self.output_branch = Some(output_branch_str);
-        } else if ! missing_repo_name {
+        } else if missing_output_branch && ! missing_repo_name {
             // make the repo_name the output branch name
             self.output_branch = Some(self.repo_file.repo_name.clone().unwrap());
-        } else if ! missing_input_branch {
+        } else if missing_output_branch && ! missing_input_branch {
             // make the output_branch the name of the input_branch -reverse
             let output_branch_str = format!("{}-reverse", self.input_branch.clone().unwrap());
             self.output_branch = Some(output_branch_str);
@@ -445,16 +445,6 @@ mod test {
         assert!(files.contains(&PathBuf::from("test/")));
         assert!(files.contains(&PathBuf::from("test/general/")));
         assert!(files.contains(&PathBuf::from("test/general/end-to-end.bats")));
-    }
-
-    #[test]
-    #[should_panic(expected = "Must provide either repo_name in your repofile, or specify a")]
-    fn should_panic_if_missing_input_branch_and_remote_repo() {
-        let matches = ArgMatches::new();
-        let mut runner = Runner::new(&matches);
-        let repofile = RepoFile::new();
-        runner.repo_file = repofile;
-        runner.validate_repo_file();
     }
 
     // this test requires reading files/folders from the root of the
