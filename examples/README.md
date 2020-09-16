@@ -12,6 +12,7 @@ that are interesting to you, you can use the table of contents below. Otherwise,
 * [include as rename and move](#scenario-06-include-as-rename-and-move)
 * [split in existing code](#scenario-07-split-in-existing-code)
 * [let mgt rebase for us](#scenario-08-let-mgt-rebase-for-us)
+* [mgt custom rebase algorithm](#scenario-09-topbase)
 
 ## Purpose
 
@@ -533,3 +534,22 @@ a24ad83 readme
 664977f index.html
 c61b8a2 example.config
 ```
+
+## Scenario 09 Topbase
+
+I came up with an alternate rebasing algorithm that is useful to `mgt` in some scenarios. This algorithm is called `topbase`, and what it does is it finds
+an alternate fork point, and then runs an interactive rebase, stopping at that fork point. `git` is good at doing this most of the time, but for complicated repository rewrites, it sometimes struggles, which is why I needed to add this to `mgt`.
+
+The idea of how and when to use `topbase` is if you originally had conflicts when rebasing your repository, but you resolved those conflicts, and then
+pushed those changes. However, the next time you try to run `mgt split-in --rebase`, it still has conflicts because `git` is struggling to find the correct fork point due to the previous conflicts, and due to the fact that the structure of the repository is different. What `topbase` does differently is that **it only tries to rebase to the most common commit**. That means it starts from the head of the branch that is going to be rebased (top), and it goes down in history, one commit at a time, and checks if that commit "exists" in the branch that is going to be the (base) branch. **As soon as it finds a commit that exists in both the top and base branch, it will run the interactive rebase on all prior commits**. `topbase` is able to find matching commits because in `git`, files are hashed into what are called "blobs", and blobs are the same regardless of the name of the file, or where the file is.
+
+`topbase` exists as both an individual command (ie: `mgt topbase <branch>`) if you want to topbase branches that already exist in your local repository. And it also exists as an option to pass to `mgt` `split-in` or `split-out`.
+
+In the example we have been working with, our repository structure is simple enough to continue using `--rebase` every time we want to accept updates, but if we wanted to, we could run it like this:
+
+```
+mgt split-in repo_file.txt --topbase
+```
+
+A good rule of thumb is to use `--rebase` the first time you use `mgt split-in` or `mgt split-out`, and then use `--topbase` every time afterwards. You can think of `--topbase` as a "get the most recent updates" option.
+
