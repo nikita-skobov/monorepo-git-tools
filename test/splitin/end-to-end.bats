@@ -125,6 +125,23 @@ function teardown() {
     [[ -f this/path/will/be/created/test_remote_repo2.txt ]]
 }
 
+@test 'can split in to a specific output branch (overrides repo_name)' {
+    repo_file_contents="
+    repo_name=\"abcd\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include_as=(
+        \"this/path/will/be/created/\" \" \"
+    )
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+
+    run $PROGRAM_PATH split-in repo_file.sh --verbose -o newbranch1
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ "$(git branch --show-current)" == *"newbranch1"* ]]
+}
+
 @test 'can split in a remote_repo with a specific remote_branch' {
     repo_file_contents="
     remote_repo=\"..$SEP$test_remote_repo2\"
