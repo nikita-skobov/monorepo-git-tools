@@ -78,6 +78,10 @@ jobs:
         run: bash -c "bats test/topbase"
         env:
           PROGRAM_PATH: mgt
+      - name: e2e_test_checkupdates
+        run: bash -c "bats test/checkupdates"
+        env:
+          PROGRAM_PATH: mgt
       - name: upload_artifact
         uses: actions/upload-artifact@v2.1.4
         with:

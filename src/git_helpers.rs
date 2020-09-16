@@ -5,6 +5,16 @@ use std::path::Path;
 use std::fs;
 use std::str::from_utf8;
 
+pub trait Short {
+    fn short(self) -> String;
+}
+impl Short for git2::Oid {
+    fn short(self) -> String {
+        self.to_string().get(0..7).unwrap().into()
+    }
+}
+
+
 fn remove_git_from_path_buf(pathbuf: &mut PathBuf) -> PathBuf {
     match &pathbuf.file_name() {
         Some(p) => {

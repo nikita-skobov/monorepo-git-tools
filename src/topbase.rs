@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use super::git_helpers;
 use super::exec_helpers;
 use super::split::Runner;
+use super::check_updates::topbase_check_alg;
 use super::commands::TOPBASE_CMD_BASE;
 use super::commands::TOPBASE_CMD_TOP;
 use super::commands::VERBOSE_ARG;
@@ -53,35 +54,12 @@ impl<'a> Topbase for Runner<'a> {
         let num_commits_of_current = all_commits_of_current.len();
         let mut num_commits_to_take = 0;
         let mut rebase_data = vec![];
-        // for every commit in the current branch (the branch going to be rebased)
-        // check if every single blob of every commit exists in the upstream branch.
-        // as soon as we a commit of this current branch that has all of its blobs
-        // exists in upstream, then we break, and run out interactive rebase that we
-        // are building
-        for c in all_commits_of_current {
-            // I think we want to skip merge commits, because thats what git rebase
-            // interactive does by default. also, is it safe to assume
-            // any commit with > 1 parent is a merge commit?
-            if c.parent_count() > 1 {
-                continue;
-            }
-
-            let mut current_commit_blobs = HashSet::new();
-            get_all_blobs_from_commit(&c.id().to_string()[..], &mut current_commit_blobs);
-            let mut all_blobs_exist = true;
-            for b in current_commit_blobs {
-                if ! all_upstream_blobs.contains(&b) {
-                    all_blobs_exist = false;
-                    break;
-                }
-            }
-            if all_blobs_exist {
-                break;
-            }
+        let mut cb = |c: &git2::Commit| {
             num_commits_to_take += 1;
             let rebase_interactive_entry = format!("pick {} {}\n", c.id(), c.summary().unwrap());
             rebase_data.push(rebase_interactive_entry);
-        }
+        };
+        topbase_check_alg(all_commits_of_current, all_upstream_blobs, &mut cb);
 
         // need to reverse it because git rebase interactive
         // takes commits in order of oldest to newest, but
@@ -204,19 +182,48 @@ impl<'a> Topbase for Runner<'a> {
     }
 }
 
+pub enum BlobCheckValue {
+    TakeNext,
+    TakePrev,
+}
+use BlobCheckValue::*;
+pub struct BlobCheck<'a> {
+    pub mode_prev: &'a str,
+    pub mode_next: &'a str,
+    pub blob_prev: &'a str,
+    pub blob_next: &'a str,
+    pub path: String,
+}
+
+pub fn blob_check_callback_default(blob_check: &BlobCheck) -> Option<BlobCheckValue> {
+    match blob_check.is_delete_blob() {
+        true => Some(TakePrev),
+        false => Some(TakeNext),
+    }
+}
+
+impl<'a> BlobCheck<'a> {
+    fn is_delete_blob(&self) -> bool {
+        let blob_prev_not_all_zeroes = ! self.blob_prev.chars().all(|c| c == '0');
+        let blob_next_all_zeroes = self.blob_next.chars().all(|c| c == '0');
+        blob_next_all_zeroes && blob_prev_not_all_zeroes
+    }
+}
+
 // run a git diff-tree on the commit id, and parse the output
-// and insert every blob id into the provided blob hash set
-pub fn get_all_blobs_from_commit(
+// and for every blob, if callback returns true,
+// insert that blob id into the provided blob hash set
+pub fn get_all_blobs_from_commit_with_callback(
     commit_id: &str,
     blob_set: &mut HashSet<String>,
+    insert_callback: Option<&dyn Fn(&BlobCheck) -> Option<BlobCheckValue>>,
 ) {
-    // the diff filter is VERY important... A (added), M (modified), C (copied)
-    // theres a few more like D (deleted), but I don't think we want the D because
-    // *I think* we only care about blobs that EXIST at a given point in time...
-    // maybe this might change later
+    // the diff filter is VERY important...
+    // A (added), M (modified), C (copied), D (deleted)
+    // theres a few more..
     let args = [
         "git", "diff-tree", commit_id, "-r", "--root",
-        "--diff-filter=AMC", "--pretty=oneline"
+        "--diff-filter=AMCD", "--pretty=oneline"
     ];
     match exec_helpers::execute(&args) {
         Err(e) => panic!("Failed to get blobs from commit {} : {}", commit_id, e),
@@ -230,22 +237,49 @@ pub fn get_all_blobs_from_commit(
                 // there are technically 6 items from this output:
                 // the last item (items[5]) is a path to the file that this blob
                 // is for (and the array could have more than 6 if file names
-                // have spaces in them). But we only care about the first 5:
+                // have spaces in them)
                 let (
                     mode_prev, mode_next,
                     blob_prev, blob_next,
                     diff_type
                 ) = (items[0], items[1], items[2], items[3], items[4]);
-                // now blob_prev will be all zeros if diff_type is A
-                // however, for other diff_types, it will be a valid blob.
-                // it is my assumption that we don't need it because
-                // it probably exists in one of the other commits as a blob_next.
-                // maybe this will need to change, but for now, I think it is
-                // sufficient to just get the blob_next
-                blob_set.insert(blob_next.into());
+                // the path of this blob starts at index 5, but we combine the rest
+                // in case there are spaces
+                let blob_path = items[5..items.len()].join(" ");
+                let blob_check = BlobCheck {
+                    mode_prev,
+                    mode_next,
+                    blob_prev,
+                    blob_next,
+                    path: blob_path,
+                };
+                // if user provided a callback, ask the user A) if they want to take this
+                // blob, and B) which one to take (next or prev)
+                // otherwise, use the default way to decide which one to take
+                let should_take = match insert_callback {
+                    Some(ref which_to_take_callback) => which_to_take_callback(&blob_check),
+                    None => blob_check_callback_default(&blob_check),
+                };
+                if let Some(which) = should_take {
+                    match which {
+                        TakeNext => blob_set.insert(blob_next.into()),
+                        TakePrev => blob_set.insert(blob_prev.into()),
+                    };
+                }
             }
         }
     };
+}
+
+pub fn get_all_blobs_from_commit<'a>(
+    commit_id: &str,
+    blob_set: &mut HashSet<String>,
+) {
+    get_all_blobs_from_commit_with_callback(
+        commit_id,
+        blob_set,
+        None,
+    );
 }
 
 // perform a rev-list of the branch name to get a list of all commits

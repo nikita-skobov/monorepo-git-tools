@@ -5,6 +5,7 @@ mod repo_file;
 mod split_out;
 mod split_in;
 mod topbase;
+mod check_updates;
 mod split;
 mod git_helpers;
 mod exec_helpers;
@@ -21,6 +22,7 @@ fn get_cli_input<'a>() -> ArgMatches<'a> {
         commands::split_out(),
         commands::split_out_as(),
         commands::topbase(),
+        commands::check_updates(),
     ]);
 
     return base_app.get_matches();
