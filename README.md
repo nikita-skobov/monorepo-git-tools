@@ -46,7 +46,7 @@ After those steps, you will be on the `monorepo-git-tools` branch, and you can m
 
 ## How does it work?
 
-`mgt` knows how to rewrite your history based on files that contain information on how to rewrite the history.
+`mgt` knows how to rewrite your history based on files that contain information on how to map between local and remote repositories.
 These files are called `repo_file`s, and some common things that would
 go in a `repo_file` are:
 
@@ -83,9 +83,9 @@ cp ./target/release/mgt /usr/bin/mgt
 
 ### From binary
 
-This project builds and tests every release on [github](https://github.com/nikita-skobov/monorepo-git-tools)
+This project builds and tests every release on [GitHub](https://github.com/nikita-skobov/monorepo-git-tools)
 
-To install from latest binary, go to [the release page](https://github.com/nikita-skobov/monorepo-git-tools/releases) and download
-the asset that is appropriate for your machine.
+To get the latest binary, go to [the release page](https://github.com/nikita-skobov/monorepo-git-tools/releases) and download
+the zip file that is appropriate for your machine.
 
-To install it, simply copy it to a directory that is on your system's path.
+To install it, simply extract the zip, and copy the executable to a directory that is on your system's path.
