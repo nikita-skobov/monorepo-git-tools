@@ -469,6 +469,36 @@ function teardown() {
     [[ -f test_remote_repo.txt ]]
 }
 
+@test '--topbase should not say success if there were rebase merge conflicts' {
+    # save current dir to cd back to later
+    curr_dir="$PWD"
+    # setup the test remote repo:
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    mkdir -p lib
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "123" > abc.txt && git add abc.txt && git commit -m "abc-123"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include_as=(\"lib/\" \" \")
+    "
+    echo "$repo_file_contents" > repo_file.sh
+
+    mkdir -p lib
+    # this is where it aligns:
+    echo "abc" > lib/abc.txt && git add lib/abc.txt && git commit -m "abc"
+    # this is the conflict:
+    echo "conflicthere" > lib/abc.txt && git add lib/abc.txt && git commit -m "conflict"
+
+    run $PROGRAM_PATH split-in repo_file.sh --topbase --verbose
+    echo "$output"
+    echo "$(git status)"
+    [[ $status == "1" ]]
+    [[ "$output" != "Success!" ]]
+    [[ "$(git status)" == *"rebase in progress"* ]]
+}
+
 @test 'if topbase finds 0, it shouldnt rebase interactively' {
     curr_dir="$PWD"
     cd "$BATS_TMPDIR/test_remote_repo2"
