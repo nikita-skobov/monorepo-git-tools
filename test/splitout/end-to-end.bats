@@ -642,3 +642,29 @@ function teardown() {
     [[ $status == "1" ]]
     [[ "$(git status)" == *"rebase in progress"* ]]
 }
+
+@test '--rebase should not say success if there were rebase merge conflicts' {
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include=(\"lib/\")
+    "
+    echo "$repo_file_contents" > repo_file.sh
+
+    mkdir -p lib/
+    echo "libfile1.txt" > lib/libfile1.txt
+    git add lib/libfile1.txt && git commit -m "libfile1"
+    echo "mod" > lib/libfile1.txt && git add lib/libfile1.txt && git commit -m "somemod"
+
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    mkdir -p lib/
+    echo "conffflict" > lib/libfile1.txt && git add lib/libfile1.txt && git commit -m "where it conflicts"
+    cd "$curr_dir"
+
+    run $PROGRAM_PATH split-out repo_file.sh --rebase --verbose
+    echo "$output"
+    echo "$(git status)"
+    [[ $output != "Success" ]]
+    [[ $status == "1" ]]
+    [[ "$(git status)" == *"rebase in progress"* ]]
+}

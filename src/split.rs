@@ -140,7 +140,7 @@ impl<'a> Runner<'a> {
         self
     }
 
-    pub fn rebase(self) -> Self {
+    pub fn rebase(mut self) -> Self {
         let upstream_branch = match self.repo_original_ref {
             Some(ref branch) => branch,
             None => {
@@ -165,10 +165,23 @@ impl<'a> Runner<'a> {
         let args = [
             "git", "rebase", upstream_branch.as_str(),
         ];
-        match exec_helpers::execute(&args) {
-            Err(e) => println!("Failed to rebase: {}", e),
-            Ok(_) => (),
+        let err_msg = match exec_helpers::execute(&args) {
+            Err(e) => Some(vec![format!("{}", e)]),
+            Ok(o) => {
+                match o.status {
+                    0 => None,
+                    _ => Some(vec![o.stderr.lines().next().unwrap().to_string()]),
+                }
+            },
         };
+        if let Some(err) = err_msg {
+            self.status = 1;
+            let err_details = match self.verbose {
+                true => format!("{}", err.join("\n")),
+                false => "".into(),
+            };
+            println!("Failed to rebase\n{}", err_details);
+        }
         self
     }
 
