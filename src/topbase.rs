@@ -82,54 +82,71 @@ impl<'a> Topbase for Runner<'a> {
             println!("{}no commit of {} exists in {}. rebasing non-interactively", self.log_p, current_branch, upstream_branch);
         }
 
-        // if there's nothing to topbase, then we want to just
-        // rebase the last commit onto the upstream branch.
-        // this will allow our current branch to be fast-forwardable
-        // onto upstream (well really its going to be the exact same branch)
-        if num_commits_to_take == 0 {
-            // if current branch only has one commit, dont use the <branch>~1
-            // git rebase syntax. it will cause git rebase to fail
-            let rebase_last_one = if num_commits_of_current > 1 {
-                "~1"
-            } else {
-                ""
-            };
-            let last_commit_arg = format!("{}{}", current_branch, rebase_last_one);
-            let args = [
-                "git", "rebase", "--onto",
-                upstream_branch.as_str(),
-                last_commit_arg.as_str(),
-                current_branch.as_str()
-            ];
+        let args = match num_commits_to_take {
+            // if there's nothing to topbase, then we want to just
+            // rebase the last commit onto the upstream branch.
+            // this will allow our current branch to be fast-forwardable
+            // onto upstream (well really its going to be the exact same branch)
+            0 => {
+                // if current branch only has one commit, dont use the <branch>~1
+                // git rebase syntax. it will cause git rebase to fail
+                let rebase_last_one = match num_commits_of_current > 1 {
+                    true => "~1",
+                    false => "",
+                };
+                let last_commit_arg = format!("{}{}", current_branch, rebase_last_one);
+                let args = vec![
+                    "git".into(), "rebase".into(), "--onto".into(),
+                    upstream_branch.clone(),
+                    last_commit_arg,
+                    current_branch.clone()
+                ];
+                args
+            },
+            // if we need to topbase the entirety of the current branch
+            // it will be better to do a regular rebase
+            n => {
+                if n == num_commits_of_current {
+                    let args = vec![
+                        "git".into(), "rebase".into(), upstream_branch.clone(),
+                    ];
+                    args
+                } else {
+                    vec![]
+                }
+            },
+        };
 
+        // args will have non-zero length only if
+        //  - we need to topbase all commits
+        //  - we found no commits to topbase
+        if args.len() != 0 {
             if self.dry_run {
                 let arg_str = args.join(" ");
                 println!("{}", arg_str);
                 return self;
             }
 
-            match exec_helpers::execute(&args) {
-                Err(e) => panic!("Failed to rebase: {}", e),
-                Ok(_) => (),
+            let str_args: Vec<&str> = args.iter().map(|f| f.as_str()).collect();
+            let err_msg = match exec_helpers::execute(
+                &str_args[..]
+            ) {
+                Err(e) => Some(vec![format!("{}", e)]),
+                Ok(o) => {
+                    match o.status {
+                        0 => None,
+                        _ => Some(vec![o.stderr.lines().next().unwrap().to_string()]),
+                    }
+                },
             };
-            return self;
-        }
-
-        // if we need to topbase the entirety of the current branch
-        // it will be better to do a regular rebase
-        if num_commits_to_take == num_commits_of_current {
-            if self.dry_run {
-                println!("git rebase {}", upstream_branch);
-                return self;
+            if let Some(err) = err_msg {
+                self.status = 1;
+                let err_details = match self.verbose {
+                    true => format!("{}", err.join("\n")),
+                    false => "".into(),
+                };
+                println!("Failed to rebase\n{}", err_details);
             }
-
-            let args = [
-                "git", "rebase", upstream_branch.as_str(),
-            ];
-            match exec_helpers::execute(&args) {
-                Err(e) => panic!("Failed to rebase: {}", e),
-                Ok(_) => (),
-            };
             return self;
         }
 
