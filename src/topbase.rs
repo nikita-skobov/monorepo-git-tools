@@ -166,18 +166,26 @@ impl<'a> Topbase for Runner<'a> {
         let rebase_data_str = rebase_data.join("");
         let rebase_data_str = format!("echo \"{}\" >", rebase_data_str);
 
-        match exec_helpers::execute_with_env(
+        let err_msg = match exec_helpers::execute_with_env(
             &args,
             &["GIT_SEQUENCE_EDITOR"],
             &[rebase_data_str.as_str()],
         ) {
-            Err(e) => println!("Failed to rebase: {}", e),
+            Err(e) => Some(vec![format!("{}", e)]),
             Ok(o) => {
-                if o.status != 0 {
-                    println!("Failed to rebase: {} {}", o.stdout, o.stderr);
+                match o.status {
+                    0 => None,
+                    _ => Some(vec![o.stderr.lines().next().unwrap().to_string()]),
                 }
             },
         };
+        if let Some(err) = err_msg {
+            let err_details = match self.verbose {
+                true => format!("{}", err.join("\n")),
+                false => "".into(),
+            };
+            println!("Failed to rebase\n{}", err_details);
+        }
         self
     }
 }
