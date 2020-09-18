@@ -35,6 +35,7 @@ pub struct Runner<'a> {
     pub include_arg_str: Option<Vec<String>>,
     pub include_as_arg_str: Option<Vec<String>>,
     pub exclude_arg_str: Option<Vec<String>>,
+    pub status: i32,
 }
 
 impl<'a> Runner<'a> {
@@ -45,6 +46,7 @@ impl<'a> Runner<'a> {
         let is_topbase = matches.is_present(TOPBASE_ARG[0]);
         let output_branch = matches.value_of(OUTPUT_BRANCH_ARG[0]);
         Runner {
+            status: 0,
             matches: matches,
             dry_run: is_dry_run,
             verbose: is_verbose,

@@ -15,7 +15,7 @@ pub trait Topbase {
 }
 
 impl<'a> Topbase for Runner<'a> {
-    fn topbase(self) -> Self {
+    fn topbase(mut self) -> Self {
         let repo = match self.repo {
             Some(ref r) => r,
             None => panic!("failed to get repo?"),
@@ -180,6 +180,7 @@ impl<'a> Topbase for Runner<'a> {
             },
         };
         if let Some(err) = err_msg {
+            self.status = 1;
             let err_details = match self.verbose {
                 true => format!("{}", err.join("\n")),
                 false => "".into(),

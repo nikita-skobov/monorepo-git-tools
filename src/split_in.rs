@@ -363,7 +363,7 @@ pub fn run_split_in(matches: &ArgMatches) {
     let log_p = runner.log_p.clone();
     let temp_branch = runner.output_branch.clone().unwrap_or("\"\"".into());
     println!("{}Running filter commands on temporary branch: {}", log_p, temp_branch);
-    let runner = runner
+    let mut runner = runner
         .filter_exclude()
         .filter_include_as()
         .filter_include();
@@ -375,13 +375,18 @@ pub fn run_split_in(matches: &ArgMatches) {
     if runner.should_topbase {
         println!("{}Topbasing", log_p);
         use super::topbase::Topbase;
-        runner.get_repository_from_current_dir().topbase();
+        runner = runner.get_repository_from_current_dir().topbase();
     } else if runner.should_rebase {
         println!("{}Rebasing", log_p);
-        runner.get_repository_from_current_dir().rebase();
+        runner = runner.get_repository_from_current_dir().rebase();
     }
 
-    println!("{}Success!", log_p);
+    match runner.status {
+        0 => println!("{}Success!", log_p),
+        c => {
+            std::process::exit(c);
+        },
+    };
 }
 
 pub fn run_split_in_as(matches: &ArgMatches) {
@@ -407,7 +412,7 @@ pub fn run_split_in_as(matches: &ArgMatches) {
     let log_p = runner.log_p.clone();
     let temp_branch = runner.output_branch.clone().unwrap_or("\"\"".into());
     println!("{}Running filter commands on temporary branch: {}", log_p, temp_branch);
-    let runner = runner
+    let mut runner = runner
         .filter_exclude()
         .filter_include_as()
         .filter_include();
@@ -415,13 +420,18 @@ pub fn run_split_in_as(matches: &ArgMatches) {
     if runner.should_topbase {
         println!("{}Topbasing", log_p);
         use super::topbase::Topbase;
-        runner.get_repository_from_current_dir().topbase();
+        runner = runner.get_repository_from_current_dir().topbase();
     } else if runner.should_rebase {
         println!("{}Rebasing", log_p);
-        runner.get_repository_from_current_dir().rebase();
+        runner = runner.get_repository_from_current_dir().rebase();
     }
 
-    println!("{}Success!", log_p);
+    match runner.status {
+        0 => println!("{}Success!", log_p),
+        c => {
+            std::process::exit(c);
+        },
+    };
 }
 
 
