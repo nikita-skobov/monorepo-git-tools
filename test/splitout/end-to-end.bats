@@ -588,3 +588,31 @@ function teardown() {
     # and then the topbased commit "libfile1mod"
     [[ "$output_commits" == 3 ]]
 }
+
+@test '--topbase should not say success if there were rebase merge conflicts' {
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include=(\"lib/\")
+    "
+    echo "$repo_file_contents" > repo_file.sh
+
+    mkdir -p lib/
+    echo "libfile1.txt" > lib/libfile1.txt
+    git add lib/libfile1.txt && git commit -m "libfile1"
+    echo "conflict" > lib/libfile1.txt && git add lib/libfile1.txt && git commit -m "conflict"
+
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    mkdir -p lib/
+    echo "libfile1.txt" > lib/libfile1.txt
+    git add lib/libfile1.txt && git commit -m "libfile1"
+    echo "test" > lib/libfile1.txt && git add lib/libfile1.txt && git commit -m "libfile1mod"
+    cd "$curr_dir"
+
+    run $PROGRAM_PATH split-out repo_file.sh --topbase --verbose
+    echo "$output"
+    echo "$(git status)"
+    [[ $output != "Success" ]]
+    [[ $status == "1" ]]
+    [[ "$(git status)" == *"rebase in progress"* ]]
+}
