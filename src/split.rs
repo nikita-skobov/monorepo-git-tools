@@ -17,6 +17,7 @@ use super::git_helpers;
 use super::exec_helpers;
 
 pub struct Runner<'a> {
+    pub repo_file_path: Option<&'a str>,
     pub matches: &'a ArgMatches<'a>,
     pub current_dir: PathBuf,
     // log prefix
@@ -45,7 +46,9 @@ impl<'a> Runner<'a> {
         let is_rebase = matches.is_present(REBASE_ARG[0]);
         let is_topbase = matches.is_present(TOPBASE_ARG[0]);
         let output_branch = matches.value_of(OUTPUT_BRANCH_ARG[0]);
+        let repo_file_path = matches.value_of(REPO_FILE_ARG);
         Runner {
+            repo_file_path: repo_file_path,
             status: 0,
             matches: matches,
             dry_run: is_dry_run,
@@ -210,7 +213,8 @@ impl<'a> Runner<'a> {
     }
 
     pub fn get_repo_file(mut self) -> Self {
-        let repo_file_name = self.matches.value_of(REPO_FILE_ARG).unwrap();
+        // safe to unwrap because its required
+        let repo_file_name = self.repo_file_path.unwrap();
         self.repo_file = repo_file::parse_repo_file(repo_file_name);
         if self.verbose {
             println!("{}got repo file: {}", self.log_p, repo_file_name);
