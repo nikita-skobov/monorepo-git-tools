@@ -6,6 +6,7 @@ use super::exec_helpers;
 use super::split::Runner;
 use super::repo_file::RepoFile;
 use super::split;
+use super::commands::REPO_FILE_ARG;
 use super::commands::LOCAL_ARG;
 use super::commands::REMOTE_ARG;
 use super::commands::REMOTE_BRANCH_ARG;
@@ -384,14 +385,25 @@ fn get_remote_branch(runner: &Runner) -> String {
 }
 
 pub fn run_check_updates(matches: &ArgMatches) {
-    let runner = Runner::new(matches);
-    let runner = runner.save_current_dir()
-        .get_repository_from_current_dir()
-        .get_repo_file();
+    // safe to unwrap because it is required
+    let repo_file_path = matches.value_of(REPO_FILE_ARG).unwrap();
+    let repo_file_pathbuf: PathBuf = repo_file_path.into();
+    let mut files_to_check = vec![];
+    if repo_file_pathbuf.is_file() {
+        files_to_check.push(&repo_file_path);
+    } else {
+        // iterate over that folder and find all repo files
+    }
 
-    let (upstream, current, current_is_remote) = setup_check_updates(&runner);
+    for file in files_to_check {
+        let mut runner = Runner::new(matches);
+        runner.repo_file_path = Some(file);
+        let runner = runner.save_current_dir()
+            .get_repository_from_current_dir()
+            .get_repo_file();
 
-    // have to call it with an empty callback...
-    // idk how to make it an option, I get weird dyn errors
-    runner.check_updates(&upstream[..], &current[..], current_is_remote, true, true);
+        let (upstream, current, current_is_remote) = setup_check_updates(&runner);
+
+        runner.check_updates(&upstream[..], &current[..], current_is_remote, true, true);
+    }
 }
