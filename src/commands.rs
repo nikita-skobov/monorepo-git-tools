@@ -26,6 +26,7 @@ pub const REMOTE_ARG: [&'static str; 2] = ["remote", "m"];
 pub const REMOTE_BRANCH_ARG: [&'static str; 2] = ["remote-branch", "b"];
 pub const LOCAL_BRANCH_ARG: &'static str = "local-branch";
 pub const RECURSIVE_ARG: [&'static str; 2] = ["recursive", "r"];
+pub const ALL_ARG: [&'static str; 2] = ["all", "a"];
 
 const SPLIT_IN_STR: &'static str = "split-in";
 const SPLIT_IN_AS_STR: &'static str = "split-in-as";
@@ -324,6 +325,13 @@ pub fn check_updates<'a, 'b>() ->App<'a, 'b> {
             Arg::with_name(RECURSIVE_ARG[0])
                 .long(RECURSIVE_ARG[0])
                 .short(RECURSIVE_ARG[1])
+                .help("if the <repo-file> is a directory, get all files in this directory recursively")
+        )
+        .arg(
+            Arg::with_name(ALL_ARG[0])
+                .long(ALL_ARG[0])
+                .short(ALL_ARG[1])
+                .help("if the <repo-file> is a directory, by default mgt only looks for files ending in .rf, with the --all flag, you are telling mgt to get any file it finds from the <repo-file> directory")
         )
         .arg(
             Arg::with_name(LOCAL_BRANCH_ARG)
