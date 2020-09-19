@@ -8,6 +8,7 @@ use super::repo_file::RepoFile;
 use super::split;
 use super::commands::REPO_FILE_ARG;
 use super::commands::LOCAL_ARG;
+use super::commands::RECURSIVE_ARG;
 use super::commands::REMOTE_ARG;
 use super::commands::REMOTE_BRANCH_ARG;
 use super::commands::LOCAL_BRANCH_ARG;
@@ -384,20 +385,60 @@ fn get_remote_branch(runner: &Runner) -> String {
     format!("{}?{}", remote_repo,remote_branch)
 }
 
+pub fn get_all_repo_files(
+    dir: &str, recursive: bool
+) -> std::io::Result<Vec<String>>
+{
+    // TODO: idk is this good enough?
+    // should this be dynamic? should the
+    // default be something different.. should
+    // we check file names too?
+    let valid_repo_file_extension = "rf";
+    let mut out_vec = vec![];
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() && recursive {
+            let mut repo_files = get_all_repo_files(
+                path.to_str().unwrap(), recursive
+            )?;
+            out_vec.append(&mut repo_files);
+        } else if path.is_file() {
+            match path.extension() {
+                None => (),
+                Some(ext) => {
+                    if ext == valid_repo_file_extension {
+                        out_vec.push(path.to_str().unwrap().to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(out_vec)
+}
+
 pub fn run_check_updates(matches: &ArgMatches) {
     // safe to unwrap because it is required
     let repo_file_path = matches.value_of(REPO_FILE_ARG).unwrap();
     let repo_file_pathbuf: PathBuf = repo_file_path.into();
     let mut files_to_check = vec![];
     if repo_file_pathbuf.is_file() {
-        files_to_check.push(&repo_file_path);
+        files_to_check.push(repo_file_path.to_string());
     } else {
         // iterate over that folder and find all repo files
+        let should_recurse = matches.is_present(RECURSIVE_ARG[0]);
+        let repo_files = get_all_repo_files(repo_file_path, should_recurse);
+        files_to_check = match repo_files {
+            Ok(files) => files,
+            Err(e) => panic!("Failed to read repo file directory: {}", e),
+        };
     }
 
     for file in files_to_check {
+        println!("--- Checking {}", file);
         let mut runner = Runner::new(matches);
-        runner.repo_file_path = Some(file);
+        runner.repo_file_path = Some(file.as_str());
         let runner = runner.save_current_dir()
             .get_repository_from_current_dir()
             .get_repo_file();
