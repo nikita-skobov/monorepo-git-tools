@@ -127,6 +127,49 @@ function setup() {
     [[ $output != *"not_a_rf.txt"* ]]
 }
 
+@test 'should work on a directory of repo files recursively' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "REMOTE:"
+    echo "$(git log --oneline)"
+    cd "$curr_dir"
+
+    mkdir -p repo_file_dir
+    mkdir -p repo_file_dir/recurse
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include=\"abc.txt\"
+    "
+    echo "$repo_file_contents" > repo_file_dir/repo_file1.rf
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include=\"xyz.txt\"
+    "
+    echo "$repo_file_contents" > repo_file_dir/repo_file2.rf
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include=\"qqq.txt\"
+    "
+    echo "$repo_file_contents" > repo_file_dir/recurse/repo_file3.rf
+
+    # also to make sure it only grabs repo files:
+    echo "not_a_rf.txt" > repo_file_dir/not_a_rf.txt
+
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "LOCAL:"
+    echo "$(git log --oneline)"
+
+    run $PROGRAM_PATH check-updates --recursive repo_file_dir
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ $output == *"up to date"* ]]
+    [[ $output == *"repo_file1.rf"* ]]
+    [[ $output == *"repo_file2.rf"* ]]
+    [[ $output == *"repo_file3.rf"* ]]
+    [[ $output != *"not_a_rf.txt"* ]]
+}
+
 @test 'should report an update is necessary if theres one ahead' {
     curr_dir="$PWD"
     cd "$BATS_TMPDIR/test_remote_repo2"
