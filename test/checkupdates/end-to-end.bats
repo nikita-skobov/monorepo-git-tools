@@ -127,6 +127,38 @@ function setup() {
     [[ $output != *"not_a_rf.txt"* ]]
 }
 
+@test 'should work on a directory of repo files with any extension' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "REMOTE:"
+    echo "$(git log --oneline)"
+    cd "$curr_dir"
+
+    mkdir -p repo_file_dir
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include=\"abc.txt\"
+    "
+    echo "$repo_file_contents" > repo_file_dir/repo_file1.txt
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include=\"xyz.txt\"
+    "
+    echo "$repo_file_contents" > repo_file_dir/repo_file2.txt
+
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "LOCAL:"
+    echo "$(git log --oneline)"
+
+    run $PROGRAM_PATH check-updates --all repo_file_dir
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ $output == *"up to date"* ]]
+    [[ $output == *"repo_file1.txt"* ]]
+    [[ $output == *"repo_file2.txt"* ]]
+}
+
 @test 'should work on a directory of repo files recursively' {
     curr_dir="$PWD"
     cd "$BATS_TMPDIR/test_remote_repo2"
