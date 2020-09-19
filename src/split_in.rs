@@ -356,6 +356,7 @@ pub fn run_split_in(matches: &ArgMatches) {
         .verify_dependencies()
         .validate_repo_file()
         .change_to_repo_root()
+        .safe_to_proceed()
         .make_and_checkout_output_branch()
         .populate_empty_branch_with_remote_commits()
         .generate_arg_strings();
@@ -405,6 +406,7 @@ pub fn run_split_in_as(matches: &ArgMatches) {
         .verify_dependencies()
         .validate_repo_file()
         .change_to_repo_root()
+        .safe_to_proceed()
         .make_and_checkout_output_branch()
         .populate_empty_branch_with_remote_commits()
         .generate_arg_strings();
