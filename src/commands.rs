@@ -22,9 +22,10 @@ pub const TOPBASE_ARG: [&'static str; 2] = ["topbase", "t"];
 pub const TOPBASE_CMD_TOP: &'static str = "top";
 pub const TOPBASE_CMD_BASE: &'static str = "base";
 pub const LOCAL_ARG: [&'static str; 2] = ["local", "l"];
-pub const REMOTE_ARG: [&'static str; 2] = ["remote", "r"];
+pub const REMOTE_ARG: [&'static str; 2] = ["remote", "m"];
 pub const REMOTE_BRANCH_ARG: [&'static str; 2] = ["remote-branch", "b"];
 pub const LOCAL_BRANCH_ARG: &'static str = "local-branch";
+pub const RECURSIVE_ARG: [&'static str; 2] = ["recursive", "r"];
 
 const SPLIT_IN_STR: &'static str = "split-in";
 const SPLIT_IN_AS_STR: &'static str = "split-in-as";
@@ -318,6 +319,11 @@ pub fn check_updates<'a, 'b>() ->App<'a, 'b> {
                 .long(REMOTE_BRANCH_ARG[0])
                 .short(REMOTE_BRANCH_ARG[1])
                 .takes_value(true)
+        )
+        .arg(
+            Arg::with_name(RECURSIVE_ARG[0])
+                .long(RECURSIVE_ARG[0])
+                .short(RECURSIVE_ARG[1])
         )
         .arg(
             Arg::with_name(LOCAL_BRANCH_ARG)
