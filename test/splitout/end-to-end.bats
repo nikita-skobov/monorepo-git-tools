@@ -125,6 +125,37 @@ function teardown() {
     [[ "$(git branch --show-current)" == "my-branch" ]]
 }
 
+@test 'should not run if user has modified files' {
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include_as=(
+        \"lib/\" \" \"
+    )
+    "
+    echo "$repo_file_contents" > repo_file.sh
+
+    # create a modified file
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    # now modify it so that it shows up to git as modified but unstaged
+    echo "abcd" > abc.txt
+
+    echo "$(git status)"
+    echo "$(find . -not -path '*/\.*')"
+
+    git_log_before="$(git log --oneline)"
+    # this should exit with a warning that you have modified files
+    # and we should not run, otherwise your changes might be lost
+    run $PROGRAM_PATH split-out repo_file.sh --verbose -o newbranch1
+    git_log_after="$(git log --oneline)"
+    echo "$output"
+    echo "$(git status)"
+    echo "$(find . -not -path '*/\.*')"
+    [[ $status == 1 ]]
+    [[ "$(git branch --show-current)" == "master" ]]
+    [[ "$git_log_before" == "$git_log_after" ]]
+    [[ $output == *"modified changes"* ]]
+}
+
 @test 'capable of only including certain folders' {
     repo_file_contents="
     remote_repo=\"..$SEP$test_remote_repo2\"
