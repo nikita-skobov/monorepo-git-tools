@@ -240,6 +240,7 @@ pub fn run_split_out(matches: &ArgMatches) {
         .save_current_dir()
         .get_repository_from_current_dir()
         .change_to_repo_root()
+        .safe_to_proceed()
         .generate_arg_strings()
         .make_and_checkout_output_branch();
 
@@ -300,6 +301,7 @@ pub fn run_split_out_as(matches: &ArgMatches) {
         .verify_dependencies()
         .validate_repo_file()
         .change_to_repo_root()
+        .safe_to_proceed()
         .generate_arg_strings()
         .make_and_checkout_output_branch();
 

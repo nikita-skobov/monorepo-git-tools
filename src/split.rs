@@ -113,6 +113,30 @@ impl<'a> Runner<'a> {
         self
     }
 
+    // check the state of the git repository. exit if
+    // there are modified files, in the middle of a merge conflict
+    // etc...
+    pub fn safe_to_proceed(self) -> Self {
+        // TODO: also check for other things like:
+        // are there files staged? are we resolving a conflict?
+        // im just too lazy right now, and this is the most likely scenario
+        let args = ["git", "ls-files", "--modified"];
+        let output = match exec_helpers::execute(&args) {
+            Ok(o) => match o.status {
+                0 => o.stdout,
+                _ => panic!("Failed to run ls-files: {}", o.stderr),
+            },
+            Err(e) => panic!("Failed to run ls-files: {}", e),
+        };
+        if ! output.is_empty() {
+            exit_with_message_and_status(
+                "You have modified changes. Please stash or commit your changes before running this command",
+                1
+            );
+        }
+        self
+    }
+
     pub fn populate_empty_branch_with_remote_commits(self) -> Self {
         let remote_repo = self.repo_file.remote_repo.clone();
         let remote_branch: Option<&str> = match &self.repo_file.remote_branch {
@@ -305,6 +329,11 @@ impl<'a> Runner<'a> {
 
         self.run_filter(arg_vec, "Filtering exclude")
     }
+}
+
+pub fn exit_with_message_and_status(msg: &str, status: i32) {
+    println!("{}", msg);
+    std::process::exit(status);
 }
 
 pub fn generate_filter_arg_vec<'a>(
