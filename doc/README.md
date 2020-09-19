@@ -1,6 +1,6 @@
 # `mgt`
 
-> this file was automatically generated on 2020-09-18
+> this file was automatically generated on 2020-09-19
 
 Below you'll find a list of links to documentation pages, as well as the
 automatically generated output of `mgt --help`
