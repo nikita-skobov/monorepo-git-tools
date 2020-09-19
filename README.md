@@ -22,7 +22,7 @@ Some features that `mgt` provides are:
 
 - splitting your private repository into subrepositories that only contain files/folders that you want to share publically
 - bidirectional sync between repositories via transient branches that are formatted to be rebased
-- checking updates of multiple subrepositories (TODO)
+- checking updates of multiple subrepositories
 - filtering out specific text/commits before sharing publically (TODO)
 
 ## Example
