@@ -269,14 +269,19 @@ pub fn run_split_out(matches: &ArgMatches) {
 
         if runner.should_rebase {
             println!("{}Rebasing", log_p);
-            runner.rebase().delete_branch(tmp_remote_branch);
+            runner = runner.rebase().delete_branch(tmp_remote_branch);
         } else if runner.should_topbase {
             println!("{}Topbasing", log_p);
             use super::topbase::Topbase;
-            runner.topbase().delete_branch(tmp_remote_branch);
+            runner = runner.topbase().delete_branch(tmp_remote_branch);
         }
 
-        println!("{}Success!", log_p);
+        match runner.status {
+            0 => println!("{}Success!", log_p),
+            c => {
+                std::process::exit(c);
+            },
+        };
     }
 }
 
@@ -290,7 +295,7 @@ pub fn run_split_out_as(matches: &ArgMatches) {
     ]);
     runner.repo_file.repo_name = Some(output_branch.into());
 
-    let runner = runner.save_current_dir()
+    let mut runner = runner.save_current_dir()
         .get_repository_from_current_dir()
         .verify_dependencies()
         .validate_repo_file()
@@ -301,11 +306,16 @@ pub fn run_split_out_as(matches: &ArgMatches) {
     let log_p = runner.log_p.clone();
     let temp_branch = runner.output_branch.clone().unwrap_or("\"\"".into());
     println!("{}Running filter commands on temporary branch: {}", log_p, temp_branch);
-    runner.filter_include()
+    runner = runner.filter_include()
         .filter_exclude()
         .filter_include_as();
 
-    println!("{}Success!", log_p);
+    match runner.status {
+        0 => println!("{}Success!", log_p),
+        c => {
+            std::process::exit(c);
+        },
+    };
 }
 
 
