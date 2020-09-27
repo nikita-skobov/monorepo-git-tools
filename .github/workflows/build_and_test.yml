@@ -19,6 +19,7 @@ jobs:
           - { os: ubuntu-18.04 , target: i686-unknown-linux-gnu , usecross: true }
           - { os: ubuntu-18.04 , target: x86_64-unknown-linux-gnu , usecross: false }
           - { os: windows-latest, target: x86_64-pc-windows-msvc, usecross: false }
+          - { os: windows-latest, target: i686-pc-windows-msvc, usecross: false }
     steps:
       - name: install_rust
         uses: actions-rs/toolchain@v1.0.6
@@ -117,6 +118,17 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
           asset_path: ./mgt-windows-64.zip
           asset_name: mgt-${{ github.event.inputs.name }}-windows-64.zip
+          asset_content_type: application/zip
+      - name: pack_asset_windows_32
+        run: zip -j mgt-windows-32 ./mgt-i686-pc-windows-msvc/mgt.exe
+      - name: upload_asset_windows_32
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with: 
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+          asset_path: ./mgt-windows-32.zip
+          asset_name: mgt-${{ github.event.inputs.name }}-windows-32.zip
           asset_content_type: application/zip
       - name: pack_asset_linux_64
         run: zip -j mgt-linux-64 ./mgt-x86_64-unknown-linux-gnu/mgt
