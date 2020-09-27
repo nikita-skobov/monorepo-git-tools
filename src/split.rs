@@ -355,8 +355,8 @@ pub fn generate_filter_arg_vec<'a>(
     arg_vec
 }
 
-fn get_string_after_last_slash(s: String) -> String {
-    let mut pieces = s.rsplit(MAIN_SEPARATOR);
+fn get_string_after_last_slash(s: String, slash_type: char) -> String {
+    let mut pieces = s.rsplit(slash_type);
     match pieces.next() {
         Some(p) => p.into(),
         None => s.into(),
@@ -388,22 +388,35 @@ pub fn is_valid_remote_repo(remote_repo: &String) -> bool {
 
 // try to parse the remote repo
 pub fn try_get_repo_name_from_remote_repo(remote_repo: String) -> String {
+    let slash_type = MAIN_SEPARATOR;
+    let next_slash_type = if slash_type == '/' { '\\' } else { '/' };
+
+    // try to use native slash first:
+    let mut repo_name = try_get_repo_name_with_slash_type(&remote_repo, slash_type);
+    if repo_name == "" {
+        repo_name = try_get_repo_name_with_slash_type(&remote_repo, next_slash_type);
+    }
+
+    if repo_name == "" {
+        panic!("Failed to parse repo_name from remote_repo: {}", remote_repo);
+    }
+
+    repo_name
+}
+
+pub fn try_get_repo_name_with_slash_type(remote_repo: &String, slash_type: char) -> String {
     let mut out_str = remote_repo.clone().trim_end().to_string();
     if !is_valid_remote_repo(&remote_repo) {
         out_str = "".into();
     }
-    if out_str.ends_with(MAIN_SEPARATOR) {
+    if out_str.ends_with(slash_type) {
         out_str.pop();
     }
-    if !out_str.contains(MAIN_SEPARATOR) {
+    if !out_str.contains(slash_type) {
         out_str = "".into();
     }
-    out_str = get_string_after_last_slash(out_str);
+    out_str = get_string_after_last_slash(out_str, slash_type);
     out_str = get_string_before_first_dot(out_str);
-
-    if out_str == "" {
-        panic!("Failed to parse repo_name from remote_repo: {}", remote_repo);
-    }
 
     return out_str;
 }
@@ -441,15 +454,55 @@ pub fn changed_to_repo_root(repo_root: &PathBuf) -> bool {
 }
 
 
-// #[cfg(test)]
-// mod test {
-//     use super::*;
+#[cfg(test)]
+mod test {
+    use super::*;
 
-//     #[test]
-//     #[should_panic(expected = "Must provide either repo")]
-//     fn should_panic_if_no_repo_name_or_remote_repo() {
-//         let mut repofile = RepoFile::new();
-//         let argmatches = ArgMatches::new();
-//         validate_repo_file(&argmatches, &mut repofile);
-//     }
-// }
+    #[test]
+    #[cfg(target_family = "unix")]
+    fn unix_get_repo_name_from_remote_repo_should_try_main_seperator_first() {
+        let my_remote_repo = "https://website.com/reponame".into();
+        let repo_name = try_get_repo_name_from_remote_repo(my_remote_repo);
+        assert_eq!(repo_name, "reponame");
+    }
+
+    #[test]
+    #[cfg(target_family = "unix")]
+    fn unix_get_repo_name_from_remote_repo_should_try_main_seperator_first_with_dot() {
+        let my_remote_repo = "https://website.com/reponame.git".into();
+        let repo_name = try_get_repo_name_from_remote_repo(my_remote_repo);
+        assert_eq!(repo_name, "reponame");
+    }
+
+    #[test]
+    #[cfg(target_family = "windows")]
+    fn win_get_repo_name_from_remote_repo_should_try_main_seperator_first() {
+        let my_remote_repo = "file://some\\path\\reponame".into();
+        let repo_name = try_get_repo_name_from_remote_repo(my_remote_repo);
+        assert_eq!(repo_name, "reponame");
+    }
+
+    #[test]
+    #[cfg(target_family = "unix")]
+    fn unix_get_repo_name_from_remote_repo_should_use_other_path_slash_if_not_found() {
+        let my_remote_repo = ".\\Desktop\\reponame".into();
+        let repo_name = try_get_repo_name_from_remote_repo(my_remote_repo);
+        assert_eq!(repo_name, "reponame");
+    }
+
+    #[test]
+    #[cfg(target_family = "windows")]
+    fn win_get_repo_name_from_remote_repo_should_use_other_path_slash_if_not_found() {
+        let my_remote_repo = "https://website.com/reponame".into();
+        let repo_name = try_get_repo_name_from_remote_repo(my_remote_repo);
+        assert_eq!(repo_name, "reponame");
+    }
+
+    #[test]
+    #[cfg(target_family = "windows")]
+    fn win_get_repo_name_from_remote_repo_should_use_other_path_slash_if_not_found_with_dot() {
+        let my_remote_repo = "https://website.com/reponame.git".into();
+        let repo_name = try_get_repo_name_from_remote_repo(my_remote_repo);
+        assert_eq!(repo_name, "reponame");
+    }
+}
