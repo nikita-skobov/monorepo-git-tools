@@ -55,3 +55,31 @@ pub fn execute_with_env(
 pub fn execute(exe_and_args: &[&str]) -> Result<CommandOutput, Error> {
     execute_with_env(exe_and_args, &[], &[])
 }
+
+pub fn spawn_with_env(
+    exe_and_args: &[&str],
+    keys: &[&str],
+    vals: &[&str],
+) -> Result<std::process::Child, Error> {
+    // at the very least must provide the executable name
+    assert!(exe_and_args.len() >= 1);
+    assert!(keys.len() == vals.len());
+
+    let mut proc = Command::new(exe_and_args[0]);
+    for arg in exe_and_args.iter().skip(1) {
+        proc.arg(arg);
+    }
+
+    let it = keys.iter().zip(vals.iter());
+    for (k, v) in it {
+        proc.env(k, v);
+    }
+
+    proc.stdin(Stdio::null());
+    proc.stderr(Stdio::null());
+    proc.spawn()
+}
+
+pub fn spawn(exe_and_args: &[&str]) -> Result<std::process::Child, Error> {
+    spawn_with_env(exe_and_args, &[], &[])
+}
