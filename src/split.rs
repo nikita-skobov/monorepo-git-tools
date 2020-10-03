@@ -4,6 +4,7 @@ use std::env;
 use std::path::PathBuf;
 use std::path::MAIN_SEPARATOR;
 use clap::ArgMatches;
+use git_url_parse::GitUrl;
 
 use super::commands::REPO_FILE_ARG;
 use super::commands::DRY_RUN_ARG;
@@ -372,18 +373,7 @@ fn get_string_before_first_dot(s: String) -> String {
 }
 
 pub fn is_valid_remote_repo(remote_repo: &String) -> bool {
-    // TODO:
-    // need to check for if it matches a regex like a server ip
-    // like 192.168.1.1, or user@server.com:/gitpath
-    return remote_repo.starts_with("ssh://") ||
-    remote_repo.starts_with("git://") ||
-    remote_repo.starts_with("http://") ||
-    remote_repo.starts_with("https://") ||
-    remote_repo.starts_with("ftp://") ||
-    remote_repo.starts_with("sftp://") ||
-    remote_repo.starts_with("file://") ||
-    remote_repo.starts_with(".") ||
-    remote_repo.starts_with("/");
+    GitUrl::parse(remote_repo).is_ok()
 }
 
 // try to parse the remote repo
@@ -504,5 +494,138 @@ mod test {
         let my_remote_repo = "https://website.com/reponame.git".into();
         let repo_name = try_get_repo_name_from_remote_repo(my_remote_repo);
         assert_eq!(repo_name, "reponame");
+    }
+
+    
+    #[test]
+    fn validate_git_repo_unix_relative_path() {
+        let repo_url = "../test_repo";
+        assert_eq!(
+            GitUrl::parse(repo_url).unwrap(),
+            GitUrl {
+                host: None,
+                name: "test_repo".into(),
+                owner: None,
+                organization: None,
+                fullname: "test_repo".into(),
+                scheme: git_url_parse::Scheme::File,
+                user: None,
+                token: None,
+                port: None,
+                path: "../test_repo".into(),
+                git_suffix: false,
+                scheme_prefix: false
+            }
+        )
+    }
+
+    #[test]
+    fn validate_git_repo_unix_absolute_path_with_file_scheme() {
+        let repo_url = "file:///test_repo";
+        assert_eq!(
+            GitUrl::parse(repo_url).unwrap(),
+            GitUrl {
+                host: None,
+                name: "test_repo".into(),
+                owner: None,
+                organization: None,
+                fullname: "test_repo".into(),
+                scheme: git_url_parse::Scheme::File,
+                user: None,
+                token: None,
+                port: None,
+                path: "/test_repo".into(),
+                git_suffix: false,
+                scheme_prefix: true 
+            }
+        )
+    }
+
+    #[test]
+    fn validate_git_repo_win_relative_path() {
+        let repo_url = "..\\test_repo";
+        assert_eq!(
+            GitUrl::parse(repo_url).unwrap(),
+            GitUrl {
+                host: None,
+                name: "test_repo".into(),
+                owner: None,
+                organization: None,
+                fullname: "test_repo".into(),
+                scheme: git_url_parse::Scheme::File,
+                user: None,
+                token: None,
+                port: None,
+                path: "../test_repo".into(),
+                git_suffix: false,
+                scheme_prefix: false 
+            }
+        )
+    }
+
+    #[test]
+    fn validate_git_repo_https() {
+        let repo_url = "https://website.com/username/reponame";
+        assert_eq!(
+            GitUrl::parse(repo_url).unwrap(),
+            GitUrl {
+                host: Some("website.com".into()),
+                name: "reponame".into(),
+                owner: Some("username".into()),
+                organization: None,
+                fullname: "username/reponame".into(),
+                scheme: git_url_parse::Scheme::Https,
+                user: None,
+                token: None,
+                port: None,
+                path: "/username/reponame".into(),
+                git_suffix: false,
+                scheme_prefix: true 
+            }
+        )
+    }
+
+    #[test]
+    fn validate_git_repo_https_dot_git() {
+        let repo_url = "https://website.com/username/reponame.git";
+        assert_eq!(
+            GitUrl::parse(repo_url).unwrap(),
+            GitUrl {
+                host: Some("website.com".into()),
+                name: "reponame".into(),
+                owner: Some("username".into()),
+                organization: None,
+                fullname: "username/reponame".into(),
+                scheme: git_url_parse::Scheme::Https,
+                user: None,
+                token: None,
+                port: None,
+                path: "/username/reponame.git".into(),
+                git_suffix: true,
+                scheme_prefix: true 
+            }
+        )
+    }
+
+    #[test]
+    fn validate_git_repo_ssh_ip_address_with_user_dot_git() {
+        let repo_url = "pi@10.10.10.10:/home/reponame.git";
+        assert_eq!(
+            GitUrl::parse(repo_url).unwrap(),
+            GitUrl {
+                host: Some("10.10.10.10".into()),
+                name: "reponame".into(),
+                owner: Some("home".into()),
+                organization: None,
+                fullname: "home/reponame".into(),
+                scheme: git_url_parse::Scheme::Ssh,
+                user: Some("pi".into()),
+                token: None,
+                port: None,
+                path: "/home/reponame.git".into(),
+                git_suffix: true,
+                scheme_prefix: false 
+            }
+        )
     }
 }
