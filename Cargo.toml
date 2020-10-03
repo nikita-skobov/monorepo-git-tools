@@ -1,6 +1,7 @@
 [package]
 name = "mgt"
 description = "Git tools that enable easy bidirectional sync between multiple repositories"
+# please make sure version is always on line 5, otherwise CI will break ¯\_(ツ)_/¯
 version = "2.4.1"
 authors = ["Nikita Skobov"]
 edition = "2018"

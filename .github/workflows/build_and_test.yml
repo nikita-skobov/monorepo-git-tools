@@ -173,6 +173,9 @@ jobs:
         run: ./doc/gen_docs.sh
       - name: git_config
         run: git config --local user.name "github_CI" && git config --local user.email "github_CI"
+      - name: version_bump
+        run: sed -i '5s/.*/version = "${{ github.event.inputs.name }}"/' Cargo.toml
+      # TODO: need to increment lock file as well
       - name: commit_and_push_new_docs
         continue-on-error: true
-        run: git add doc/ && git commit -m "updates docs for ${{ github.event.inputs.name }}" && git push
+        run: git add doc/ Cargo.toml Cargo.lock && git commit -m "updates docs for ${{ github.event.inputs.name }}" && git push
