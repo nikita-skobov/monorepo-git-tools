@@ -12,6 +12,15 @@ function make_temp_repo() {
     fi
 }
 
+# TODO: maybe even let each test run in parallel
+# via randomly generated folders for each test case?
+function random_folder_name() {
+    chars=abcdef01234567
+    for i in {1..16} ; do
+        echo -n "${chars:RANDOM%${#chars}:1}"
+    done
+}
+
 function set_seperator() {
     # I wanna use these tests for both windows (git bash)
     # and linux, so I need to change the separator
@@ -23,6 +32,10 @@ function set_seperator() {
 }
 
 function setup() {
+    test_folder="$BATS_TMPDIR/splitin"
+    mkdir -p "$test_folder"
+    BATS_TMPDIR="$test_folder"
+    cd $test_folder
     set_seperator
     make_temp_repo test_remote_repo
     test_remote_repo="test_remote_repo"
@@ -38,6 +51,10 @@ function teardown() {
     fi
     if [[ -d test_remote_repo2 ]]; then
         rm -rf test_remote_repo2
+    fi
+    cd ..
+    if [[ -d splitin ]]; then
+        rm -rf splitin/
     fi
 }
 
