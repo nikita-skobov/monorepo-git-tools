@@ -30,9 +30,17 @@ function teardown() {
     if [[ -d test_remote_repo2 ]]; then
         rm -rf test_remote_repo2
     fi
+    cd ..
+    if [[ -d checkupdatesusage ]]; then
+        rm -rf checkupdatesusage/
+    fi
 }
 
 function setup() {
+    test_folder="$BATS_TMPDIR/checkupdatesusage"
+    mkdir -p "$test_folder"
+    BATS_TMPDIR="$test_folder"
+    cd $test_folder
     set_seperator
     make_temp_repo test_remote_repo
     test_remote_repo="test_remote_repo"

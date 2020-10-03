@@ -23,6 +23,10 @@ function set_seperator() {
 }
 
 function setup() {
+    test_folder="$BATS_TMPDIR/topbase"
+    mkdir -p "$test_folder"
+    BATS_TMPDIR="$test_folder"
+    cd $test_folder
     set_seperator
     make_temp_repo test_remote_repo
     test_remote_repo="test_remote_repo"
@@ -36,6 +40,10 @@ function teardown() {
     fi
     if [[ -d test_remote_repo2 ]]; then
         rm -rf test_remote_repo2
+    fi
+    cd ..
+    if [[ -d topbase ]]; then
+        rm -rf topbase/
     fi
 }
 

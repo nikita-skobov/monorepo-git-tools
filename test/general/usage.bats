@@ -30,7 +30,12 @@ function teardown() {
     if [[ -d test_remote_repo2 ]]; then
         rm -rf test_remote_repo2
     fi
+    cd ..
+    if [[ -d genusage ]]; then
+        rm -rf genusage/
+    fi
 }
+
 
 @test 'should show usage when using -h --help or help' {
     run $PROGRAM_PATH help
@@ -74,6 +79,10 @@ function teardown() {
 }
 
 @test 'can use dry run as -d or --dry-run' {
+    test_folder="$BATS_TMPDIR/genusage"
+    mkdir -p "$test_folder"
+    BATS_TMPDIR="$test_folder"
+    cd $test_folder
     set_seperator
     make_temp_repo test_remote_repo
     test_remote_repo="test_remote_repo"
