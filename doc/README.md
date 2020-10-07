@@ -11,7 +11,7 @@ automatically generated output of `mgt --help`
 * [split-in](./split-in.md)
 * [split-in-as](./split-in-as.md)
 * [topbase](./topbase.md)
-* [check-updates](./check-updates.md)
+* [check](./check.md)
 * [repo_file](./repo_file.md)
 
 ## `mgt --help` or
@@ -31,7 +31,7 @@ FLAGS:
     -V, --version    Prints version information
 
 SUBCOMMANDS:
-    check-updates    check if remote has commits not present in local or vice versa
+    check            check if remote has commits not present in local or vice versa
     help             Prints this message or the help of the given subcommand(s)
     split-in         fetch and rewrite a remote repository's history onto a new branch such that it only contains
                      certain paths according to a repo-file

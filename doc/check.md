@@ -1,11 +1,11 @@
-# `mgt check-updates --help`
+# `mgt check --help`
 
 ```
-mgt-check-updates 
+mgt-check
 check if remote has commits not present in local or vice versa
 
 USAGE:
-    mgt check-updates [FLAGS] [OPTIONS] <repo-file>
+    mgt check [FLAGS] [OPTIONS] <repo-file>
 
 FLAGS:
     -a, --all          if the <repo-file> is a directory, by default mgt only looks for files ending in .rf, with the

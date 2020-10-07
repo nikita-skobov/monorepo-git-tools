@@ -5,7 +5,7 @@ use super::split_out::run_split_out_as;
 use super::split_in::run_split_in;
 use super::split_in::run_split_in_as;
 use super::topbase::run_topbase;
-use super::check_updates::run_check_updates;
+use super::check::run_check;
 
 pub const INPUT_BRANCH_ARG: &'static str = "input-branch";
 pub const INPUT_BRANCH_NAME: &'static str = "branch-name";
@@ -33,13 +33,13 @@ const SPLIT_IN_AS_STR: &'static str = "split-in-as";
 const SPLIT_OUT_STR: &'static str = "split-out";
 const SPLIT_OUT_AS_STR: &'static str = "split-out-as";
 const TOPBASE_CMD_STR: &'static str = "topbase";
-const CHECKUPDATES_CMD_STR: &'static str = "check-updates";
+const CHECK_CMD_STR: &'static str = "check";
 const SPLIT_OUT_DESCRIPTION: &'static str = "rewrite this repository history onto a new branch such that it only contains certain paths according to a repo-file";
 const SPLIT_IN_DESCRIPTION: &'static str = "fetch and rewrite a remote repository's history onto a new branch such that it only contains certain paths according to a repo-file";
 const SPLIT_IN_AS_DESCRIPTION: &'static str = "fetch the entirety of a remote repository and place it in a subdirectory of this repository";
 const SPLIT_OUT_AS_DESCRIPTION: &'static str = "make a new repository (via a branch) that only contains commits that are part of a subdirectory";
 const TOPBASE_CMD_DESCRIPTION: &'static str = "rebases top branch onto bottom branch keeping only the first commits until it finds a commit from top where all blobs exist in the bottom branch.";
-const CHECKUPDATES_CMD_DESCRIPTION: &'static str = "check if remote has commits not present in local or vice versa";
+const CHECK_CMD_DESCRIPTION: &'static str = "check if remote has commits not present in local or vice versa";
 const REPO_FILE_DESCRIPTION: &'static str = "path to file that contains instructions of how to split a repository";
 const REPO_URI_DESCRIPTION: &'static str = "a valid git url of the repository to split in";
 const AS_SUBDIR_DESCRIPTION: &'static str = "path relative to root of the local repository that will contain the entire repository being split";
@@ -59,7 +59,7 @@ pub enum CommandName {
     SplitOut,
     SplitOutAs,
     Topbase,
-    CheckUpdates,
+    Check,
     UnknownCommand,
 }
 
@@ -73,7 +73,7 @@ impl From<CommandName> for &'static str {
             SplitOut => SPLIT_OUT_STR,
             SplitOutAs => SPLIT_OUT_AS_STR,
             Topbase => TOPBASE_CMD_STR,
-            CheckUpdates => CHECKUPDATES_CMD_STR,
+            Check => CHECK_CMD_STR,
             UnknownCommand => "",
         }
     }
@@ -87,7 +87,7 @@ impl From<&str> for CommandName {
             SPLIT_OUT_STR => SplitOut,
             SPLIT_OUT_AS_STR => SplitOutAs,
             TOPBASE_CMD_STR => Topbase,
-            CHECKUPDATES_CMD_STR => CheckUpdates,
+            CHECK_CMD_STR => Check,
             _ => UnknownCommand,
         }
     }
@@ -101,7 +101,7 @@ impl CommandName {
             SplitOut => SPLIT_OUT_DESCRIPTION,
             SplitOutAs => SPLIT_OUT_AS_DESCRIPTION,
             Topbase => TOPBASE_CMD_DESCRIPTION,
-            CheckUpdates => CHECKUPDATES_CMD_DESCRIPTION,
+            Check => CHECK_CMD_DESCRIPTION,
             _ => "",
         }
     }
@@ -289,8 +289,8 @@ pub fn topbase<'a, 'b>() -> App<'a, 'b> {
         );
 }
 
-pub fn check_updates<'a, 'b>() ->App<'a, 'b> {
-    let cmd = CheckUpdates;
+pub fn check<'a, 'b>() ->App<'a, 'b> {
+    let cmd = Check;
     let name = cmd.clone().into();
 
     return SubCommand::with_name(name)
@@ -352,6 +352,6 @@ pub fn run_command(name: &str, matches: &ArgMatches) {
         SplitOut => run_split_out(matches.subcommand_matches(name).unwrap()),
         SplitOutAs => run_split_out_as(matches.subcommand_matches(name).unwrap()),
         Topbase => run_topbase(matches.subcommand_matches(name).unwrap()),
-        CheckUpdates => run_check_updates(matches.subcommand_matches(name).unwrap()),
+        Check => run_check(matches.subcommand_matches(name).unwrap()),
     }
 }

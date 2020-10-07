@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use super::git_helpers;
 use super::exec_helpers;
 use super::split::Runner;
-use super::check_updates::topbase_check_alg;
+use super::check::topbase_check_alg;
 use super::commands::TOPBASE_CMD_BASE;
 use super::commands::TOPBASE_CMD_TOP;
 use super::commands::VERBOSE_ARG;

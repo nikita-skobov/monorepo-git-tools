@@ -11,7 +11,7 @@ automatically generated output of `mgt --help`
 * [split-in](./split-in.md)
 * [split-in-as](./split-in-as.md)
 * [topbase](./topbase.md)
-* [check-updates](./check-updates.md)
+* [check](./check.md)
 * [repo_file](./repo_file.md)
 
 ## `mgt --help` or
