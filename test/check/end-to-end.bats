@@ -31,13 +31,13 @@ function teardown() {
         rm -rf test_remote_repo2
     fi
     cd ..
-    if [[ -d checkupdates ]]; then
-        rm -rf checkupdates/
+    if [[ -d check ]]; then
+        rm -rf check/
     fi
 }
 
 function setup() {
-    test_folder="$BATS_TMPDIR/checkupdates"
+    test_folder="$BATS_TMPDIR/check"
     mkdir -p "$test_folder"
     BATS_TMPDIR="$test_folder"
     cd $test_folder
@@ -64,7 +64,7 @@ function setup() {
 # 
     # [[ ! -f .git/FETCH_HEAD ]]
 # 
-    # run $PROGRAM_PATH check-updates repo_file.sh
+    # run $PROGRAM_PATH check repo_file.sh
     # echo "$output"
     # size_git_after="$(du -s .git/*)"
     # echo "BEFORE:"
@@ -93,7 +93,7 @@ function setup() {
     echo "$(git log --oneline)"
 
 
-    run $PROGRAM_PATH check-updates repo_file.sh
+    run $PROGRAM_PATH check repo_file.sh
     echo "$output"
     [[ $status == "0" ]]
     [[ $output == *"up to date"* ]]
@@ -126,7 +126,7 @@ function setup() {
     echo "LOCAL:"
     echo "$(git log --oneline)"
 
-    run $PROGRAM_PATH check-updates repo_file_dir
+    run $PROGRAM_PATH check repo_file_dir
     echo "$output"
     [[ $status == "0" ]]
     [[ $output == *"up to date"* ]]
@@ -159,7 +159,7 @@ function setup() {
     echo "LOCAL:"
     echo "$(git log --oneline)"
 
-    run $PROGRAM_PATH check-updates --all repo_file_dir
+    run $PROGRAM_PATH check --all repo_file_dir
     echo "$output"
     [[ $status == "0" ]]
     [[ $output == *"up to date"* ]]
@@ -200,7 +200,7 @@ function setup() {
     echo "LOCAL:"
     echo "$(git log --oneline)"
 
-    run $PROGRAM_PATH check-updates --recursive repo_file_dir
+    run $PROGRAM_PATH check --recursive repo_file_dir
     echo "$output"
     [[ $status == "0" ]]
     [[ $output == *"up to date"* ]]
@@ -233,7 +233,7 @@ function setup() {
     echo "$(git log --oneline)"
 
 
-    run $PROGRAM_PATH check-updates repo_file.sh
+    run $PROGRAM_PATH check repo_file.sh
     echo "$output"
     [[ $status == "0" ]]
     [[ $output == *"$commit_to_take"* ]]
@@ -251,7 +251,7 @@ function setup() {
 
     # we only care about abc.txt <-> abc.txt
     # the fact that remote has xyz.txt should be irrelevant
-    # to this check-updates
+    # to this check
     repo_file_contents="
     remote_repo=\"..$SEP$test_remote_repo2\"
     include=\"abc.txt\"
@@ -263,7 +263,7 @@ function setup() {
     echo "$(git log --oneline)"
 
 
-    run $PROGRAM_PATH check-updates repo_file.sh
+    run $PROGRAM_PATH check repo_file.sh
     echo "$output"
     [[ $status == "0" ]]
     [[ $output == *"up to date"* ]]
@@ -281,7 +281,7 @@ function setup() {
 
     # we only care about abcd.txt <-> abc.txt
     # the fact that remote has xyz.txt should be irrelevant
-    # to this check-updates
+    # to this check
     repo_file_contents="
     remote_repo=\"..$SEP$test_remote_repo2\"
     include_as=(
@@ -295,7 +295,7 @@ function setup() {
     echo "$(git log --oneline)"
 
 
-    run $PROGRAM_PATH check-updates repo_file.sh
+    run $PROGRAM_PATH check repo_file.sh
     echo "$output"
     [[ $status == "0" ]]
     [[ $output == *"up to date"* ]]
@@ -313,7 +313,7 @@ function setup() {
 
     # we only care about abcd.txt <-> abc.txt
     # the fact that remote has xyz.txt should be irrelevant
-    # to this check-updates
+    # to this check
     repo_file_contents="
     remote_repo=\"..$SEP$test_remote_repo2\"
     exclude=(\"xy z.txt\" \"abcd.txt\")
@@ -324,7 +324,7 @@ function setup() {
     echo "$(git log --oneline)"
 
 
-    run $PROGRAM_PATH check-updates repo_file.sh
+    run $PROGRAM_PATH check repo_file.sh
     echo "$output"
     [[ $status == "0" ]]
     [[ $output == *"up to date"* ]]
@@ -344,7 +344,7 @@ function setup() {
 
     # we only care about abcd.txt <-> abc.txt
     # the fact that remote has xyz.txt should be irrelevant
-    # to this check-updates
+    # to this check
     repo_file_contents="
     remote_repo=\"..$SEP$test_remote_repo2\"
     include=(\"some path/\")
@@ -356,7 +356,7 @@ function setup() {
     echo "$(git log --oneline)"
 
 
-    run $PROGRAM_PATH check-updates repo_file.sh
+    run $PROGRAM_PATH check repo_file.sh
     echo "$output"
     [[ $status == "0" ]]
     [[ $output == *"up to date"* ]]
@@ -377,7 +377,7 @@ function setup() {
     cd "$curr_dir"
 
     # the fact that remote has xyz.txt should be irrelevant
-    # to this check-updates
+    # to this check
     repo_file_contents="
     remote_repo=\"..$SEP$test_remote_repo2\"
     include_as=(
@@ -390,7 +390,7 @@ function setup() {
     echo "$(git log --oneline)"
 
 
-    run $PROGRAM_PATH check-updates repo_file.sh
+    run $PROGRAM_PATH check repo_file.sh
     echo "$output"
     [[ $status == "0" ]]
     [[ $output == *"$commit_to_take"* ]]
@@ -411,7 +411,7 @@ function setup() {
     cd "$curr_dir"
 
     # the fact that remote has xyz.txt should be irrelevant
-    # to this check-updates
+    # to this check
     repo_file_contents="
     remote_repo=\"..$SEP$test_remote_repo2\"
     include_as=(
@@ -425,7 +425,7 @@ function setup() {
     echo "$(git log --oneline)"
 
 
-    run $PROGRAM_PATH check-updates repo_file.sh
+    run $PROGRAM_PATH check repo_file.sh
     echo "$output"
     [[ $status == "0" ]]
     [[ $output == *"up to date"* ]]
@@ -444,7 +444,7 @@ function setup() {
     cd "$curr_dir"
 
     # the fact that remote has xyz.txt should be irrelevant
-    # to this check-updates
+    # to this check
     repo_file_contents="
     remote_repo=\"..$SEP$test_remote_repo2\"
     include_as=(
@@ -459,7 +459,7 @@ function setup() {
     echo "$(git log --oneline)"
 
 
-    run $PROGRAM_PATH check-updates repo_file.sh --local
+    run $PROGRAM_PATH check repo_file.sh --local
     echo "$output"
     [[ $status == "0" ]]
     [[ $output == *"$commit_to_take"* ]]
@@ -478,7 +478,7 @@ function setup() {
     cd "$curr_dir"
 
     # the fact that remote has xyz.txt should be irrelevant
-    # to this check-updates
+    # to this check
     repo_file_contents="
     remote_repo=\"..$SEP$test_remote_repo2\"
     include_as=(
@@ -494,7 +494,7 @@ function setup() {
     echo "$(git log --oneline)"
 
 
-    run $PROGRAM_PATH check-updates repo_file.sh --local
+    run $PROGRAM_PATH check repo_file.sh --local
     echo "$output"
     [[ $status == "0" ]]
     [[ $output == *"up to date"* ]]

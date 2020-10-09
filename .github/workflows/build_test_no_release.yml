@@ -82,7 +82,7 @@ jobs:
         run: bash -c "bats test/topbase"
         env:
           PROGRAM_PATH: mgt
-      - name: e2e_test_checkupdates
-        run: bash -c "bats test/checkupdates"
+      - name: e2e_test_check
+        run: bash -c "bats test/check"
         env:
           PROGRAM_PATH: mgt

@@ -20,7 +20,7 @@ use super::topbase::blob_check_callback_default;
 use std::{collections::HashSet, path::PathBuf};
 
 pub trait CheckUpdates {
-    fn check_updates(
+    fn check(
         self,
         upstream_branch: &str,
         current_branch: &str,
@@ -32,7 +32,7 @@ pub trait CheckUpdates {
 
 impl<'a> CheckUpdates for Runner<'a> {
     // check if upstream branch needs to get updates from current
-    fn check_updates(
+    fn check(
         self,
         upstream_branch: &str,
         current_branch: &str,
@@ -239,12 +239,12 @@ pub fn topbase_check_alg<F>(
     );
 }
 
-// the above check_updated method will do the checking, and is useful
+// the above check method will do the checking, and is useful
 // for other commands that already have the branch names, and data fetched
-// this method will get the information it needs specifically for the check-updates
+// this method will get the information it needs specifically for the check
 // command, and fetch it appropriately. it will return the name of the upstream branch
-// and the name of the current branch to pass on to the actual check_updates method above
-fn setup_check_updates(runner: &Runner) -> (String, String, bool) {
+// and the name of the current branch to pass on to the actual check method above
+fn setup_check(runner: &Runner) -> (String, String, bool) {
     // 'current' is the branch that potentially
     // has the most recent updates
     let mut current_is_remote = true;
@@ -423,7 +423,7 @@ pub fn get_all_repo_files(
     Ok(out_vec)
 }
 
-pub fn run_check_updates(matches: &ArgMatches) {
+pub fn run_check(matches: &ArgMatches) {
     // safe to unwrap because it is required
     let repo_file_path = matches.value_of(REPO_FILE_ARG).unwrap();
     let repo_file_pathbuf: PathBuf = repo_file_path.into();
@@ -449,8 +449,8 @@ pub fn run_check_updates(matches: &ArgMatches) {
             .get_repository_from_current_dir()
             .get_repo_file();
 
-        let (upstream, current, current_is_remote) = setup_check_updates(&runner);
+        let (upstream, current, current_is_remote) = setup_check(&runner);
 
-        runner.check_updates(&upstream[..], &current[..], current_is_remote, true, true);
+        runner.check(&upstream[..], &current[..], current_is_remote, true, true);
     }
 }

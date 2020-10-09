@@ -67,8 +67,8 @@ run_end_to_end_tests() {
     echo "SPLIT-OUT-AS:"
     PROGRAM_PATH="$PROGRAM_PATH" bats test/splitoutas
     echo ""
-    echo "CHECK-UPDATES:"
-    PROGRAM_PATH="$PROGRAM_PATH" bats test/checkupdates
+    echo "CHECK:"
+    PROGRAM_PATH="$PROGRAM_PATH" bats test/check
     echo ""
 }
 
