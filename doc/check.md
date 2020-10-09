@@ -1,7 +1,7 @@
 # `mgt check --help`
 
 ```
-mgt-check
+mgt-check 
 check if remote has commits not present in local or vice versa
 
 USAGE:
