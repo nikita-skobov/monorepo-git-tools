@@ -102,8 +102,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.event.inputs.name }}
-          release_name: ${{ github.event.inputs.name }}
+          tag_name: v${{ github.event.inputs.name }}
+          release_name: v${{ github.event.inputs.name }}
           body: |
             TODO: fill this in
           draft: false
@@ -117,7 +117,7 @@ jobs:
         with: 
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
           asset_path: ./mgt-windows-64.zip
-          asset_name: mgt-${{ github.event.inputs.name }}-windows-64.zip
+          asset_name: mgt-v${{ github.event.inputs.name }}-windows-64.zip
           asset_content_type: application/zip
       - name: pack_asset_windows_32
         run: zip -j mgt-windows-32 ./mgt-i686-pc-windows-msvc/mgt.exe
@@ -128,7 +128,7 @@ jobs:
         with: 
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
           asset_path: ./mgt-windows-32.zip
-          asset_name: mgt-${{ github.event.inputs.name }}-windows-32.zip
+          asset_name: mgt-v${{ github.event.inputs.name }}-windows-32.zip
           asset_content_type: application/zip
       - name: pack_asset_linux_64
         run: zip -j mgt-linux-64 ./mgt-x86_64-unknown-linux-gnu/mgt
@@ -139,7 +139,7 @@ jobs:
         with: 
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
           asset_path: ./mgt-linux-64.zip
-          asset_name: mgt-${{ github.event.inputs.name }}-linux-64.zip
+          asset_name: mgt-v${{ github.event.inputs.name }}-linux-64.zip
           asset_content_type: application/zip
       - name: pack_asset_linux_32
         run: zip -j mgt-linux-32 ./mgt-i686-unknown-linux-gnu/mgt
@@ -150,7 +150,7 @@ jobs:
         with: 
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
           asset_path: ./mgt-linux-32.zip
-          asset_name: mgt-${{ github.event.inputs.name }}-linux-32.zip
+          asset_name: mgt-v${{ github.event.inputs.name }}-linux-32.zip
           asset_content_type: application/zip
   publish_docs:
     runs-on: ubuntu-latest
@@ -174,8 +174,12 @@ jobs:
       - name: git_config
         run: git config --local user.name "github_CI" && git config --local user.email "github_CI"
       - name: version_bump
+      # when running this pipeline make sure the inputs.name is just the version without the v (eg: 1.1.1)
         run: sed -i '5s/.*/version = "${{ github.event.inputs.name }}"/' Cargo.toml
-      # TODO: need to increment lock file as well
+      - name: version_check
+        uses: actions-rs/cargo@ae10961054e4aa8b4aa7dffede299aaf087aa33b
+        with:
+          command: check
       - name: commit_and_push_new_docs
         continue-on-error: true
         run: git add doc/ Cargo.toml Cargo.lock && git commit -m "updates docs for ${{ github.event.inputs.name }}" && git push
