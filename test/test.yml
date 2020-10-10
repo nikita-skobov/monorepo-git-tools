@@ -1,0 +1,37 @@
+custom:
+  should_run_git_tests: ${{ ENV:SHOULD_RUN_GIT_TESTS | false }}
+
+run_unit_tests:
+  series:
+    - task: |
+        if [[ "${{ custom.should_run_git_tests }}" != "false" ]]; then
+            cargo test --features gittest 2>tempfile.txt  
+        else
+            cargo test 2>tempfile.txt
+        fi
+  # - run: echo "$(<tempfile.txt)"
+  # only_on_fail: true
+    - task: rm tempfile.txt
+
+run_e2e_test:
+  task: bats ?{{ 1 }}
+  env:
+    PROGRAM_PATH: ?{{ program_path }}
+
+series:
+  - name: build
+    series:
+      - task: cargo build --release 2>&1
+        capture_stdout: a
+      - task: realpath ./target/release/mgt
+        capture_stdout: program_path
+
+  - parallel:
+    - run_unit_tests
+    - run_e2e_test test/general
+    - run_e2e_test test/splitout
+    - run_e2e_test test/splitin
+    - run_e2e_test test/splitinas
+    - run_e2e_test test/topbase
+    - run_e2e_test test/splitoutas
+    - run_e2e_test test/check
