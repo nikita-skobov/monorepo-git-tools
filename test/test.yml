@@ -3,7 +3,8 @@ custom:
 
 run_unit_tests:
   series:
-    - task: |
+    - name: cargo test
+      run: |
         if [[ "${{ custom.should_run_git_tests }}" != "false" ]]; then
             cargo test --features gittest 2>tempfile.txt  
         else
@@ -11,20 +12,22 @@ run_unit_tests:
         fi
   # - run: echo "$(<tempfile.txt)"
   # only_on_fail: true
-    - task: rm tempfile.txt
+    - name: cargo test cleanup
+      run: rm tempfile.txt
 
 run_e2e_test:
-  task: bats ?{{ 1 }}
+  run: bats ?{{ 1 }}
   env:
     PROGRAM_PATH: ?{{ program_path }}
 
 series:
   - name: build
     series:
-      - task: cargo build --release 2>&1
-        capture_stdout: a
-      - task: realpath ./target/release/mgt
+      - run: cargo build --release 2>&1
+        name: cargo build
+      - run: realpath ./target/release/mgt
         capture_stdout: program_path
+        name: cargo build cleanup
 
   - parallel:
     - run_unit_tests
