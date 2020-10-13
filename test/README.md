@@ -23,5 +23,5 @@ If you want to try out my task runner that I use to run tests, checkout [simple-
 The task runner can run the tests via:
 
 ```sh
-simple-yaml-task-runner ./test/test.yml
+sytr ./test/test.yml
 ```
