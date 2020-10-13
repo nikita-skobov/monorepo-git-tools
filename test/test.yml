@@ -6,14 +6,10 @@ run_unit_tests:
     - name: cargo test
       run: |
         if [[ "${{ custom.should_run_git_tests }}" != "false" ]]; then
-            cargo test --features gittest 2>tempfile.txt  
+            cargo test --features gittest
         else
-            cargo test 2>tempfile.txt
+            cargo test
         fi
-  # - run: echo "$(<tempfile.txt)"
-  # only_on_fail: true
-    - name: cargo test cleanup
-      run: rm tempfile.txt
 
 run_e2e_test:
   run: bats ?{{ 1 }}
