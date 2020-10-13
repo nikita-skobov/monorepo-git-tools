@@ -1,0 +1,36 @@
+custom:
+  should_run_git_tests: ${{ ENV:SHOULD_RUN_GIT_TESTS | false }}
+
+run_unit_tests:
+  series:
+    - name: cargo test
+      run: |
+        if [[ "${{ custom.should_run_git_tests }}" != "false" ]]; then
+            cargo test --features gittest
+        else
+            cargo test
+        fi
+
+run_e2e_test:
+  run: bats ?{{ 1 }}
+  env:
+    PROGRAM_PATH: ?{{ program_path }}
+
+series:
+  - name: build
+    series:
+      - run: cargo build --release 2>&1
+        name: cargo build
+      - run: realpath ./target/release/mgt
+        capture_stdout: program_path
+        name: cargo build cleanup
+
+  - parallel:
+    - run_unit_tests
+    - run_e2e_test test/general
+    - run_e2e_test test/splitout
+    - run_e2e_test test/splitin
+    - run_e2e_test test/splitinas
+    - run_e2e_test test/topbase
+    - run_e2e_test test/splitoutas
+    - run_e2e_test test/check
