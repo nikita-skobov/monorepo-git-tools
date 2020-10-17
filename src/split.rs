@@ -27,6 +27,7 @@ pub struct Runner<'a> {
     pub verbose: bool,
     pub should_rebase: bool,
     pub should_topbase: bool,
+    pub topbase_add_label: bool,
     pub repo_file: RepoFile,
     pub repo_root_dir: PathBuf,
     pub topbase_top_ref: Option<String>,
@@ -56,6 +57,7 @@ impl<'a> Runner<'a> {
             verbose: is_verbose,
             should_rebase: is_rebase,
             should_topbase: is_topbase,
+            topbase_add_label: false,
             repo_file: RepoFile::new(),
             topbase_top_ref: None,
             repo_original_ref: None,
@@ -73,6 +75,11 @@ impl<'a> Runner<'a> {
                 None
             }
         }
+    }
+
+    pub fn add_label_before_topbase(mut self, flag: bool) -> Self {
+        self.topbase_add_label = flag;
+        self
     }
 
     // get the current ref that this git repo is pointing to
