@@ -167,6 +167,14 @@ impl<'a> Topbase for Runner<'a> {
             }
         }
 
+        // if we've made it this far, that
+        // means we have commits to topbase
+        // so we should add a label here of the upstream
+        // branch, so if the user does a git log after topbase
+        // they can visualize which commits were added on top
+        let label_name = format!("{}-remote", current_branch);
+        let _ = exec_helpers::execute(&["git", "branch", label_name.as_str(), upstream_branch.as_str()]);
+
         // rebase_data="pick <hash> <msg>
         // pick <hash> <msg>
         // pick <hash> <msg>
