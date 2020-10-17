@@ -241,6 +241,7 @@ pub fn run_split_out(matches: &ArgMatches) {
         .get_repository_from_current_dir()
         .change_to_repo_root()
         .safe_to_proceed()
+        .add_label_before_topbase(true)
         .generate_arg_strings()
         .make_and_checkout_output_branch();
 
