@@ -5,13 +5,34 @@ on:
     inputs:
       name:
         description: 'release tag version'
-        default: 'vX.Y.Z'
+        default: 'X.Y.Z'
         required: true
 
 jobs:
+  version_bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout_code
+        uses: actions/checkout@v2.3.2
+      - name: git_config
+        run: git config --local user.name "github_CI" && git config --local user.email "github_CI"
+      - name: version_bump
+      # when running this pipeline make sure the inputs.name is just the version without the v (eg: 1.1.1)
+        run: sed -i '5s/.*/version = "${{ github.event.inputs.name }}"/' Cargo.toml
+      - name: version_check
+        uses: actions-rs/cargo@ae10961054e4aa8b4aa7dffede299aaf087aa33b
+        with:
+          command: check
+      - name: temp_branch
+        continue-on-error: true
+        run: git checkout -b tmp_branch
+      - name: commit_and_push_new_docs
+        continue-on-error: true
+        run: git add Cargo.toml Cargo.lock && git commit -m "version bump ${{ github.event.inputs.name }}" && git push origin HEAD:tmp_branch
   build_test:
     # The type of runner that the job will run on
     runs-on: ${{ matrix.job.os }}
+    needs: version_bump
     strategy:
       fail-fast: false
       matrix:
@@ -31,6 +52,8 @@ jobs:
         uses: mig4/setup-bats@v1.0.1
       - name: checkout_code
         uses: actions/checkout@v2.3.2
+        with:
+          ref: tmp_branch
       - name: install_git_filter_repo
         run: bash .github/install-git-filter-repo.sh ${{ matrix.job.os }}
       - name: build_executable
@@ -165,6 +188,8 @@ jobs:
           path: ./target/release
       - name: lstest
         run: ls -l ./target/release/mgt
+      - name: merge_from_tmp
+        run: git fetch origin tmp_branch && git checkout tmp_branch && git checkout - && git merge --ff-only tmp_branch
       - name: make_mgt_executable
         run: chmod +x ./target/release/mgt
       - name: helptest
@@ -173,13 +198,9 @@ jobs:
         run: ./doc/gen_docs.sh
       - name: git_config
         run: git config --local user.name "github_CI" && git config --local user.email "github_CI"
-      - name: version_bump
-      # when running this pipeline make sure the inputs.name is just the version without the v (eg: 1.1.1)
-        run: sed -i '5s/.*/version = "${{ github.event.inputs.name }}"/' Cargo.toml
-      - name: version_check
-        uses: actions-rs/cargo@ae10961054e4aa8b4aa7dffede299aaf087aa33b
-        with:
-          command: check
       - name: commit_and_push_new_docs
         continue-on-error: true
-        run: git add doc/ Cargo.toml Cargo.lock && git commit -m "updates docs for ${{ github.event.inputs.name }}" && git push
+        run: git add doc/ && git commit -m "updates docs for ${{ github.event.inputs.name }}" && git push
+      - name: cleanup_tmp_branch
+        run: git push origin --delete tmp_branch
+        continue-on-error: true

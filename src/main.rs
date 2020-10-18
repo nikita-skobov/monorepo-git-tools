@@ -11,8 +11,13 @@ mod git_helpers;
 mod exec_helpers;
 
 fn get_cli_input<'a>() -> ArgMatches<'a> {
+    let version_str = format!(
+        "{} {}",
+        env!("CARGO_PKG_VERSION"),
+        env!("LATEST_COMMIT"),
+    );
     let mut base_app = App::new(env!("CARGO_PKG_NAME"))
-        .version(env!("CARGO_PKG_VERSION"))
+        .version(version_str.as_str())
         .author(env!("CARGO_PKG_AUTHORS"))
         .about(env!("CARGO_PKG_DESCRIPTION"));
 
