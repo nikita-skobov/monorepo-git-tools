@@ -77,7 +77,7 @@ jobs:
         with:
           use-cross: ${{ matrix.job.usecross }}
           command: test
-          args: --release --target=${{ matrix.job.target }}
+          args: --target=${{ matrix.job.target }}
       - name: e2e_test_general
         run: bash -c "bats test/general"
         env:
