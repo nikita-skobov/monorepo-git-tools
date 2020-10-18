@@ -3,6 +3,7 @@ use clap::ArgMatches;
 use super::split::panic_if_array_invalid;
 use super::split::Runner;
 use super::split::try_get_repo_name_from_remote_repo;
+use super::split::has_both_topbase_and_rebase;
 use super::repo_file::RepoFile;
 use super::git_helpers;
 use super::commands::AS_SUBDIR_ARG;
@@ -234,6 +235,10 @@ pub fn generate_split_out_arg_exclude(repofile: &RepoFile) -> Vec<String> {
 }
 
 pub fn run_split_out(matches: &ArgMatches) {
+    if has_both_topbase_and_rebase(matches) {
+        die!("Cannot use both --topbase and --rebase");
+    }
+
     let runner = Runner::new(matches)
         .get_repo_file()
         .verify_dependencies()
@@ -289,6 +294,10 @@ pub fn run_split_out(matches: &ArgMatches) {
 }
 
 pub fn run_split_out_as(matches: &ArgMatches) {
+    if has_both_topbase_and_rebase(matches) {
+        die!("Cannot use both --topbase and --rebase");
+    }
+
     // should be safe to unwrap because its a required argument
     let include_as_src = matches.value_of(AS_SUBDIR_ARG).unwrap();
     let output_branch = matches.value_of(OUTPUT_BRANCH_ARG[0]).unwrap();

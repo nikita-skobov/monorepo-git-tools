@@ -489,6 +489,16 @@ pub fn changed_to_repo_root(repo_root: &PathBuf) -> bool {
     }
 }
 
+pub fn has_both_topbase_and_rebase(matches: &ArgMatches) -> bool {
+    let rebase_args = matches.occurrences_of(REBASE_ARG[0]);
+    let topbase_args = matches.occurrences_of(TOPBASE_ARG[0]);
+    if rebase_args > 0 && topbase_args > 0 {
+        true
+    } else {
+        false
+    }
+}
+
 
 #[cfg(test)]
 mod test {

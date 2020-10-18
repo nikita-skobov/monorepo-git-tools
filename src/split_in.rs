@@ -5,6 +5,7 @@ use super::commands::AS_SUBDIR_ARG;
 use super::commands::REPO_URI_ARG;
 use super::split::panic_if_array_invalid;
 use super::split::Runner;
+use super::split::has_both_topbase_and_rebase;
 use super::git_helpers;
 use super::exec_helpers;
 use super::split::try_get_repo_name_from_remote_repo;
@@ -349,6 +350,10 @@ pub fn generate_split_out_arg_exclude(repofile: &RepoFile) -> Vec<String> {
 }
 
 pub fn run_split_in(matches: &ArgMatches) {
+    if has_both_topbase_and_rebase(matches) {
+        die!("Cannot use both --topbase and --rebase");
+    }
+
     let runner = Runner::new(matches)
         .get_repo_file()
         .save_current_dir()
@@ -392,6 +397,10 @@ pub fn run_split_in(matches: &ArgMatches) {
 }
 
 pub fn run_split_in_as(matches: &ArgMatches) {
+    if has_both_topbase_and_rebase(matches) {
+        die!("Cannot use both --topbase and --rebase");
+    }
+
     // should be safe to unwrap because its a required argument
     let include_as_src = matches.value_of(AS_SUBDIR_ARG).unwrap();
     let repo_uri = matches.value_of(REPO_URI_ARG).unwrap();
