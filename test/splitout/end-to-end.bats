@@ -554,6 +554,46 @@ function teardown() {
     [[ "$output_log" == *"initial commit for test_remote_repo2"* ]]
 }
 
+@test 'can rebase onto specific remote branch' {
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    remote_branch=\"specific-branch\"
+    include=(\"lib/\" \"test_remote_repo.txt\")
+    "
+    echo "$repo_file_contents" > repo_file.sh
+
+    # checkout to a specific branch
+    # so we can test that we can rebase from that specific
+    # remote branch instead of default of remote HEAD
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    git checkout -b specific-branch
+    echo "a" > a.txt && git add a.txt && git commit -m "a_commit"
+    git checkout -
+    cd "$curr_dir"
+
+    mkdir -p lib/
+    echo "libfile1.txt" > lib/libfile1.txt
+    git add lib/libfile1.txt && git commit -m "libfile1"
+
+    run $PROGRAM_PATH split-out repo_file.sh -r --verbose
+    echo "$output"
+    echo "$(git branch -v)"
+    echo -e "\n$(git branch --show-current):"
+    echo "$(git log --oneline)"
+    [[ $status == "0" ]]
+    [[ "$(git branch --show-current)" == "test_remote_repo2" ]]
+    output_log="$(git log --oneline)"
+    output_commits="$(git log --oneline | wc -l)"
+    echo ""
+
+    # we test that the number of commits is now the number that we made in our local
+    # repo (2: the original, and the libfile) plus the initial commit of test_remote_repo2
+    # and plus one (a) that we made on specific-branch, for total of 4
+    [[ "$output_commits" == "4" ]]
+    [[ "$output_log" == *"a_commit"* ]]
+}
+
 @test 'rebasing new branch onto original should not leave temporary branch' {
     repo_file_contents="
     remote_repo=\"..$SEP$test_remote_repo2\"
