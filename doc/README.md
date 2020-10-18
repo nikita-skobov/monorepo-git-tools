@@ -1,6 +1,6 @@
 # `mgt`
 
-> this file was automatically generated on 2020-10-09
+> this file was automatically generated on 2020-10-18
 
 Below you'll find a list of links to documentation pages, as well as the
 automatically generated output of `mgt --help`
@@ -19,7 +19,7 @@ automatically generated output of `mgt --help`
 ## `mgt help`
 
 ```
-mgt 2.4.2
+mgt 2.6.0 78f6c85
 Nikita Skobov
 Git tools that enable easy bidirectional sync between multiple repositories
 
