@@ -201,3 +201,6 @@ jobs:
       - name: commit_and_push_new_docs
         continue-on-error: true
         run: git add doc/ && git commit -m "updates docs for ${{ github.event.inputs.name }}" && git push
+      - name: cleanup_tmp_branch
+        run: git push origin --delete tmp_branch
+        continue-on-error: true
