@@ -472,7 +472,7 @@ pub fn pull(
         repo,
         &[remote_branch],
         &mut remote,
-    ).unwrap();
+    )?;
     merge(repo, fetched_commit, None)
 }
 

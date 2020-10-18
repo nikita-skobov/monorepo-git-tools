@@ -38,13 +38,11 @@ fn get_cli_input<'a>() -> ArgMatches<'a> {
 #[macro_export]
 macro_rules! die {
     () => (::std::process::exit(1));
-    ($x:expr, $($y:expr),+) => ({
+    ($x:expr; $($y:expr),+) => ({
         panic!($($y),+);
-        ::std::process::exit($x)
     });
     ($($y:expr),+) => ({
         panic!($($y),+);
-        ::std::process::exit(1)
     });
 }
 
@@ -53,7 +51,7 @@ macro_rules! die {
 #[macro_export]
 macro_rules! die {
     () => (::std::process::exit(1));
-    ($x:expr, $($y:expr),+) => ({
+    ($x:expr; $($y:expr),+) => ({
         println!($($y),+);
         ::std::process::exit($x)
     });
@@ -62,6 +60,7 @@ macro_rules! die {
         ::std::process::exit(1)
     });
 }
+
 
 fn main() {
     let matches = get_cli_input();

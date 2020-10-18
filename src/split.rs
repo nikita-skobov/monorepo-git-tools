@@ -16,6 +16,7 @@ use super::repo_file;
 use super::repo_file::RepoFile;
 use super::git_helpers;
 use super::exec_helpers;
+use super::die;
 
 pub struct Runner<'a> {
     pub repo_file_path: Option<&'a str>,
@@ -166,8 +167,16 @@ impl<'a> Runner<'a> {
                         git_helpers::merge_branches(&r, &branch_name[..], None);
                     },
                     (false, None) => {
-                        println!("{}Pulling from {} {}", self.log_p, remote_repo.clone().unwrap_or("?".into()), remote_branch.clone().unwrap_or("".into()));
-                        git_helpers::pull(&r, &remote_repo.unwrap()[..], remote_branch);
+                        let remote_repo_name = remote_repo.clone().unwrap_or("?".into());
+                        let remote_branch_name = remote_branch.clone().unwrap_or("".into());
+                        let remote_string = if remote_branch_name != "" {
+                            format!("{}:{}", remote_repo_name, remote_branch_name)
+                        } else { format!("{}", remote_repo_name) };
+                        println!("{}Pulling from {}", self.log_p, remote_string);
+                        let res = git_helpers::pull(&r, &remote_repo.unwrap()[..], remote_branch);
+                        if res.is_err() {
+                            die!("Failed to pull remote repo {}", remote_string);
+                        }
                     },
                 };
             },
