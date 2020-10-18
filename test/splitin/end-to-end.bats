@@ -577,6 +577,20 @@ function teardown() {
     [[ "$(git status)" == *"rebase in progress"* ]]
 }
 
+@test 'should not be able to use --topbase with --rebase' {
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include_as=(\"lib/\" \" \")
+    "
+    echo "$repo_file_contents" > repo_file.sh
+
+    run $PROGRAM_PATH split-in repo_file.sh --rebase --topbase --verbose
+    echo "$output"
+    [[ $status != "0" ]]
+    [[ "$output" != "Success!" ]]
+    [[ "$output" == *"Cannot use both"* ]]
+}
+
 @test '--topbase should not say success if there were rebase merge conflicts (if take all remote)' {
     # save current dir to cd back to later
     curr_dir="$PWD"
