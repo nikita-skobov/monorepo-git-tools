@@ -132,15 +132,15 @@ fn base_command<'a, 'b>(cmd: CommandName) -> App<'a, 'b> {
             Arg::with_name(REBASE_ARG[0])
                 .long(REBASE_ARG[0])
                 .short(REBASE_ARG[1])
+                .takes_value(true)
+                .default_value("")
                 .help(REBASE_DESCRIPTION)
-                .conflicts_with(TOPBASE_ARG[0])
         )
         .arg(
             Arg::with_name(TOPBASE_ARG[0])
                 .long(TOPBASE_ARG[0])
                 .short(TOPBASE_ARG[1])
                 .help(TOPBASE_DESCRIPTION)
-                .conflicts_with(REBASE_ARG[0])
         )
         .arg(
             Arg::with_name(OUTPUT_BRANCH_ARG[0])
@@ -180,7 +180,8 @@ pub fn split_in_as<'a, 'b>() -> App<'a, 'b> {
                 .long(REBASE_ARG[0])
                 .short(REBASE_ARG[1])
                 .help(REBASE_DESCRIPTION)
-                .conflicts_with(TOPBASE_ARG[0])
+                .takes_value(true)
+                .default_value("")
         )
         // TODO: should remove topbase from split-in-as? i dont think it makes sense
         .arg(
@@ -188,7 +189,6 @@ pub fn split_in_as<'a, 'b>() -> App<'a, 'b> {
                 .long(TOPBASE_ARG[0])
                 .short(TOPBASE_ARG[1])
                 .help(TOPBASE_DESCRIPTION)
-                .conflicts_with(REBASE_ARG[0])
         )
         .arg(
             Arg::with_name(AS_SUBDIR_ARG)

@@ -46,7 +46,7 @@ impl<'a> Runner<'a> {
     pub fn new(matches: &'a ArgMatches) -> Runner<'a> {
         let is_verbose = matches.is_present(VERBOSE_ARG[0]);
         let is_dry_run = matches.is_present(DRY_RUN_ARG[0]);
-        let is_rebase = matches.is_present(REBASE_ARG[0]);
+        let is_rebase = matches.occurrences_of(REBASE_ARG[0]) > 0;
         let is_topbase = matches.is_present(TOPBASE_ARG[0]);
         let output_branch = matches.value_of(OUTPUT_BRANCH_ARG[0]);
         let repo_file_path = matches.value_of(REPO_FILE_ARG);
@@ -154,6 +154,20 @@ impl<'a> Runner<'a> {
         let remote_branch: Option<&str> = match &self.repo_file.remote_branch {
             Some(branch_name) => Some(branch_name.as_str()),
             None => None,
+        };
+        // if user provided a remote_branch name
+        // on the command line, let that override what
+        // is present in the repo file:
+        let remote_branch = match &self.matches.occurrences_of(REBASE_ARG[0]) {
+            1 => match &self.matches.value_of(REBASE_ARG[0]) {
+                Some(s) => if *s != "" {
+                    Some(*s)
+                } else {
+                    remote_branch
+                },
+                None => remote_branch,
+            },
+            _ => remote_branch,
         };
 
         match self.repo {
