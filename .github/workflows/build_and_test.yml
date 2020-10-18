@@ -5,7 +5,7 @@ on:
     inputs:
       name:
         description: 'release tag version'
-        default: 'vX.Y.Z'
+        default: 'X.Y.Z'
         required: true
 
 jobs:
@@ -189,7 +189,7 @@ jobs:
       - name: lstest
         run: ls -l ./target/release/mgt
       - name: merge_from_tmp
-        run: git checkout tmp_branch && git checkout - && git merge --squash tmp_branch
+        run: git fetch origin tmp_branch && git checkout tmp_branch && git checkout - && git merge --ff-only tmp_branch
       - name: make_mgt_executable
         run: chmod +x ./target/release/mgt
       - name: helptest
@@ -200,4 +200,4 @@ jobs:
         run: git config --local user.name "github_CI" && git config --local user.email "github_CI"
       - name: commit_and_push_new_docs
         continue-on-error: true
-        run: git add doc/ Cargo.toml Cargo.lock && git commit -m "updates docs for ${{ github.event.inputs.name }}" && git push
+        run: git add doc/ && git commit -m "updates docs for ${{ github.event.inputs.name }}" && git push
