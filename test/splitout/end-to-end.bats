@@ -158,7 +158,7 @@ function teardown() {
     echo "$output"
     echo "$(git status)"
     echo "$(find . -not -path '*/\.*')"
-    [[ $status == 1 ]]
+    [[ $status != "0" ]]
     [[ "$(git branch --show-current)" == "master" ]]
     [[ "$git_log_before" == "$git_log_after" ]]
     [[ $output == *"modified changes"* ]]
@@ -810,8 +810,8 @@ function teardown() {
     run $PROGRAM_PATH split-out repo_file.sh --topbase --verbose
     echo "$output"
     echo "$(git status)"
-    [[ $output != "Success" ]]
-    [[ $status == "1" ]]
+    [[ $output != *"Success"* ]]
+    [[ $status != "0" ]]
     [[ "$(git status)" == *"rebase in progress"* ]]
 }
 
@@ -836,8 +836,8 @@ function teardown() {
     run $PROGRAM_PATH split-out repo_file.sh --topbase --verbose
     echo "$output"
     echo "$(git status)"
-    [[ $output != "Success" ]]
-    [[ $status == "1" ]]
+    [[ $output != *"Success"* ]]
+    [[ $status != "0" ]]
     [[ "$(git status)" == *"rebase in progress"* ]]
 }
 
@@ -908,7 +908,7 @@ function teardown() {
     run $PROGRAM_PATH split-out repo_file.sh --rebase --verbose
     echo "$output"
     echo "$(git status)"
-    [[ $output != "Success" ]]
-    [[ $status == "1" ]]
+    [[ $output != *"Success"* ]]
+    [[ $status != "0" ]]
     [[ "$(git status)" == *"rebase in progress"* ]]
 }
