@@ -140,6 +140,8 @@ fn base_command<'a, 'b>(cmd: CommandName) -> App<'a, 'b> {
             Arg::with_name(TOPBASE_ARG[0])
                 .long(TOPBASE_ARG[0])
                 .short(TOPBASE_ARG[1])
+                .takes_value(true)
+                .default_value("")
                 .help(TOPBASE_DESCRIPTION)
         )
         .arg(
@@ -188,6 +190,8 @@ pub fn split_in_as<'a, 'b>() -> App<'a, 'b> {
             Arg::with_name(TOPBASE_ARG[0])
                 .long(TOPBASE_ARG[0])
                 .short(TOPBASE_ARG[1])
+                .takes_value(true)
+                .default_value("")
                 .help(TOPBASE_DESCRIPTION)
         )
         .arg(

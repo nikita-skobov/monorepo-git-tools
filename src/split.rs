@@ -47,7 +47,7 @@ impl<'a> Runner<'a> {
         let is_verbose = matches.is_present(VERBOSE_ARG[0]);
         let is_dry_run = matches.is_present(DRY_RUN_ARG[0]);
         let is_rebase = matches.occurrences_of(REBASE_ARG[0]) > 0;
-        let is_topbase = matches.is_present(TOPBASE_ARG[0]);
+        let is_topbase = matches.occurrences_of(TOPBASE_ARG[0]) > 0;
         let output_branch = matches.value_of(OUTPUT_BRANCH_ARG[0]);
         let repo_file_path = matches.value_of(REPO_FILE_ARG);
         Runner {
@@ -149,6 +149,29 @@ impl<'a> Runner<'a> {
         self
     }
 
+    pub fn get_remote_branch_from_args(&self) -> Option<&'a str> {
+        let topbase_branch_args = self.matches.occurrences_of(TOPBASE_ARG[0]);
+        let rebase_branch_args = self.matches.occurrences_of(REBASE_ARG[0]);
+        if topbase_branch_args <= 0 && rebase_branch_args <= 0 {
+            return None;
+        }
+
+        let use_arg_str = if topbase_branch_args > 0 {
+            TOPBASE_ARG[0]
+        } else {
+            REBASE_ARG[0]
+        };
+
+        match &self.matches.value_of(use_arg_str) {
+            Some(s) => if *s != "" {
+                Some(*s)
+            } else {
+                None
+            },
+            None => None,
+        }
+    }
+
     pub fn populate_empty_branch_with_remote_commits(self) -> Self {
         let remote_repo = self.repo_file.remote_repo.clone();
         let remote_branch: Option<&str> = match &self.repo_file.remote_branch {
@@ -158,16 +181,9 @@ impl<'a> Runner<'a> {
         // if user provided a remote_branch name
         // on the command line, let that override what
         // is present in the repo file:
-        let remote_branch = match &self.matches.occurrences_of(REBASE_ARG[0]) {
-            1 => match &self.matches.value_of(REBASE_ARG[0]) {
-                Some(s) => if *s != "" {
-                    Some(*s)
-                } else {
-                    remote_branch
-                },
-                None => remote_branch,
-            },
-            _ => remote_branch,
+        let remote_branch = match self.get_remote_branch_from_args() {
+            None => remote_branch,
+            Some(new_remote_branch) => Some(new_remote_branch),
         };
 
         match self.repo {
