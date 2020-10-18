@@ -43,8 +43,8 @@ const CHECK_CMD_DESCRIPTION: &'static str = "check if remote has commits not pre
 const REPO_FILE_DESCRIPTION: &'static str = "path to file that contains instructions of how to split a repository";
 const REPO_URI_DESCRIPTION: &'static str = "a valid git url of the repository to split in";
 const AS_SUBDIR_DESCRIPTION: &'static str = "path relative to root of the local repository that will contain the entire repository being split";
-const REBASE_DESCRIPTION: &'static str = "after generating a branch with rewritten history, rebase that branch such that it can be fast forwarded back into the comparison branch. For split-in, the comparison branch is the branch you started on. For split-out, the comparison branch is the remote branch";
-const TOPBASE_DESCRIPTION: &'static str = "like rebase, but it finds a fork point to only take the top commits from the created branch that dont exist in your starting branch";
+const REBASE_DESCRIPTION: &'static str = "after generating a branch with rewritten history, rebase that branch such that it can be fast forwarded back into the comparison branch. For split-in, the comparison branch is the branch you started on. For split-out, the comparison branch is the remote branch. By specifying a value for <rebase>, you can use a specific remote branch and override what is in your repo file.";
+const TOPBASE_DESCRIPTION: &'static str = "like rebase, but it finds a fork point to only take the top commits from the created branch that dont exist in your starting branch. Optionally pass in the name of a remote branch to override what is in your repo file.";
 const TOPBASE_TOP_DESCRIPTION: &'static str = "the branch that will be rebased. defaults to current branch";
 const TOPBASE_BASE_DESCRIPTION: &'static str = "the branch to rebase onto.";
 const LOCAL_ARG_DESCRIPTION: &'static str = "check if the local branch has commits not present in remote";
@@ -132,15 +132,19 @@ fn base_command<'a, 'b>(cmd: CommandName) -> App<'a, 'b> {
             Arg::with_name(REBASE_ARG[0])
                 .long(REBASE_ARG[0])
                 .short(REBASE_ARG[1])
+                .takes_value(true)
+                .default_value("")
+                .hide_default_value(true)
                 .help(REBASE_DESCRIPTION)
-                .conflicts_with(TOPBASE_ARG[0])
         )
         .arg(
             Arg::with_name(TOPBASE_ARG[0])
                 .long(TOPBASE_ARG[0])
                 .short(TOPBASE_ARG[1])
+                .takes_value(true)
+                .default_value("")
+                .hide_default_value(true)
                 .help(TOPBASE_DESCRIPTION)
-                .conflicts_with(REBASE_ARG[0])
         )
         .arg(
             Arg::with_name(OUTPUT_BRANCH_ARG[0])
@@ -180,15 +184,18 @@ pub fn split_in_as<'a, 'b>() -> App<'a, 'b> {
                 .long(REBASE_ARG[0])
                 .short(REBASE_ARG[1])
                 .help(REBASE_DESCRIPTION)
-                .conflicts_with(TOPBASE_ARG[0])
+                .takes_value(true)
+                .default_value("")
         )
         // TODO: should remove topbase from split-in-as? i dont think it makes sense
         .arg(
             Arg::with_name(TOPBASE_ARG[0])
                 .long(TOPBASE_ARG[0])
                 .short(TOPBASE_ARG[1])
+                .takes_value(true)
+                .default_value("")
                 .help(TOPBASE_DESCRIPTION)
-                .conflicts_with(REBASE_ARG[0])
+                .hide_default_value(true)
         )
         .arg(
             Arg::with_name(AS_SUBDIR_ARG)
@@ -197,6 +204,7 @@ pub fn split_in_as<'a, 'b>() -> App<'a, 'b> {
                 .value_name(AS_SUBDIR_ARG_NAME)
                 .required(true)
                 .takes_value(true)
+                .hide_default_value(true)
         )
         .arg(
             Arg::with_name(DRY_RUN_ARG[0])

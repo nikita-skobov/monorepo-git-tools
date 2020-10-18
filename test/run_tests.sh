@@ -11,7 +11,7 @@ fi
 
 
 build_program() {
-    cargo_output=$(cargo build --release 2>&1)
+    cargo_output=$(cargo build 2>&1)
     if [[ $? != "0" ]]; then
         echo "$cargo_output"
         echo ""
@@ -19,8 +19,7 @@ build_program() {
         echo "Tests will not run"
         exit 1
     fi
-    # this should output to ./target/release/my-git-tools
-    PROGRAM_PATH="./target/release/mgt"
+    PROGRAM_PATH="./target/debug/mgt"
     PROGRAM_PATH="$(realpath $PROGRAM_PATH)"
 
     if [[ ! -f $PROGRAM_PATH ]]; then

@@ -158,7 +158,7 @@ function teardown() {
     echo "$output"
     echo "$(git status)"
     echo "$(find . -not -path '*/\.*')"
-    [[ $status == 1 ]]
+    [[ $status != "0" ]]
     [[ "$(git branch --show-current)" == "master" ]]
     [[ "$git_log_before" == "$git_log_after" ]]
     [[ $output == *"modified changes"* ]]
@@ -554,6 +554,165 @@ function teardown() {
     [[ "$output_log" == *"initial commit for test_remote_repo2"* ]]
 }
 
+@test 'can rebase onto specific remote branch' {
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    remote_branch=\"specific-branch\"
+    include=(\"lib/\" \"test_remote_repo.txt\")
+    "
+    echo "$repo_file_contents" > repo_file.sh
+
+    # checkout to a specific branch
+    # so we can test that we can rebase from that specific
+    # remote branch instead of default of remote HEAD
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    git checkout -b specific-branch
+    echo "a" > a.txt && git add a.txt && git commit -m "a_commit"
+    git checkout -
+    cd "$curr_dir"
+
+    mkdir -p lib/
+    echo "libfile1.txt" > lib/libfile1.txt
+    git add lib/libfile1.txt && git commit -m "libfile1"
+
+    run $PROGRAM_PATH split-out repo_file.sh -r --verbose
+    echo "$output"
+    echo "$(git branch -v)"
+    echo -e "\n$(git branch --show-current):"
+    echo "$(git log --oneline)"
+    [[ $status == "0" ]]
+    [[ "$(git branch --show-current)" == "test_remote_repo2" ]]
+    output_log="$(git log --oneline)"
+    output_commits="$(git log --oneline | wc -l)"
+    echo ""
+
+    # we test that the number of commits is now the number that we made in our local
+    # repo (2: the original, and the libfile) plus the initial commit of test_remote_repo2
+    # and plus one (a) that we made on specific-branch, for total of 4
+    [[ "$output_commits" == "4" ]]
+    [[ "$output_log" == *"a_commit"* ]]
+}
+
+@test 'can rebase onto specific remote branch via cli arg' {
+    # here we also test that passing the cli arg will override
+    # whats defined in the repo file
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    remote_branch=\"specific-branch\"
+    include=(\"lib/\" \"test_remote_repo.txt\")
+    "
+    echo "$repo_file_contents" > repo_file.sh
+
+    # checkout to a specific branch
+    # so we can test that we can rebase from that specific
+    # remote branch instead of default of remote HEAD
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    git checkout -b specific-branch
+    echo "a" > a.txt && git add a.txt && git commit -m "a_commit"
+    # then we checkout to sb2 which is
+    # what we will use in the cli args, to test
+    # that mgt uses sb2 instead of specific-branch
+    git checkout -
+    git checkout -b sb2
+    echo "b" > b.txt && git add b.txt && git commit -m "b_commit"
+    git checkout -
+    cd "$curr_dir"
+
+    mkdir -p lib/
+    echo "libfile1.txt" > lib/libfile1.txt
+    git add lib/libfile1.txt && git commit -m "libfile1"
+
+    run $PROGRAM_PATH split-out repo_file.sh --rebase sb2 --verbose
+    echo "$output"
+    echo "$(git branch -v)"
+    echo -e "\n$(git branch --show-current):"
+    echo "$(git log --oneline)"
+    [[ $status == "0" ]]
+    [[ "$(git branch --show-current)" == "test_remote_repo2" ]]
+    output_log="$(git log --oneline)"
+    output_commits="$(git log --oneline | wc -l)"
+    echo ""
+
+    # we test that the number of commits is now the number that we made in our local
+    # repo (2: the original, and the libfile) plus the initial commit of test_remote_repo2
+    # and plus one (b) that we made on specific-branch, for total of 4
+    # it should not have (a) because a was made on a different
+    # branch than the one we want
+    [[ "$output_commits" == "4" ]]
+    [[ "$output_log" == *"b_commit"* ]]
+    [[ "$output_log" != *"a_commit"* ]]
+}
+
+@test 'can topbase onto specific remote branch via cli arg' {
+    # here we also test that passing the cli arg will override
+    # whats defined in the repo file
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    remote_branch=\"specific-branch\"
+    include=(\"lib/\" \"test_remote_repo.txt\")
+    "
+    echo "$repo_file_contents" > repo_file.sh
+
+    # checkout to a specific branch
+    # so we can test that we can rebase from that specific
+    # remote branch instead of default of remote HEAD
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    git checkout -b specific-branch
+    echo "a" > a.txt && git add a.txt && git commit -m "a_commit"
+    # then we checkout to sb2 which is
+    # what we will use in the cli args, to test
+    # that mgt uses sb2 instead of specific-branch
+    git checkout -
+    git checkout -b sb2
+    echo "b" > b.txt && git add b.txt && git commit -m "b_commit"
+    git checkout -
+    cd "$curr_dir"
+
+    mkdir -p lib/
+    echo "libfile1.txt" > lib/libfile1.txt
+    git add lib/libfile1.txt && git commit -m "libfile1"
+
+    run $PROGRAM_PATH split-out repo_file.sh --topbase sb2 --verbose
+    echo "$output"
+    echo "$(git branch -v)"
+    echo -e "\n$(git branch --show-current):"
+    echo "$(git log --oneline)"
+    [[ $status == "0" ]]
+    [[ "$(git branch --show-current)" == "test_remote_repo2" ]]
+    output_log="$(git log --oneline)"
+    output_commits="$(git log --oneline | wc -l)"
+    echo ""
+
+    # we test that the number of commits is now the number that we made in our local
+    # repo (2: the original, and the libfile) plus the initial commit of test_remote_repo2
+    # and plus one (b) that we made on specific-branch, for total of 4
+    # it should not have (a) because a was made on a different
+    # branch than the one we want
+    [[ "$output_commits" == "4" ]]
+    [[ "$output_log" == *"b_commit"* ]]
+    [[ "$output_log" != *"a_commit"* ]]
+}
+
+@test 'gives proper error if failed to find remote_branch' {
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    remote_branch=\"specific-branch\"
+    include=(\"lib/\" \"test_remote_repo.txt\")
+    "
+    echo "$repo_file_contents" > repo_file.sh
+
+    # in this test, we dont make a specific-branch
+    # so the fetch for specific-branch should fail,
+    # and we should detect that
+    run $PROGRAM_PATH split-out repo_file.sh -r --verbose
+    echo "$output"
+    [[ $status != "0" ]]
+    [[ $output == *"Failed to pull remote repo"* ]]
+}
+
 @test 'rebasing new branch onto original should not leave temporary branch' {
     repo_file_contents="
     remote_repo=\"..$SEP$test_remote_repo2\"
@@ -651,8 +810,8 @@ function teardown() {
     run $PROGRAM_PATH split-out repo_file.sh --topbase --verbose
     echo "$output"
     echo "$(git status)"
-    [[ $output != "Success" ]]
-    [[ $status == "1" ]]
+    [[ $output != *"Success"* ]]
+    [[ $status != "0" ]]
     [[ "$(git status)" == *"rebase in progress"* ]]
 }
 
@@ -677,8 +836,8 @@ function teardown() {
     run $PROGRAM_PATH split-out repo_file.sh --topbase --verbose
     echo "$output"
     echo "$(git status)"
-    [[ $output != "Success" ]]
-    [[ $status == "1" ]]
+    [[ $output != *"Success"* ]]
+    [[ $status != "0" ]]
     [[ "$(git status)" == *"rebase in progress"* ]]
 }
 
@@ -749,7 +908,7 @@ function teardown() {
     run $PROGRAM_PATH split-out repo_file.sh --rebase --verbose
     echo "$output"
     echo "$(git status)"
-    [[ $output != "Success" ]]
-    [[ $status == "1" ]]
+    [[ $output != *"Success"* ]]
+    [[ $status != "0" ]]
     [[ "$(git status)" == *"rebase in progress"* ]]
 }

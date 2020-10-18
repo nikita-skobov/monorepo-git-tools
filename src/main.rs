@@ -33,6 +33,35 @@ fn get_cli_input<'a>() -> ArgMatches<'a> {
     return base_app.get_matches();
 }
 
+// in debug mode, use panic so we get a stack trace
+#[cfg(debug_assertions)]
+#[macro_export]
+macro_rules! die {
+    () => (::std::process::exit(1));
+    ($x:expr; $($y:expr),+) => ({
+        panic!($($y),+);
+    });
+    ($($y:expr),+) => ({
+        panic!($($y),+);
+    });
+}
+
+// in release mode, use print so its not ugly
+#[cfg(not(debug_assertions))]
+#[macro_export]
+macro_rules! die {
+    () => (::std::process::exit(1));
+    ($x:expr; $($y:expr),+) => ({
+        println!($($y),+);
+        ::std::process::exit($x)
+    });
+    ($($y:expr),+) => ({
+        println!($($y),+);
+        ::std::process::exit(1)
+    });
+}
+
+
 fn main() {
     let matches = get_cli_input();
 

@@ -140,7 +140,7 @@ function teardown() {
     echo "$output"
     echo "$(git status)"
     echo "$(find . -not -path '*/\.*')"
-    [[ $status == 1 ]]
+    [[ $status != "0" ]]
     [[ "$(git branch --show-current)" == "master" ]]
     [[ "$git_log_before" == "$git_log_after" ]]
     [[ $output == *"modified changes"* ]]
@@ -542,8 +542,8 @@ function teardown() {
     run $PROGRAM_PATH split-in repo_file.sh --rebase --verbose
     echo "$output"
     echo "$(git status)"
-    [[ $status == "1" ]]
-    [[ "$output" != "Success!" ]]
+    [[ $status != "0" ]]
+    [[ "$output" != *"Success!"* ]]
     [[ "$(git status)" == *"rebase in progress"* ]]
 }
 
@@ -572,9 +572,54 @@ function teardown() {
     run $PROGRAM_PATH split-in repo_file.sh --topbase --verbose
     echo "$output"
     echo "$(git status)"
-    [[ $status == "1" ]]
-    [[ "$output" != "Success!" ]]
+    [[ $status != "0" ]]
+    [[ "$output" != *"Success!"* ]]
     [[ "$(git status)" == *"rebase in progress"* ]]
+}
+
+@test 'can specify a branch to topbase from' {
+    # save current dir to cd back to later
+    curr_dir="$PWD"
+    # setup the test remote repo:
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    mkdir -p lib
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "123" > abc.txt && git add abc.txt && git commit -m "abc-123"
+    git checkout -b b456
+    echo "456" > abc.txt && git add abc.txt && git commit -m "commit_456"
+    git checkout -
+    cd "$curr_dir"
+
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include_as=(\"lib/\" \" \")
+    "
+    echo "$repo_file_contents" > repo_file.sh
+
+    mkdir -p lib
+    # this is where it aligns:
+    echo "abc" > lib/abc.txt && git add lib/abc.txt && git commit -m "abc"
+
+    run $PROGRAM_PATH split-in repo_file.sh --topbase b456 --verbose
+    echo "$output"
+    echo "$(git status)"
+    [[ $status == "0" ]]
+    [[ "$output" == *"Success!"* ]]
+    [[ "$(git log --oneline)" == *"commit_456"* ]]
+}
+
+@test 'should not be able to use --topbase with --rebase' {
+    repo_file_contents="
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include_as=(\"lib/\" \" \")
+    "
+    echo "$repo_file_contents" > repo_file.sh
+
+    run $PROGRAM_PATH split-in repo_file.sh --rebase --topbase --verbose
+    echo "$output"
+    [[ $status != "0" ]]
+    [[ "$output" != *"Success!"* ]]
+    [[ "$output" == *"Cannot use both"* ]]
 }
 
 @test '--topbase should not say success if there were rebase merge conflicts (if take all remote)' {
@@ -603,8 +648,8 @@ function teardown() {
     run $PROGRAM_PATH split-in repo_file.sh --topbase --verbose
     echo "$output"
     echo "$(git status)"
-    [[ $status == "1" ]]
-    [[ "$output" != "Success!" ]]
+    [[ $status != "0" ]]
+    [[ "$output" != *"Success!"* ]]
     [[ "$(git status)" == *"rebase in progress"* ]]
 }
 
