@@ -9,6 +9,7 @@ use super::git_helpers;
 use super::exec_helpers;
 use super::split::try_get_repo_name_from_remote_repo;
 use super::repo_file::RepoFile;
+use super::die;
 use std::convert::From;
 use std::fs;
 use std::path::Path;
@@ -27,10 +28,10 @@ impl<'a> SplitIn for Runner<'a> {
             None => None,
             Some(branch_name) => {
                 match &self.repo {
-                    None => panic!("Failed to find repo for some reason"),
+                    None => die!("Failed to find repo for some reason"),
                     Some(ref repo) => {
                         if ! git_helpers::branch_exists(branch_name, repo) {
-                            panic!("You specified an input branch of {}, but that branch was not found", branch_name);
+                            die!("You specified an input branch of {}, but that branch was not found", branch_name);
                         }
                         Some(branch_name.into())
                     },
@@ -46,11 +47,11 @@ impl<'a> SplitIn for Runner<'a> {
         let missing_include = self.repo_file.include.is_none();
 
         if missing_remote_repo && missing_input_branch && ! missing_output_branch {
-            panic!("Must provide either repo_name in your repofile, or specify a --{} argument", INPUT_BRANCH_ARG);
+            die!("Must provide either repo_name in your repofile, or specify a --{} argument", INPUT_BRANCH_ARG);
         }
 
         if missing_include && missing_include_as {
-            panic!("Must provide either include or include_as in your repofile");
+            die!("Must provide either include or include_as in your repofile");
         }
 
         if missing_repo_name && !missing_remote_repo && missing_output_branch {
@@ -120,10 +121,10 @@ pub fn path_is_ignored(path: &PathBuf) -> bool {
 pub fn get_commited_paths() -> Vec<PathBuf> {
     let data = exec_helpers::execute(&["git", "ls-files"]);
     let data = match data {
-        Err(e) => panic!("Failed to list git committed files: {}", e),
+        Err(e) => die!("Failed to list git committed files: {}", e),
         Ok(d) => {
             if d.status != 0 {
-                panic!("Failed to list git committed files: {}", d.stderr);
+                die!("Failed to list git committed files: {}", d.stderr);
             }
             d.stdout
         },
@@ -289,7 +290,7 @@ pub fn gen_include_as_arg_files_from_folder(
 
     let all_files_recursively = get_files_recursively(src.clone(), &mut file_vec, should_ignore);
     if all_files_recursively.is_err() {
-        panic!("Error reading dir recursively: {:?}", src);
+        die!("Error reading dir recursively: {:?}", src);
     }
 
     let mut out_vec = vec![];

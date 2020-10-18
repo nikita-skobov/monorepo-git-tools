@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::path::Path;
 use std::fs;
 use std::str::from_utf8;
+use super::die;
 
 pub trait Short {
     fn short(self) -> String;
@@ -34,7 +35,7 @@ fn remove_git_from_path_buf(pathbuf: &mut PathBuf) -> PathBuf {
 
 pub fn get_repository_and_root_directory(dir: &PathBuf) -> (Repository, PathBuf) {
     let repo = match Repository::discover(dir) {
-        Err(e) => panic!("Failed to find or open repository from {} - {}", dir.display(), e),
+        Err(e) => die!("Failed to find or open repository from {} - {}", dir.display(), e),
         Ok(repo) => repo,
     };
 
@@ -177,7 +178,7 @@ pub fn list_everything_under_tree(
             git2::ObjectType::Blob  => {
                 let blob = match t_obj.into_blob() {
                     Ok(b) => b,
-                    _ => panic!("failed to turn into blob"),
+                    _ => die!("failed to turn into blob"),
                 };
                 println!("{}  B:{}", indent, blob.id());
             }
@@ -186,7 +187,7 @@ pub fn list_everything_under_tree(
             git2::ObjectType::Tree => {
                 let t_next = match t_obj.into_tree() {
                     Ok(tn) => tn,
-                    _ => panic!("failed to turn into tree"),
+                    _ => die!("failed to turn into tree"),
                 };
                 let next_indent = format!("{}  ", indent);
                 list_everything_under_tree(repo, t_next, next_indent.as_str())?;
@@ -369,7 +370,7 @@ pub fn remove_index_and_files(
         if ! file_removed {
             let result = fs::remove_file(f);
             if result.is_err() {
-                panic!("Failed to remove file {}. Stopping operation without modifying index", f.display());
+                die!("Failed to remove file {}. Stopping operation without modifying index", f.display());
             }
             file_removed = true;
         } else {
@@ -444,7 +445,7 @@ pub fn merge<'a>(
             }
         }
     } else {
-        panic!("cannot fast-forward. Alternate merge strategies not implements yet");
+        die!("cannot fast-forward. Alternate merge strategies not implements yet");
     }
 
     Ok(())

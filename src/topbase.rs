@@ -9,6 +9,7 @@ use super::commands::TOPBASE_CMD_BASE;
 use super::commands::TOPBASE_CMD_TOP;
 use super::commands::VERBOSE_ARG;
 use super::commands::DRY_RUN_ARG;
+use super::die;
 
 pub trait Topbase {
     fn topbase(self) -> Self;
@@ -18,7 +19,7 @@ impl<'a> Topbase for Runner<'a> {
     fn topbase(mut self) -> Self {
         let repo = match self.repo {
             Some(ref r) => r,
-            None => panic!("failed to get repo?"),
+            None => die!("failed to get repo?"),
         };
 
         // for split commands, we always use current ref,
@@ -48,7 +49,7 @@ impl<'a> Topbase for Runner<'a> {
         let all_upstream_blobs = get_all_blobs_in_branch(upstream_branch.as_str());
         let all_commits_of_current = match git_helpers::get_all_commits_from_ref(repo, current_branch.as_str()) {
             Ok(v) => v,
-            Err(e) => panic!("Failed to get all commits! {}", e),
+            Err(e) => die!("Failed to get all commits! {}", e),
         };
 
         let num_commits_of_current = all_commits_of_current.len();
@@ -265,9 +266,9 @@ pub fn get_all_blobs_from_commit_with_callback(
         "--diff-filter=AMCD", "--pretty=oneline"
     ];
     match exec_helpers::execute(&args) {
-        Err(e) => panic!("Failed to get blobs from commit {} : {}", commit_id, e),
+        Err(e) => die!("Failed to get blobs from commit {} : {}", commit_id, e),
         Ok(out) => {
-            if out.status != 0 { panic!("Failed to get blobs from commit {} : {}", commit_id, out.stderr); }
+            if out.status != 0 { die!("Failed to get blobs from commit {} : {}", commit_id, out.stderr); }
             for l in out.stdout.lines() {
                 // lines starting with colons are the lines
                 // that contain blob ids
@@ -334,9 +335,9 @@ pub fn get_all_blobs_in_branch(branch_name: &str) -> HashSet<String> {
     // lives outside the match
     let mut out_stdout = "".into();
     let commit_ids = match exec_helpers::execute(&args) {
-        Err(e) => panic!("Failed to get all blobs of {} : {}", branch_name, e),
+        Err(e) => die!("Failed to get all blobs of {} : {}", branch_name, e),
         Ok(out) => {
-            if out.status != 0 { panic!("Failed to get all blobs of {} : {}", branch_name, out.stderr); }
+            if out.status != 0 { die!("Failed to get all blobs of {} : {}", branch_name, out.stderr); }
             out_stdout = out.stdout;
             out_stdout.split_whitespace().collect::<Vec<&str>>()
         },

@@ -6,6 +6,7 @@ use super::exec_helpers;
 use super::split::Runner;
 use super::repo_file::RepoFile;
 use super::split;
+use super::die;
 use super::commands::REPO_FILE_ARG;
 use super::commands::LOCAL_ARG;
 use super::commands::RECURSIVE_ARG;
@@ -43,7 +44,7 @@ impl<'a> CheckUpdates for Runner<'a> {
         let repo = if let Some(ref r) = self.repo {
             r
         } else {
-            panic!("Failed to get repo");
+            die!("Failed to get repo");
         };
         // TODO: probably need to add blob_applies_to_repo_file here?
         // I think in most cases this isnt necessary, but I should
@@ -51,7 +52,7 @@ impl<'a> CheckUpdates for Runner<'a> {
         let all_upstream_blobs = get_all_blobs_in_branch(upstream_branch);
         let all_commits_of_current = match git_helpers::get_all_commits_from_ref(repo, current_branch) {
             Ok(v) => v,
-            Err(e) => panic!("Failed to get all commits! {}", e),
+            Err(e) => die!("Failed to get all commits! {}", e),
         };
         // println!("GOT ALL UPSTREAM BLOBS: {}", all_upstream_blobs.len());
         // println!("GOT ALL CURRENT COMMITS: {}", all_commits_of_current.len());
@@ -92,7 +93,7 @@ impl<'a> CheckUpdates for Runner<'a> {
             //         println!("Succesfully deleted FETCH_HEAD");
             //         println!("git prune successful? {}", tf);
             //     },
-            //     Err(e) => panic!("Failed to delete FETCH_HEAD:\n{}", e),
+            //     Err(e) => die!("Failed to delete FETCH_HEAD:\n{}", e),
             // };
         }
 
@@ -334,7 +335,7 @@ pub fn fetch_branch(remote: &str, branch: &str) {
         },
     };
     if let Some(err) = err_msg {
-        panic!("Error fetching {} {}\n{}", remote, branch, err);
+        die!("Error fetching {} {}\n{}", remote, branch, err);
     }
 }
 
@@ -365,7 +366,7 @@ fn get_local_branch(runner: &Runner) -> String {
 fn get_remote_branch(runner: &Runner) -> String {
     let remote_repo = match runner.repo_file.remote_repo {
         Some(ref s) => s,
-        None => panic!("repo file missing remote_repo"),
+        None => die!("repo file missing remote_repo"),
     };
     // check if user provided a --remote <branch>
     let mut remote_branch = match runner.matches.value_of(REMOTE_BRANCH_ARG[0]) {
@@ -437,7 +438,7 @@ pub fn run_check(matches: &ArgMatches) {
         let repo_files = get_all_repo_files(repo_file_path, should_recurse, any_extension);
         files_to_check = match repo_files {
             Ok(files) => files,
-            Err(e) => panic!("Failed to read repo file directory: {}", e),
+            Err(e) => die!("Failed to read repo file directory: {}", e),
         };
     }
 

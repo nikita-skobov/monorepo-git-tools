@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use super::die;
 
 #[derive(Debug, PartialEq)]
 pub struct RepoFile {
@@ -245,16 +246,16 @@ fn parse_variable(variable: &mut RepoFileVariable, text: &String, line_num: usiz
     }
 
     if variable.name == VarUnknown {
-        panic!("Invalid variable name found on line {}:\n\"{}\"", line_num, text);
+        die!("Invalid variable name found on line {}:\n\"{}\"", line_num, text);
     }
 
     if variable.var_type == TypeUnknown {
-        panic!("Failed to parse line {}:\n\"{}\"", line_num, text);
+        die!("Failed to parse line {}:\n\"{}\"", line_num, text);
     }
 
     let strings = get_all_strings(&text);
     if let None = strings {
-        panic!("Failed to parse variable at line {}:\n\"{}\"", line_num, text);
+        die!("Failed to parse variable at line {}:\n\"{}\"", line_num, text);
     }
 
     match variable.var_type {
@@ -315,12 +316,12 @@ fn should_parse_line(text: &String) -> bool {
 pub fn parse_repo_file(filename: &str) -> RepoFile {
     let repo_file_path = Path::new(filename);
     if !repo_file_path.exists() {
-        panic!("Failed to find repo_file: {}", filename);
+        die!("Failed to find repo_file: {}", filename);
     }
 
     let file = File::open(repo_file_path);
     if let Err(file_error) = file {
-        panic!("Failed to open file: {}, {}", filename, file_error);
+        die!("Failed to open file: {}, {}", filename, file_error);
     }
 
     let file_contents = file.unwrap();

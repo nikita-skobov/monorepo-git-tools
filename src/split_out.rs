@@ -7,6 +7,7 @@ use super::repo_file::RepoFile;
 use super::git_helpers;
 use super::commands::AS_SUBDIR_ARG;
 use super::commands::OUTPUT_BRANCH_ARG;
+use super::die;
 
 pub trait SplitOut {
     fn validate_repo_file(self) -> Self;
@@ -25,11 +26,11 @@ impl<'a> SplitOut for Runner<'a> {
         let missing_include = self.repo_file.include.is_none();
     
         if missing_remote_repo && missing_repo_name && missing_output_branch {
-            panic!("Must provide either repo_name or remote_repo in your repofile");
+            die!("Must provide either repo_name or remote_repo in your repofile");
         }
     
         if missing_include && missing_include_as {
-            panic!("Must provide either include or include_as in your repofile");
+            die!("Must provide either include or include_as in your repofile");
         }
     
         if missing_output_branch && missing_repo_name && !missing_remote_repo {
@@ -87,11 +88,11 @@ impl<'a> SplitOut for Runner<'a> {
                 ) {
                     Ok(_) => (),
                     Err(e) => {
-                        panic!("Failed to checkout branch {}", e);
+                        die!("Failed to checkout branch {}", e);
                     }
                 };
             },
-            _ => panic!("Something went horribly wrong!"),
+            _ => die!("Something went horribly wrong!"),
         };
         if self.verbose {
             println!("{} checked out branch {}", self.log_p, output_branch_name);
@@ -114,10 +115,10 @@ impl<'a> SplitOut for Runner<'a> {
                     output_branch_name.as_str(),
                 ).is_ok();
                 if ! success {
-                    panic!("Failed to checkout new branch");
+                    die!("Failed to checkout new branch");
                 }
             },
-            _ => panic!("Something went horribly wrong!"),
+            _ => die!("Something went horribly wrong!"),
         };
         if self.verbose {
             println!("{}created and checked out new branch {}", self.log_p, output_branch_name);

@@ -107,16 +107,16 @@ impl<'a> Runner<'a> {
                     r,
                 ).is_ok();
                 if ! success {
-                    panic!("Failed to checkout orphan branch");
+                    die!("Failed to checkout orphan branch");
                 }
                 // on a new orphan branch our existing files appear in the stage
                 // we need to essentially do "git rm -rf ."
                 let success = git_helpers::remove_index_and_files(r).is_ok();
                 if ! success {
-                    panic!("Failed to remove git indexed files after making orphan");
+                    die!("Failed to remove git indexed files after making orphan");
                 }
             },
-            _ => panic!("Something went horribly wrong!"),
+            _ => die!("Something went horribly wrong!"),
         };
         if self.verbose {
             println!("{}created and checked out orphan branch {}", self.log_p, orphan_branch);
@@ -136,9 +136,9 @@ impl<'a> Runner<'a> {
         let output = match exec_helpers::execute(&args) {
             Ok(o) => match o.status {
                 0 => o.stdout,
-                _ => panic!("Failed to run ls-files: {}", o.stderr),
+                _ => die!("Failed to run ls-files: {}", o.stderr),
             },
-            Err(e) => panic!("Failed to run ls-files: {}", e),
+            Err(e) => die!("Failed to run ls-files: {}", e),
         };
         if ! output.is_empty() {
             exit_with_message_and_status(
@@ -157,7 +157,7 @@ impl<'a> Runner<'a> {
         };
 
         match self.repo {
-            None => panic!("Failed to find repo?"),
+            None => die!("Failed to find repo?"),
             Some(ref r) => {
                 match (self.dry_run, &self.input_branch) {
                     (true, Some(branch_name)) => println!("git merge {}", branch_name),
@@ -243,7 +243,7 @@ impl<'a> Runner<'a> {
         // save this for later, as well as to find the repository
         self.current_dir = match env::current_dir() {
             Ok(pathbuf) => pathbuf,
-            Err(_) => panic!("Failed to find your current directory. Cannot proceed"),
+            Err(_) => die!("Failed to find your current directory. Cannot proceed"),
         };
         if self.verbose {
             println!("{}saving current dir to return to later: {}", self.log_p, self.current_dir.display());
@@ -265,7 +265,7 @@ impl<'a> Runner<'a> {
             return self;
         }
         if ! changed_to_repo_root(&self.repo_root_dir) {
-            panic!("Failed to change to repository root: {:?}", &self.repo_root_dir);
+            die!("Failed to change to repository root: {:?}", &self.repo_root_dir);
         }
         if self.verbose {
             println!("{}changed to repository root {}", self.log_p, self.repo_root_dir.display());
@@ -276,10 +276,10 @@ impl<'a> Runner<'a> {
     // panic if all dependencies are not met
     pub fn verify_dependencies(self) -> Self {
         if ! exec_helpers::executed_successfully(&["git", "--version"]) {
-            panic!("Failed to run. Missing dependency 'git'");
+            die!("Failed to run. Missing dependency 'git'");
         }
         if ! exec_helpers::executed_successfully(&["git", "filter-repo", "--version"]) {
-            panic!("Failed to run. Missing dependency 'git-filter-repo'");
+            die!("Failed to run. Missing dependency 'git-filter-repo'");
         }
         self
     }
@@ -299,7 +299,7 @@ impl<'a> Runner<'a> {
             Err(e) => Some(format!("{}", e)),
         };
         if let Some(err) = err_msg {
-            panic!("Failed to execute: \"{}\"\n{}", arg_vec.join(" "), err);
+            die!("Failed to execute: \"{}\"\n{}", arg_vec.join(" "), err);
         }
 
         self
@@ -404,7 +404,7 @@ pub fn try_get_repo_name_from_remote_repo(remote_repo: String) -> String {
     }
 
     if repo_name == "" {
-        panic!("Failed to parse repo_name from remote_repo: {}", remote_repo);
+        die!("Failed to parse repo_name from remote_repo: {}", remote_repo);
     }
 
     repo_name
@@ -445,7 +445,7 @@ pub fn panic_if_array_invalid(var: &Option<Vec<String>>, can_be_single: bool, va
     match var {
         Some(v) => {
             if ! include_var_valid(&v, can_be_single) {
-                panic!("{} is invalid. Must be either a single string, or an even length array of strings", varname);
+                die!("{} is invalid. Must be either a single string, or an even length array of strings", varname);
             }
         },
         _ => (),
