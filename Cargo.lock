@@ -78,6 +78,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "die"
+version = "1.0.0"
+
+[[package]]
 name = "git-url-parse"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -222,6 +226,7 @@ name = "mgt"
 version = "2.6.0"
 dependencies = [
  "clap",
+ "die",
  "git-url-parse",
  "git2",
 ]

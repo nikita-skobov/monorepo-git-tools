@@ -1,0 +1,7 @@
+[package]
+name = "die"
+version = "1.0.0"
+authors = ["nikita-skobov"]
+edition = "2018"
+
+[dependencies]
