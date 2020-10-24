@@ -39,3 +39,30 @@ pub fn merge_branch(
         Some(e) => Err(e),
     }
 }
+
+pub fn make_orphan_branch_and_checkout(
+    orphan_branch_name: &str
+) -> Result<(), String> {
+    let exec_args = vec![
+        "git", "checkout",
+        "--orphan", orphan_branch_name,
+    ];
+    match exec_helpers::executed_with_error(&exec_args) {
+        None => Ok(()),
+        Some(e) => Err(e),
+    }
+}
+
+/// after checking out an orphan branch, gits index
+/// will be full of files that exist on the filesystem,
+/// and git says they are ready to be added. We want
+/// to tell git to delete these files (which is safe to do because
+/// they exist in another branch)
+pub fn remove_index_and_files() -> Result<(), String> {
+    let exec_args = ["git", "rm", "-rf", "."];
+    let success = exec_helpers::executed_successfully(&exec_args);
+    match success {
+        true => Ok(()),
+        false => Err("Failed to git rm -rf .".into()),
+    }
+}

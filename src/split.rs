@@ -115,16 +115,18 @@ impl<'a> Runner<'a> {
 
         match self.repo {
             Some(ref r) => {
-                let success = git_helpers::make_orphan_branch_and_checkout(
+                let success = git_helpers3::make_orphan_branch_and_checkout(
                     orphan_branch,
-                    r,
                 ).is_ok();
                 if ! success {
                     die!("Failed to checkout orphan branch");
                 }
                 // on a new orphan branch our existing files appear in the stage
-                // we need to essentially do "git rm -rf ."
-                let success = git_helpers::remove_index_and_files(r).is_ok();
+                // we need to do "git rm -rf ."
+                // the 'dot' should be safe to do as long as
+                // we are in the root of the repository, but this method
+                // should only be called after we cd into the root
+                let success = git_helpers3::remove_index_and_files().is_ok();
                 if ! success {
                     die!("Failed to remove git indexed files after making orphan");
                 }
