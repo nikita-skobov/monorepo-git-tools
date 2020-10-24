@@ -66,3 +66,12 @@ pub fn remove_index_and_files() -> Result<(), String> {
         false => Err("Failed to git rm -rf .".into()),
     }
 }
+
+pub fn branch_exists(branch_name: &str) -> bool {
+    let branch_ref = format!("refs/heads/{}", branch_name);
+    let exec_args = [
+        "git", "show-ref", "--verify", "--quiet", branch_ref.as_str()
+    ];
+    // will return 0 (true) if branch exists , 1 (false) otherwise
+    exec_helpers::executed_successfully(&exec_args)
+}

@@ -6,7 +6,7 @@ use super::commands::REPO_URI_ARG;
 use super::split::panic_if_array_invalid;
 use super::split::Runner;
 use super::split::has_both_topbase_and_rebase;
-use super::git_helpers;
+use super::git_helpers3;
 use super::exec_helpers;
 use super::split::try_get_repo_name_from_remote_repo;
 use super::repo_file::RepoFile;
@@ -31,7 +31,7 @@ impl<'a> SplitIn for Runner<'a> {
                 match &self.repo {
                     None => die!("Failed to find repo for some reason"),
                     Some(ref repo) => {
-                        if ! git_helpers::branch_exists(branch_name, repo) {
+                        if ! git_helpers3::branch_exists(branch_name) {
                             die!("You specified an input branch of {}, but that branch was not found", branch_name);
                         }
                         Some(branch_name.into())
