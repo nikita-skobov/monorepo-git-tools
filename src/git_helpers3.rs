@@ -87,3 +87,15 @@ pub fn make_new_branch_from_head_and_checkout(
         Some(e) => Err(e),
     }
 }
+
+pub fn delete_branch(
+    branch_name: &str
+) -> Result<(), String> {
+    let exec_args = [
+        "git", "branch", "-D", branch_name,
+    ];
+    match exec_helpers::executed_with_error(&exec_args) {
+        None => Ok(()),
+        Some(e) => Err(e),
+    }
+}

@@ -131,9 +131,8 @@ impl<'a> SplitOut for Runner<'a> {
     fn delete_branch(self, branch_name: &str) -> Self {
         match self.repo {
             Some(ref r) => {
-                match git_helpers::delete_branch(branch_name, r) {
-                    Err(e) => println!("Failed to delete branch: {}. {}", branch_name, e),
-                    Ok(_) => (),
+                if let Err(e) = git_helpers3::delete_branch(branch_name) {
+                    println!("Failed to delete branch: {}. {}", branch_name, e);
                 }
             },
             None => println!("Failed to delete branch: {}", branch_name),
