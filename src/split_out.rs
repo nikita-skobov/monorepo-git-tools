@@ -112,8 +112,9 @@ impl<'a> SplitOut for Runner<'a> {
 
         match self.repo {
             Some(ref r) => {
-                let success = git_helpers3::make_new_branch_from_head_and_checkout(
+                let success = git_helpers3::checkout_branch(
                     output_branch_name.as_str(),
+                    true,
                 ).is_ok();
                 if ! success {
                     die!("Failed to checkout new branch");

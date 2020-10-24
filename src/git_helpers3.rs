@@ -76,11 +76,11 @@ pub fn branch_exists(branch_name: &str) -> bool {
     exec_helpers::executed_successfully(&exec_args)
 }
 
-pub fn make_new_branch_from_head_and_checkout(
+pub fn delete_branch(
     branch_name: &str
 ) -> Result<(), String> {
     let exec_args = [
-        "git", "checkout", "-b", branch_name,
+        "git", "branch", "-D", branch_name,
     ];
     match exec_helpers::executed_with_error(&exec_args) {
         None => Ok(()),
@@ -88,12 +88,20 @@ pub fn make_new_branch_from_head_and_checkout(
     }
 }
 
-pub fn delete_branch(
-    branch_name: &str
+pub fn checkout_branch(
+    branch_name: &str,
+    make_new: bool,
 ) -> Result<(), String> {
-    let exec_args = [
-        "git", "branch", "-D", branch_name,
+    let mut exec_args = vec![
+        "git", "checkout"
     ];
+    if make_new {
+        exec_args.push("-b");
+        exec_args.push(branch_name);
+    } else {
+        exec_args.push(branch_name);
+    }
+
     match exec_helpers::executed_with_error(&exec_args) {
         None => Ok(()),
         Some(e) => Err(e),
