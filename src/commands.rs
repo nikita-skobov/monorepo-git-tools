@@ -27,6 +27,7 @@ pub const REMOTE_BRANCH_ARG: [&'static str; 2] = ["remote-branch", "b"];
 pub const LOCAL_BRANCH_ARG: &'static str = "local-branch";
 pub const RECURSIVE_ARG: [&'static str; 2] = ["recursive", "r"];
 pub const ALL_ARG: [&'static str; 2] = ["all", "a"];
+pub const NUM_COMMITS_ARG: &'static str = "num-commits";
 
 const SPLIT_IN_STR: &'static str = "split-in";
 const SPLIT_IN_AS_STR: &'static str = "split-in-as";
@@ -51,6 +52,7 @@ const LOCAL_ARG_DESCRIPTION: &'static str = "check if the local branch has commi
 const REMOTE_ARG_DESCRIPTION: &'static str = "check if the remote has commits not present in this local branch. This is the default";
 const REMOTE_BRANCH_ARG_DESCRIPTION: &'static str = "check updates to/from a specific remote branch instead of what's in the repo file";
 const LOCAL_BRANCH_ARG_DESCRIPTION: &'static str = "check updates to/from a specific local branch instead of the current HEAD";
+const NUM_COMMITS_ARG_DESCRIPTION: &'static str = "when pulling from remote, limit to n commits from the current tip. This is probably only useful the first time you do a split-in";
 
 #[derive(Clone)]
 pub enum CommandName {
@@ -166,6 +168,13 @@ pub fn split_in<'a, 'b>() -> App<'a, 'b> {
                 .value_name(INPUT_BRANCH_NAME)
                 .help("split in from a local branch in this repository")
         )
+        .arg(
+            Arg::with_name(NUM_COMMITS_ARG)
+                .long(NUM_COMMITS_ARG)
+                .takes_value(true)
+                .value_name("n")
+                .help(NUM_COMMITS_ARG_DESCRIPTION)
+        )
 }
 
 pub fn split_in_as<'a, 'b>() -> App<'a, 'b> {
@@ -225,6 +234,13 @@ pub fn split_in_as<'a, 'b>() -> App<'a, 'b> {
                 .takes_value(true)
                 .value_name(OUTPUT_BRANCH_NAME)
                 .help("name of branch that will be created with new split history")
+        )
+        .arg(
+            Arg::with_name(NUM_COMMITS_ARG)
+                .long(NUM_COMMITS_ARG)
+                .takes_value(true)
+                .value_name("n")
+                .help(NUM_COMMITS_ARG_DESCRIPTION)
         );
 }
 
