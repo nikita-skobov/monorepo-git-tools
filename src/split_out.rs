@@ -5,7 +5,6 @@ use super::split::Runner;
 use super::split::try_get_repo_name_from_remote_repo;
 use super::split::has_both_topbase_and_rebase;
 use super::repo_file::RepoFile;
-use super::git_helpers;
 use super::git_helpers3;
 use super::commands::AS_SUBDIR_ARG;
 use super::commands::OUTPUT_BRANCH_ARG;
@@ -80,18 +79,14 @@ impl<'a> SplitOut for Runner<'a> {
             println!("git checkout {}", output_branch_name);
             return self;
         }
-        let output_branch_ref = format!("refs/heads/{}", output_branch_name);
 
         match self.repo {
             Some(ref r) => {
-                match git_helpers::checkout_to_branch_and_clear_index(
-                    output_branch_ref.as_str(),
-                    r,
+                if let Err(e) = git_helpers3::checkout_branch(
+                    output_branch_name.as_str(),
+                    false,
                 ) {
-                    Ok(_) => (),
-                    Err(e) => {
-                        die!("Failed to checkout branch {}", e);
-                    }
+                    die!("Failed to checkout branch {}", e);
                 };
             },
             _ => die!("Something went horribly wrong!"),
