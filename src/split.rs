@@ -216,7 +216,7 @@ impl<'a> Runner<'a> {
                             format!("{}:{}", remote_repo_name, remote_branch_name)
                         } else { format!("{}", remote_repo_name) };
                         println!("{}Pulling from {}", self.log_p, remote_string);
-                        let res = git_helpers3::pull(&remote_repo.unwrap()[..], remote_branch);
+                        let res = git_helpers3::pull(&remote_repo.unwrap()[..], remote_branch, self.num_commits);
                         if res.is_err() {
                             die!("Failed to pull remote repo {}", remote_string);
                         }
