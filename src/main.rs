@@ -10,6 +10,7 @@ mod check;
 mod split;
 mod git_helpers;
 mod exec_helpers;
+mod git_helpers3;
 
 fn get_cli_input<'a>() -> ArgMatches<'a> {
     let version_str = format!(

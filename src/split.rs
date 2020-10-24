@@ -15,6 +15,7 @@ use super::commands::OUTPUT_BRANCH_ARG;
 use super::repo_file;
 use super::repo_file::RepoFile;
 use super::git_helpers;
+use super::git_helpers3;
 use super::exec_helpers;
 use super::die;
 
@@ -203,7 +204,7 @@ impl<'a> Runner<'a> {
                             format!("{}:{}", remote_repo_name, remote_branch_name)
                         } else { format!("{}", remote_repo_name) };
                         println!("{}Pulling from {}", self.log_p, remote_string);
-                        let res = git_helpers::pull(&r, &remote_repo.unwrap()[..], remote_branch);
+                        let res = git_helpers3::pull(&remote_repo.unwrap()[..], remote_branch);
                         if res.is_err() {
                             die!("Failed to pull remote repo {}", remote_string);
                         }
