@@ -14,6 +14,18 @@ pub fn executed_successfully(exe_and_args: &[&str]) -> bool {
     }
 }
 
+/// useful when you only care if an execution yielded an error
+/// if the return is None, you know it was successful
+pub fn executed_with_error(exe_and_args: &[&str]) -> Option<String> {
+    match execute(exe_and_args) {
+        Err(e) => Some(format!("{}", e)),
+        Ok(o) => match o.status {
+            0 => None,
+            _ => Some(o.stderr.lines().next().unwrap().to_string()),
+        },
+    }
+}
+
 pub fn execute_with_env(
     exe_and_args: &[&str],
     keys: &[&str],
