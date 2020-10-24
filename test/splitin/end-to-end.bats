@@ -303,6 +303,40 @@ function teardown() {
     [[ ! -f rootfile1.txt ]]
 }
 
+@test 'can split in only n latest commits' {
+    # save current dir to cd back to later
+    curr_dir="$PWD"
+    # setup the test remote repo:
+    cd "$BATS_TMPDIR/test_remote_repo2"
+
+    echo "1a" > 1a.txt && git add 1a.txt && git commit -m "1a"
+    echo "2b" > 2b.txt && git add 2b.txt && git commit -m "2b"
+    echo "3c" > 3c.txt && git add 3c.txt && git commit -m "3c"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    repo_name=\"doesnt_matter\"
+    remote_repo=\"..$SEP$test_remote_repo2\"
+    include_as=(\"lib/\" \" \")
+    "
+    echo "$repo_file_contents" > repo_file.sh
+
+    # we only want the latest 2 commits
+    run $PROGRAM_PATH split-in repo_file.sh --verbose --num-commits 2
+    echo "$output"
+    [[ $status == "0" ]]
+    git_branch=$(git branch --show-current)
+    git_log_now=$(git log --oneline)
+    num_commits="$(git log --oneline | wc -l)"
+    echo "$git_log_now"
+    echo "$git_branch"
+    [[ $git_branch == "doesnt_matter" ]]
+    # because n was 2, there should only be the top 2 commits
+    [[ $num_commits == "2" ]]
+    [[ $git_log_now != *"1a"* ]]
+    [[ $git_log_now == *"2b"* ]]
+    [[ $git_log_now == *"3c"* ]]
+}
 
 @test 'properly handles nested folder renames/moves' {
     # save current dir to cd back to later

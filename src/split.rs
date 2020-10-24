@@ -12,9 +12,11 @@ use super::commands::VERBOSE_ARG;
 use super::commands::REBASE_ARG;
 use super::commands::TOPBASE_ARG;
 use super::commands::OUTPUT_BRANCH_ARG;
+use super::commands::NUM_COMMITS_ARG;
 use super::repo_file;
 use super::repo_file::RepoFile;
 use super::git_helpers;
+use super::git_helpers3;
 use super::exec_helpers;
 use super::die;
 
@@ -39,6 +41,8 @@ pub struct Runner<'a> {
     pub include_arg_str: Option<Vec<String>>,
     pub include_as_arg_str: Option<Vec<String>>,
     pub exclude_arg_str: Option<Vec<String>>,
+    // only relevant to split-in
+    pub num_commits: Option<u32>,
     pub status: i32,
 }
 
@@ -50,6 +54,14 @@ impl<'a> Runner<'a> {
         let is_topbase = matches.occurrences_of(TOPBASE_ARG[0]) > 0;
         let output_branch = matches.value_of(OUTPUT_BRANCH_ARG[0]);
         let repo_file_path = matches.value_of(REPO_FILE_ARG);
+        let num_commits = matches.value_of(NUM_COMMITS_ARG);
+        let num_commits = match num_commits {
+            None => None,
+            Some(s) => match s.parse::<u32>() {
+                Err(_) => None,
+                Ok(u) => Some(u),
+            },
+        };
         Runner {
             repo_file_path: repo_file_path,
             status: 0,
@@ -68,6 +80,7 @@ impl<'a> Runner<'a> {
             include_arg_str: None,
             include_as_arg_str: None,
             exclude_arg_str: None,
+            num_commits: num_commits,
             log_p: if is_dry_run { "   # " } else { "" },
             input_branch: None,
             output_branch: if let Some(branch_name) = output_branch {
@@ -203,7 +216,7 @@ impl<'a> Runner<'a> {
                             format!("{}:{}", remote_repo_name, remote_branch_name)
                         } else { format!("{}", remote_repo_name) };
                         println!("{}Pulling from {}", self.log_p, remote_string);
-                        let res = git_helpers::pull(&r, &remote_repo.unwrap()[..], remote_branch);
+                        let res = git_helpers3::pull(&remote_repo.unwrap()[..], remote_branch, self.num_commits);
                         if res.is_err() {
                             die!("Failed to pull remote repo {}", remote_string);
                         }

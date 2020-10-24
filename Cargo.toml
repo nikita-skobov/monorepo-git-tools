@@ -12,6 +12,7 @@ edition = "2018"
 git2 = "0.13"
 clap = "2.33"
 git-url-parse = "0.3.0"
+die = { path="die" }
 
 [features]
 gittests = []
