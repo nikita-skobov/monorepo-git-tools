@@ -100,7 +100,10 @@ impl<'a> Runner<'a> {
     // save it for later
     pub fn save_current_ref(mut self) -> Self {
         self.repo_original_ref = match self.repo {
-            Some(ref repo) => git_helpers::get_current_ref(repo),
+            Some(ref repo) => match git_helpers3::get_current_ref() {
+                Ok(s) => Some(s),
+                Err(_) => None,
+            },
             None => None,
         };
         self

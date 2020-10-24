@@ -107,3 +107,20 @@ pub fn checkout_branch(
         Some(e) => Err(e),
     }
 }
+
+pub fn get_current_ref() -> Result<String, String> {
+    let exec_args = [
+        "git", "rev-parse", "--abbrev-ref", "HEAD"
+    ];
+    match exec_helpers::execute(&exec_args) {
+        Ok(out) => {
+            if out.status == 0 {
+                // dont want trailing new line
+                Ok(out.stdout.trim_end().into())
+            } else {
+                Err(out.stderr)
+            }
+        }
+        Err(e) => Err(e.to_string()),
+    }
+}

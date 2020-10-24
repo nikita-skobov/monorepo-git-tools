@@ -2,6 +2,7 @@ use clap::ArgMatches;
 use std::collections::HashSet;
 
 use super::git_helpers;
+use super::git_helpers3;
 use super::exec_helpers;
 use super::split::Runner;
 use super::check::topbase_check_alg;
@@ -28,9 +29,9 @@ impl<'a> Topbase for Runner<'a> {
         let current_branch = if let Some(ref b) = self.topbase_top_ref {
             b.clone()
         } else {
-            match git_helpers::get_current_ref(repo) {
-                Some(s) => s,
-                None => {
+            match git_helpers3::get_current_ref() {
+                Ok(s) => s,
+                Err(_) => {
                     println!("Failed to get current branch. not going to rebase");
                     return self;
                 },
