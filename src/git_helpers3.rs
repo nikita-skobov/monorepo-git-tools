@@ -75,3 +75,15 @@ pub fn branch_exists(branch_name: &str) -> bool {
     // will return 0 (true) if branch exists , 1 (false) otherwise
     exec_helpers::executed_successfully(&exec_args)
 }
+
+pub fn make_new_branch_from_head_and_checkout(
+    branch_name: &str
+) -> Result<(), String> {
+    let exec_args = [
+        "git", "checkout", "-b", branch_name,
+    ];
+    match exec_helpers::executed_with_error(&exec_args) {
+        None => Ok(()),
+        Some(e) => Err(e),
+    }
+}
