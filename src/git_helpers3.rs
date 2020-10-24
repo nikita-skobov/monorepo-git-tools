@@ -25,3 +25,17 @@ pub fn pull(
         Some(e) => Err(e),
     }
 }
+
+/// target is the current branch
+pub fn merge_branch(
+    source_branch: &str,
+) -> Result<(), String> {
+    let exec_args = vec![
+        "git", "merge",
+        source_branch
+    ];
+    match exec_helpers::executed_with_error(&exec_args) {
+        None => Ok(()),
+        Some(e) => Err(e),
+    }
+}

@@ -207,7 +207,7 @@ impl<'a> Runner<'a> {
                     (true, None) => println!("git pull {}", remote_repo.unwrap()),
                     (false, Some(branch_name)) => {
                         println!("{}Merging {}", self.log_p, branch_name);
-                        git_helpers::merge_branches(&r, &branch_name[..], None);
+                        git_helpers3::merge_branch(&branch_name[..]);
                     },
                     (false, None) => {
                         let remote_repo_name = remote_repo.clone().unwrap_or("?".into());
