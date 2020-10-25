@@ -1,7 +1,9 @@
 use clap::ArgMatches;
 use std::collections::HashSet;
 
-use super::git_helpers;
+use super::git_helpers3;
+use super::git_helpers3::Commit;
+use super::git_helpers3::Oid;
 use super::exec_helpers;
 use super::split::Runner;
 use super::check::topbase_check_alg;
@@ -17,20 +19,15 @@ pub trait Topbase {
 
 impl<'a> Topbase for Runner<'a> {
     fn topbase(mut self) -> Self {
-        let repo = match self.repo {
-            Some(ref r) => r,
-            None => die!("failed to get repo?"),
-        };
-
         // for split commands, we always use current ref,
         // but for topbase command, we check if user provided a top branch
         // if user provided one, we use that, otherwise we use current
         let current_branch = if let Some(ref b) = self.topbase_top_ref {
             b.clone()
         } else {
-            match git_helpers::get_current_ref(repo) {
-                Some(s) => s,
-                None => {
+            match git_helpers3::get_current_ref() {
+                Ok(s) => s,
+                Err(_) => {
                     println!("Failed to get current branch. not going to rebase");
                     return self;
                 },
@@ -47,7 +44,7 @@ impl<'a> Topbase for Runner<'a> {
         };
 
         let all_upstream_blobs = get_all_blobs_in_branch(upstream_branch.as_str());
-        let all_commits_of_current = match git_helpers::get_all_commits_from_ref(repo, current_branch.as_str()) {
+        let all_commits_of_current = match git_helpers3::get_all_commits_from_ref(current_branch.as_str()) {
             Ok(v) => v,
             Err(e) => die!("Failed to get all commits! {}", e),
         };
@@ -55,9 +52,9 @@ impl<'a> Topbase for Runner<'a> {
         let num_commits_of_current = all_commits_of_current.len();
         let mut num_commits_to_take = 0;
         let mut rebase_data = vec![];
-        let mut cb = |c: &git2::Commit| {
+        let mut cb = |c: &Commit| {
             num_commits_to_take += 1;
-            let rebase_interactive_entry = format!("pick {} {}\n", c.id(), c.summary().unwrap());
+            let rebase_interactive_entry = format!("pick {} {}\n", c.id.long(), c.summary);
             rebase_data.push(rebase_interactive_entry);
         };
         topbase_check_alg(all_commits_of_current, all_upstream_blobs, &mut cb);

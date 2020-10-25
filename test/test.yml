@@ -6,7 +6,7 @@ run_unit_tests:
     - name: cargo test
       run: |
         if [[ "${{ custom.should_run_git_tests }}" != "false" ]]; then
-            cargo test --features gittest
+            cargo test --features gittests
         else
             cargo test
         fi
