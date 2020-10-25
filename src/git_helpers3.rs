@@ -3,6 +3,29 @@
 
 use super::exec_helpers;
 
+#[derive(Debug)]
+pub struct Oid {
+    pub hash: String,
+}
+impl Oid {
+    /// it is assumed that short() will not be called
+    /// on an empty oid
+    pub fn short(&self) -> &str {
+        let substr = self.hash.get(0..8);
+        substr.unwrap()
+    }
+    pub fn long(&self) -> &String {
+        &self.hash
+    }
+}
+#[derive(Debug)]
+pub struct Commit {
+    pub id: Oid,
+    pub summary: String,
+    pub is_merge: bool,
+}
+
+
 pub fn pull(
     remote_name: &str,
     remote_branch_name: Option<&str>,
@@ -122,5 +145,92 @@ pub fn get_current_ref() -> Result<String, String> {
             }
         }
         Err(e) => Err(e.to_string()),
+    }
+}
+
+pub fn get_all_commits_from_ref(
+    refname: &str
+) -> Result<Vec<Commit>, String> {
+    // TODO: in the future might want more info than
+    // just the hash and summary
+    let exec_args = [
+        "git", "log", refname, "--format=%H [%p] %s",
+    ];
+    let mut commits = vec![];
+    let out_str = match exec_helpers::execute(&exec_args) {
+        Err(e) => return Err(e.to_string()),
+        Ok(out) => match out.status {
+            0 => out.stdout,
+            _ => return Err(out.stderr),
+        }
+    };
+
+    for line in out_str.lines() {
+        // everything before first space is
+        // the commit hash. everything after is the summary
+        let mut line_split = line.split(" ");
+        let hash = line_split.nth(0);
+        let hash = if let Some(h) = hash {
+            h.to_string()
+        } else {
+            return Err("Failed to parse hash".into());
+        };
+        // after we took the hash, we now have
+        // something like [parent, parent, ...]
+        // if there is only one parent, it will be of form
+        // [parent], so we check if this commit is a merge
+        // or not
+        let is_merge = match line_split.next() {
+            None => false,
+            Some(s) => !s.contains(']')
+        };
+        // if we did find a merge, that means we have to
+        // advance our line split until we have reached
+        // the end of the [parent, parent, ...] list
+        if is_merge { loop {
+            match line_split.next() {
+                None => (),
+                Some(s) => if s.contains(']') {
+                    break;
+                }
+            }
+        }}
+
+        let summary = line_split.collect::<Vec<&str>>().join(" ");
+        commits.push(Commit {
+            summary: summary,
+            id: Oid { hash },
+            is_merge,
+        });
+    }
+
+    Ok(commits)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn oid_short_and_long_works() {
+        let oid_str = "692ec5536e98fecfb3dfbce61a5d89af5f2eee34";
+        let oid = Oid {
+            hash: oid_str.into(),
+        };
+        let oid_short = oid.short();
+        assert_eq!(oid_short, "692ec553");
+        let oid_long = oid.long();
+        assert_eq!(oid_long, oid_str);
+    }
+
+    // just see if it panics or not :shrug:
+    #[test]
+    fn get_all_commits_from_ref_works() {
+        let data = get_all_commits_from_ref("HEAD");
+        assert!(data.is_ok());
+        let data = data.unwrap();
+        // this only passes if the test is running from
+        // a git repository with more than 1 commit...
+        assert!(data.len() > 1);
     }
 }
