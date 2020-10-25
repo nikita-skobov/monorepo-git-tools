@@ -242,6 +242,7 @@ mod test {
 
     // just see if it panics or not :shrug:
     #[test]
+    #[cfg_attr(not(feature = "gittests"), ignore)]
     fn get_all_commits_from_ref_works() {
         let data = get_all_commits_from_ref("HEAD");
         assert!(data.is_ok());
