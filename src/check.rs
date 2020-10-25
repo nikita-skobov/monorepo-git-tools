@@ -1,10 +1,8 @@
 use clap::ArgMatches;
 
-use super::git_helpers;
 use super::git_helpers3;
 use super::git_helpers3::Commit;
 use super::git_helpers3::Oid;
-use super::git_helpers::Short;
 use super::exec_helpers;
 use super::split::Runner;
 use super::repo_file::RepoFile;

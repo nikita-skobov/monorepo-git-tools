@@ -207,6 +207,23 @@ pub fn get_all_commits_from_ref(
     Ok(commits)
 }
 
+pub fn get_repo_root() -> Result<String, String> {
+    let exec_args = [
+        "git", "rev-parse", "--show-toplevel",
+    ];
+    match exec_helpers::execute(&exec_args) {
+        Ok(out) => {
+            if out.status == 0 {
+                // dont want trailing new line
+                Ok(out.stdout.trim_end().into())
+            } else {
+                Err(out.stderr)
+            }
+        }
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

@@ -1,7 +1,6 @@
 use clap::ArgMatches;
 use std::collections::HashSet;
 
-use super::git_helpers;
 use super::git_helpers3;
 use super::git_helpers3::Commit;
 use super::git_helpers3::Oid;

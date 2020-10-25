@@ -8,7 +8,6 @@ mod split_in;
 mod topbase;
 mod check;
 mod split;
-mod git_helpers;
 mod exec_helpers;
 mod git_helpers3;
 

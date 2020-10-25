@@ -15,7 +15,6 @@ use super::commands::OUTPUT_BRANCH_ARG;
 use super::commands::NUM_COMMITS_ARG;
 use super::repo_file;
 use super::repo_file::RepoFile;
-use super::git_helpers;
 use super::git_helpers3;
 use super::exec_helpers;
 use super::die;
@@ -35,7 +34,6 @@ pub struct Runner<'a> {
     pub repo_root_dir: PathBuf,
     pub topbase_top_ref: Option<String>,
     pub repo_original_ref: Option<String>,
-    pub repo: Option<git2::Repository>,
     pub input_branch: Option<String>,
     pub output_branch: Option<String>,
     pub include_arg_str: Option<Vec<String>>,
@@ -75,7 +73,6 @@ impl<'a> Runner<'a> {
             topbase_top_ref: None,
             repo_original_ref: None,
             current_dir: PathBuf::new(),
-            repo: None,
             repo_root_dir: PathBuf::new(),
             include_arg_str: None,
             include_as_arg_str: None,
@@ -286,9 +283,12 @@ impl<'a> Runner<'a> {
         self
     }
     pub fn get_repository_from_current_dir(mut self) -> Self {
-        let (repo, repo_path) = git_helpers::get_repository_and_root_directory(&self.current_dir);
-        self.repo = Some(repo);
-        self.repo_root_dir = repo_path;
+        let repo_path = match git_helpers3::get_repo_root() {
+            Ok(p) => p,
+            Err(_) => die!("Must run this command from a git repository"),
+        };
+
+        self.repo_root_dir = PathBuf::from(repo_path);
         if self.verbose {
             println!("{}found repo path: {}", self.log_p, self.repo_root_dir.display());
         }
