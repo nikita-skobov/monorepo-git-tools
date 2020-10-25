@@ -99,12 +99,9 @@ impl<'a> Runner<'a> {
     // get the current ref that this git repo is pointing to
     // save it for later
     pub fn save_current_ref(mut self) -> Self {
-        self.repo_original_ref = match self.repo {
-            Some(ref repo) => match git_helpers3::get_current_ref() {
-                Ok(s) => Some(s),
-                Err(_) => None,
-            },
-            None => None,
+        self.repo_original_ref = match git_helpers3::get_current_ref() {
+            Ok(s) => Some(s),
+            Err(_) => None,
         };
         self
     }
@@ -116,26 +113,21 @@ impl<'a> Runner<'a> {
             return self;
         }
 
-        match self.repo {
-            Some(ref r) => {
-                let success = git_helpers3::make_orphan_branch_and_checkout(
-                    orphan_branch,
-                ).is_ok();
-                if ! success {
-                    die!("Failed to checkout orphan branch");
-                }
-                // on a new orphan branch our existing files appear in the stage
-                // we need to do "git rm -rf ."
-                // the 'dot' should be safe to do as long as
-                // we are in the root of the repository, but this method
-                // should only be called after we cd into the root
-                let success = git_helpers3::remove_index_and_files().is_ok();
-                if ! success {
-                    die!("Failed to remove git indexed files after making orphan");
-                }
-            },
-            _ => die!("Something went horribly wrong!"),
-        };
+        let success = git_helpers3::make_orphan_branch_and_checkout(
+            orphan_branch,
+        ).is_ok();
+        if ! success {
+            die!("Failed to checkout orphan branch");
+        }
+        // on a new orphan branch our existing files appear in the stage
+        // we need to do "git rm -rf ."
+        // the 'dot' should be safe to do as long as
+        // we are in the root of the repository, but this method
+        // should only be called after we cd into the root
+        let success = git_helpers3::remove_index_and_files().is_ok();
+        if ! success {
+            die!("Failed to remove git indexed files after making orphan");
+        }
         if self.verbose {
             println!("{}created and checked out orphan branch {}", self.log_p, orphan_branch);
         }
@@ -204,29 +196,24 @@ impl<'a> Runner<'a> {
             Some(new_remote_branch) => Some(new_remote_branch),
         };
 
-        match self.repo {
-            None => die!("Failed to find repo?"),
-            Some(ref r) => {
-                match (self.dry_run, &self.input_branch) {
-                    (true, Some(branch_name)) => println!("git merge {}", branch_name),
-                    (true, None) => println!("git pull {}", remote_repo.unwrap()),
-                    (false, Some(branch_name)) => {
-                        println!("{}Merging {}", self.log_p, branch_name);
-                        git_helpers3::merge_branch(&branch_name[..]);
-                    },
-                    (false, None) => {
-                        let remote_repo_name = remote_repo.clone().unwrap_or("?".into());
-                        let remote_branch_name = remote_branch.clone().unwrap_or("".into());
-                        let remote_string = if remote_branch_name != "" {
-                            format!("{}:{}", remote_repo_name, remote_branch_name)
-                        } else { format!("{}", remote_repo_name) };
-                        println!("{}Pulling from {}", self.log_p, remote_string);
-                        let res = git_helpers3::pull(&remote_repo.unwrap()[..], remote_branch, self.num_commits);
-                        if res.is_err() {
-                            die!("Failed to pull remote repo {}", remote_string);
-                        }
-                    },
-                };
+        match (self.dry_run, &self.input_branch) {
+            (true, Some(branch_name)) => println!("git merge {}", branch_name),
+            (true, None) => println!("git pull {}", remote_repo.unwrap()),
+            (false, Some(branch_name)) => {
+                println!("{}Merging {}", self.log_p, branch_name);
+                git_helpers3::merge_branch(&branch_name[..]);
+            },
+            (false, None) => {
+                let remote_repo_name = remote_repo.clone().unwrap_or("?".into());
+                let remote_branch_name = remote_branch.clone().unwrap_or("".into());
+                let remote_string = if remote_branch_name != "" {
+                    format!("{}:{}", remote_repo_name, remote_branch_name)
+                } else { format!("{}", remote_repo_name) };
+                println!("{}Pulling from {}", self.log_p, remote_string);
+                let res = git_helpers3::pull(&remote_repo.unwrap()[..], remote_branch, self.num_commits);
+                if res.is_err() {
+                    die!("Failed to pull remote repo {}", remote_string);
+                }
             },
         };
         self

@@ -20,11 +20,6 @@ pub trait Topbase {
 
 impl<'a> Topbase for Runner<'a> {
     fn topbase(mut self) -> Self {
-        let repo = match self.repo {
-            Some(ref r) => r,
-            None => die!("failed to get repo?"),
-        };
-
         // for split commands, we always use current ref,
         // but for topbase command, we check if user provided a top branch
         // if user provided one, we use that, otherwise we use current

@@ -44,11 +44,6 @@ impl<'a> CheckUpdates for Runner<'a> {
         should_clean_fetch_head: bool,
         should_summarize: bool,
     ) -> Self {
-        let repo = if let Some(ref r) = self.repo {
-            r
-        } else {
-            die!("Failed to get repo");
-        };
         // TODO: probably need to add blob_applies_to_repo_file here?
         // I think in most cases this isnt necessary, but I should
         // try to think of what edge cases this would be needed

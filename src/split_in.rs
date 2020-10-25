@@ -28,15 +28,10 @@ impl<'a> SplitIn for Runner<'a> {
         self.input_branch = match self.matches.value_of(INPUT_BRANCH_ARG) {
             None => None,
             Some(branch_name) => {
-                match &self.repo {
-                    None => die!("Failed to find repo for some reason"),
-                    Some(ref repo) => {
-                        if ! git_helpers3::branch_exists(branch_name) {
-                            die!("You specified an input branch of {}, but that branch was not found", branch_name);
-                        }
-                        Some(branch_name.into())
-                    },
+                if ! git_helpers3::branch_exists(branch_name) {
+                    die!("You specified an input branch of {}, but that branch was not found", branch_name);
                 }
+                Some(branch_name.into())
             },
         };
 

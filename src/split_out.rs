@@ -80,17 +80,13 @@ impl<'a> SplitOut for Runner<'a> {
             return self;
         }
 
-        match self.repo {
-            Some(ref r) => {
-                if let Err(e) = git_helpers3::checkout_branch(
-                    output_branch_name.as_str(),
-                    false,
-                ) {
-                    die!("Failed to checkout branch {}", e);
-                };
-            },
-            _ => die!("Something went horribly wrong!"),
-        };
+        if let Err(e) = git_helpers3::checkout_branch(
+            output_branch_name.as_str(),
+            false,
+        ) {
+            die!("Failed to checkout branch {}", e);
+        }
+
         if self.verbose {
             println!("{} checked out branch {}", self.log_p, output_branch_name);
         }
@@ -105,18 +101,14 @@ impl<'a> SplitOut for Runner<'a> {
             return self;
         }
 
-        match self.repo {
-            Some(ref r) => {
-                let success = git_helpers3::checkout_branch(
-                    output_branch_name.as_str(),
-                    true,
-                ).is_ok();
-                if ! success {
-                    die!("Failed to checkout new branch");
-                }
-            },
-            _ => die!("Something went horribly wrong!"),
-        };
+        let success = git_helpers3::checkout_branch(
+            output_branch_name.as_str(),
+            true,
+        ).is_ok();
+        if ! success {
+            die!("Failed to checkout new branch");
+        }
+
         if self.verbose {
             println!("{}created and checked out new branch {}", self.log_p, output_branch_name);
         }
@@ -125,13 +117,8 @@ impl<'a> SplitOut for Runner<'a> {
     }
 
     fn delete_branch(self, branch_name: &str) -> Self {
-        match self.repo {
-            Some(ref r) => {
-                if let Err(e) = git_helpers3::delete_branch(branch_name) {
-                    println!("Failed to delete branch: {}. {}", branch_name, e);
-                }
-            },
-            None => println!("Failed to delete branch: {}", branch_name),
+        if let Err(e) = git_helpers3::delete_branch(branch_name) {
+            println!("Failed to delete branch: {}. {}", branch_name, e);
         }
         self
     }

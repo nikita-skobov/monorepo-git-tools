@@ -218,7 +218,7 @@ mod test {
             hash: oid_str.into(),
         };
         let oid_short = oid.short();
-        assert_eq!(oid_short, "692ec553");
+        assert_eq!(oid_short, "692ec55");
         let oid_long = oid.long();
         assert_eq!(oid_long, oid_str);
     }
