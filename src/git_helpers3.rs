@@ -3,7 +3,7 @@
 
 use super::exec_helpers;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Oid {
     pub hash: String,
 }
@@ -11,7 +11,7 @@ impl Oid {
     /// it is assumed that short() will not be called
     /// on an empty oid
     pub fn short(&self) -> &str {
-        let substr = self.hash.get(0..8);
+        let substr = self.hash.get(0..7);
         substr.unwrap()
     }
     pub fn long(&self) -> &String {

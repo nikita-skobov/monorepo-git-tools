@@ -1,6 +1,9 @@
 use clap::ArgMatches;
 
 use super::git_helpers;
+use super::git_helpers3;
+use super::git_helpers3::Commit;
+use super::git_helpers3::Oid;
 use super::git_helpers::Short;
 use super::exec_helpers;
 use super::split::Runner;
@@ -50,7 +53,7 @@ impl<'a> CheckUpdates for Runner<'a> {
         // I think in most cases this isnt necessary, but I should
         // try to think of what edge cases this would be needed
         let all_upstream_blobs = get_all_blobs_in_branch(upstream_branch);
-        let all_commits_of_current = match git_helpers::get_all_commits_from_ref(repo, current_branch) {
+        let all_commits_of_current = match git_helpers3::get_all_commits_from_ref(current_branch) {
             Ok(v) => v,
             Err(e) => die!("Failed to get all commits! {}", e),
         };
@@ -59,10 +62,10 @@ impl<'a> CheckUpdates for Runner<'a> {
 
         let mut commits_to_take = vec![];
         let mut commit_summaries = vec![];
-        let mut summarize_cb = |c: &git2::Commit| {
+        let mut summarize_cb = |c: &Commit| {
             if should_summarize {
-                commits_to_take.push(c.id());
-                commit_summaries.push(c.summary().unwrap().to_string());
+                commits_to_take.push(c.id.clone());
+                commit_summaries.push(c.summary.clone());
             }
         };
         let should_take_blob_cb = |c: &BlobCheck| {
@@ -102,7 +105,7 @@ impl<'a> CheckUpdates for Runner<'a> {
 }
 
 pub fn summarize_updates(
-    commits_to_take: Vec<git2::Oid>,
+    commits_to_take: Vec<Oid>,
     commit_summaries: Vec<String>,
 ) {
     match commits_to_take.len() {
@@ -110,7 +113,7 @@ pub fn summarize_updates(
         _ => {
             println!("upstream can take {} commit(s) from current:", commits_to_take.len());
             for i in 0..commits_to_take.len() {
-                let id = commits_to_take[i];
+                let id = &commits_to_take[i];
                 let summary = &commit_summaries[i];
                 println!("{} {}", id.short(), summary);
             }
@@ -172,7 +175,7 @@ pub fn blob_path_applies_to_repo_file(
 // the other to decide whether or not to take a blob when
 // getting all blobs from commit
 pub fn topbase_check_alg_with_callback<F>(
-    all_commits_of_current: Vec<git2::Commit>,
+    all_commits_of_current: Vec<Commit>,
     all_upstream_blobs: HashSet<String>,
     cb: &mut F,
     should_take_blob: Option<&dyn Fn(&BlobCheck) -> Option<BlobCheckValue>>,
@@ -181,7 +184,7 @@ pub fn topbase_check_alg_with_callback<F>(
     // and not consider it...
     should_skip_if_no_blobs: bool,
 )
-    where F: FnMut(&git2::Commit)
+    where F: FnMut(&Commit)
 {
     // for every commit in the current branch
     // check if every single blob of every commit exists in the upstream branch.
@@ -189,15 +192,14 @@ pub fn topbase_check_alg_with_callback<F>(
     // exists in upstream, then we break
     for c in all_commits_of_current {
         // I think we want to skip merge commits, because thats what git rebase
-        // interactive does by default. also, is it safe to assume
-        // any commit with > 1 parent is a merge commit?
-        if c.parent_count() > 1 {
+        // interactive does by default.
+        if c.is_merge {
             continue;
         }
 
         let mut current_commit_blobs = HashSet::new();
         get_all_blobs_from_commit_with_callback(
-            &c.id().to_string()[..],
+            &c.id.long()[..],
             &mut current_commit_blobs,
             should_take_blob,
         );
@@ -225,11 +227,11 @@ pub fn topbase_check_alg_with_callback<F>(
 
 
 pub fn topbase_check_alg<F>(
-    all_commits_of_current: Vec<git2::Commit>,
+    all_commits_of_current: Vec<Commit>,
     all_upstream_blobs: HashSet<String>,
     cb: &mut F
 )
-    where F: FnMut(&git2::Commit),
+    where F: FnMut(&Commit),
 {
     topbase_check_alg_with_callback(
         all_commits_of_current,
