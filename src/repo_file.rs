@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use toml::Value;
 use super::die;
 
 #[derive(Debug, PartialEq)]
@@ -354,6 +355,97 @@ pub fn parse_repo_file_from_lines(lines: Vec<String>) -> RepoFile {
         }
     }
     return repofile_obj;
+}
+
+pub fn line_is_break(line: &String) -> bool {
+    for c in line.chars() {
+        if c != ' ' && c != '#' {
+            return false;
+        }
+    }
+    true
+}
+
+pub fn parse_repo_file_from_toml(filename: &str) -> RepoFile {
+    let repo_file_path = Path::new(filename);
+    if !repo_file_path.exists() {
+        die!("Failed to find repo_file: {}", filename);
+    }
+
+    let file = File::open(repo_file_path);
+    if let Err(file_error) = file {
+        die!("Failed to open file: {}, {}", filename, file_error);
+    }
+
+    // even though this is a toml file, and we have a toml parser
+    // we still want to split by lines, and then parse specific sections
+    // this is because if a user has:
+    // [include]
+    // this = that
+    //
+    // 
+    // exclude = [ something ]
+    // then toml will parse the exclude array as if its part of the include table
+    // so we split the file into sections separated by 2 'break' lines
+    // a break line is a line that only contains whitespace or a comment
+    let file_contents = file.unwrap();
+    let reader = BufReader::new(file_contents);
+    let lines: Vec<String> = reader.lines().map(|x| x.unwrap()).collect();
+    let mut last_line_was_break = false;
+    let mut segment_indices = vec![];
+    for (line_ind, line) in lines.iter().enumerate() {
+        if line_is_break(line) {
+            if last_line_was_break {
+                segment_indices.push(line_ind);
+                last_line_was_break = false;
+            } else {
+                last_line_was_break = true;
+            }
+        }
+    }
+    // always add a segment break to the end of the file
+    segment_indices.push(lines.len());
+
+    // group back the lines that are part of a contiguous segment
+    let mut current_index = 0;
+    let mut toml_segments = vec![];
+    for i in segment_indices {
+        let string_vec: Vec<&String> = lines.iter().skip(current_index).take(i - current_index).collect();
+        if string_vec.len() == 0 { continue; }
+
+        // we can calculate exactly how big the toml_segment is. its the sum
+        // of all the lengths of each string in string_vec plus a few
+        // newlines in between each string.
+        let mut string_size = string_vec.iter().map(|s| s.len()).sum();
+        // here we add the number of newlines there will be
+        string_size += string_vec.len() - 1;
+
+        let mut toml_segment = String::with_capacity(string_size);
+        toml_segment.push_str(string_vec[0]);
+        for j in 1..string_vec.len() {
+            toml_segment.push('\n');
+            toml_segment.push_str(string_vec[j]);
+        }
+
+        toml_segments.push(toml_segment);
+        current_index = i;
+    }
+
+    parse_repo_file_from_toml_segments(toml_segments)    
+}
+
+pub fn parse_repo_file_from_toml_segments(
+    toml_segments: Vec<String>
+) -> RepoFile {
+    // now we have toml_segments where each segment can be its own toml file
+    // we parse each into a toml::Value, and then apply the result into a repo file object
+    for s in toml_segments {
+        let tomlvalue = s.parse::<Value>().unwrap();
+        println!("TOML SEGMENT:");
+        println!("{:#?}", tomlvalue);
+    }
+    
+    RepoFile::new()
 }
 
 #[cfg(test)]
