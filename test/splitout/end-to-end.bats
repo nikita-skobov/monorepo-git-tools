@@ -51,8 +51,11 @@ function teardown() {
 
 @test 'capable of only including certain files' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=\"a.txt\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+    
+    include = \"a.txt\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -82,7 +85,7 @@ function teardown() {
 
 @test 'repo_file doesnt need a remote_repo if --output-branch provided' {
     repo_file_contents="
-    include=\"b.txt\"
+    include = \"b.txt\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -99,8 +102,11 @@ function teardown() {
 
 @test '--output-branch should override repo_name' {
     repo_file_contents="
-    include=\"b.txt\"
-    repo_name=\"somename\"
+    [repo]
+    name = \"somename\"
+
+
+    include = \"b.txt\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -117,8 +123,9 @@ function teardown() {
 
 @test '--output-branch should override remote_repo' {
     repo_file_contents="
-    include=\"b.txt\"
-    remote_repo=\"..$SEP$test_remote_repo2\"
+    include = \"b.txt\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -135,10 +142,10 @@ function teardown() {
 
 @test 'should not run if user has modified files' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(
-        \"lib/\" \" \"
-    )
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"lib/\" = \" \"
     "
     echo "$repo_file_contents" > repo_file.sh
 
@@ -166,8 +173,11 @@ function teardown() {
 
 @test 'capable of only including certain folders' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=\"a\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+    
+    include = \"a\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -201,11 +211,14 @@ function teardown() {
 
 @test 'works for both folders and files' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=(
-        \"a\"
-        \"b/b1.txt\"
-    )
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+
+
+    include = [
+        \"a\",
+        \"b/b1.txt\",
+    ]
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -241,10 +254,13 @@ function teardown() {
 
 @test 'works for recursive folders' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=(
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+    
+    include = [
         \"a/a1\"
-    )
+    ]
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -287,11 +303,10 @@ function teardown() {
 
 @test 'can split out to a specific output branch' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(
-        \"a.txt\"
-        \"new_a.txt\"
-    )
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"a.txt\" = \"new_a.txt\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -319,11 +334,10 @@ function teardown() {
 
 @test 'can only include_as a single file' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(
-        \"a.txt\"
-        \"new_a.txt\"
-    )
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"a.txt\" = \"new_a.txt\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -350,11 +364,10 @@ function teardown() {
 
 @test 'can only include_as a single folder' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(
-        \"a\"
-        \"new_a\"
-    )
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"a\" = \"new_a\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -389,11 +402,10 @@ function teardown() {
 
 @test 'can only include_as a single to root' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(
-        \"a/\"
-        \" \"
-    )
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"a/\" =\" \"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -426,12 +438,11 @@ function teardown() {
 
 @test 'can include_as to rename a nested folder but keep everything else' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=\"a\"
-    include_as=(
-        \"a/old_a\"
-        \"a/new_a\"
-    )
+    include = \"a\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"a/old_a\" = \"a/new_a\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -463,12 +474,16 @@ function teardown() {
 
 @test 'can include_as include and exclude a specific directory structure' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(\"a/a1\" \"lib\")
-    exclude=(
-        \"a/a1/b\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"a/a1\" = \"lib\"
+
+
+    exclude = [
+        \"a/a1/b\",
         \"a/a1/a1.txt\"
-    )
+    ]
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -505,8 +520,9 @@ function teardown() {
     # from test_remote_repo, we split out the file test_remote_repo.txt
     # and into a repo called test_remote_repo2:
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=\"test_remote_repo.txt\"
+    include = \"test_remote_repo.txt\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -525,8 +541,9 @@ function teardown() {
 
 @test 'can optionally rebase new branch onto original' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=(\"lib/\" \"test_remote_repo.txt\")
+    include = [\"lib/\", \"test_remote_repo.txt\"]
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
     "
     echo "$repo_file_contents" > repo_file.sh
 
@@ -556,9 +573,10 @@ function teardown() {
 
 @test 'can rebase onto specific remote branch' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    remote_branch=\"specific-branch\"
-    include=(\"lib/\" \"test_remote_repo.txt\")
+    include = [\"lib/\", \"test_remote_repo.txt\"]
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    branch = \"specific-branch\"
     "
     echo "$repo_file_contents" > repo_file.sh
 
@@ -598,9 +616,10 @@ function teardown() {
     # here we also test that passing the cli arg will override
     # whats defined in the repo file
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    remote_branch=\"specific-branch\"
-    include=(\"lib/\" \"test_remote_repo.txt\")
+    include = [\"lib/\", \"test_remote_repo.txt\"]
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    branch = \"specific-branch\"
     "
     echo "$repo_file_contents" > repo_file.sh
 
@@ -649,9 +668,10 @@ function teardown() {
     # here we also test that passing the cli arg will override
     # whats defined in the repo file
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    remote_branch=\"specific-branch\"
-    include=(\"lib/\" \"test_remote_repo.txt\")
+    include = [\"lib/\", \"test_remote_repo.txt\"]
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    branch = \"specific-branch\"
     "
     echo "$repo_file_contents" > repo_file.sh
 
@@ -698,9 +718,10 @@ function teardown() {
 
 @test 'gives proper error if failed to find remote_branch' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    remote_branch=\"specific-branch\"
-    include=(\"lib/\" \"test_remote_repo.txt\")
+    include = [\"lib/\", \"test_remote_repo.txt\"]
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    branch = \"specific-branch\"
     "
     echo "$repo_file_contents" > repo_file.sh
 
@@ -715,8 +736,9 @@ function teardown() {
 
 @test 'rebasing new branch onto original should not leave temporary branch' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=(\"lib/\" \"test_remote_repo.txt\")
+    include = [\"lib/\", \"test_remote_repo.txt\"]
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
     "
     echo "$repo_file_contents" > repo_file.sh
 
@@ -745,8 +767,9 @@ function teardown() {
 
 @test 'can topbase new branch onto original branch' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=(\"lib/\")
+    include = [\"lib/\"]
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
     "
     echo "$repo_file_contents" > repo_file.sh
 
@@ -789,8 +812,9 @@ function teardown() {
 
 @test '--topbase should not say success if there were rebase merge conflicts' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=(\"lib/\")
+    include = [\"lib/\"]
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
     "
     echo "$repo_file_contents" > repo_file.sh
 
@@ -817,8 +841,9 @@ function teardown() {
 
 @test '--topbase should not say success if there were rebase merge conflicts (case it takes all)' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=(\"lib/\")
+    include = [\"lib/\"]
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
     "
     echo "$repo_file_contents" > repo_file.sh
 
@@ -843,8 +868,9 @@ function teardown() {
 
 @test '--topbase should add a branch label before rebasing' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=(\"lib/\")
+    include = [\"lib/\"]
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
     "
     echo "$repo_file_contents" > repo_file.sh
 
@@ -889,8 +915,9 @@ function teardown() {
 
 @test '--rebase should not say success if there were rebase merge conflicts' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=(\"lib/\")
+    include = [\"lib/\"]
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
     "
     echo "$repo_file_contents" > repo_file.sh
 

@@ -61,8 +61,9 @@ function setup() {
 @test 'can optionally specify a remote branch to override repo file' {
     # by default it should be whatever is in the repo file branch:
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    remote_branch=\"somebranch\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    branch = \"somebranch\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -81,7 +82,8 @@ function setup() {
 
 @test 'can optionally specify a local branch to check from/to' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -101,7 +103,8 @@ function setup() {
 @test 'uses remote_repo:HEAD by default' {
     # by default it should be whatever is in the repo file branch:
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
     "
 
     echo "$repo_file_contents" > repo_file.sh

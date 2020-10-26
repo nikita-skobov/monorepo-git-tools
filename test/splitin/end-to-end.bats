@@ -60,10 +60,10 @@ function teardown() {
 
 @test 'can split in a remote_repo uri' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(
-        \"this/path/will/be/created/\" \" \"
-    )
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"this/path/will/be/created/\" = \" \"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -86,9 +86,8 @@ function teardown() {
 
 @test 'can split in a local branch' {
     repo_file_contents="
-    include_as=(
-        \"this/path/will/be/created/\" \" \"
-    )
+    [include_as]
+    \"this/path/will/be/created/\" = \" \"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -117,10 +116,10 @@ function teardown() {
 
 @test 'should not run if user has modified files' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(
-        \"lib/\" \" \"
-    )
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"lib/\" = \" \"
     "
     echo "$repo_file_contents" > repo_file.sh
 
@@ -148,10 +147,10 @@ function teardown() {
 
 @test 'can split in to a specific output branch' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(
-        \"this/path/will/be/created/\" \" \"
-    )
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"this/path/will/be/created/\" = \" \"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -176,10 +175,10 @@ function teardown() {
 @test 'can split in to a specific output branch (overrides repo_name)' {
     repo_file_contents="
     repo_name=\"abcd\"
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(
-        \"this/path/will/be/created/\" \" \"
-    )
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"this/path/will/be/created/\" = \" \"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -192,11 +191,12 @@ function teardown() {
 
 @test 'can split in a remote_repo with a specific remote_branch' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    remote_branch=\"test-branch\"
-    include_as=(
-        \"this/path/will/be/created/\" \" \"
-    )
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    branch=\"test-branch\"
+
+    [include_as]
+    \"this/path/will/be/created/\" = \" \"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -240,11 +240,11 @@ function teardown() {
     cd "$curr_dir"
 
     repo_file_contents="
-    repo_name=\"doesnt_matter\"
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(
-        \"locallib/\" \"lib/\"
-    )
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    name = \"doesnt_matter\"
+    [include_as]
+    \"locallib/\" = \"lib/\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -279,11 +279,11 @@ function teardown() {
     cd "$curr_dir"
 
     repo_file_contents="
-    repo_name=\"doesnt_matter\"
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(
-        \"locallib/\" \"my lib/\"
-    )
+    [repo]
+    name = \"doesnt_matter\"
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"locallib/\" = \"my lib/\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -315,9 +315,11 @@ function teardown() {
     cd "$curr_dir"
 
     repo_file_contents="
-    repo_name=\"doesnt_matter\"
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(\"lib/\" \" \")
+    [repo]
+    name=\"doesnt_matter\"
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"lib/\" = \" \"
     "
     echo "$repo_file_contents" > repo_file.sh
 
@@ -356,13 +358,13 @@ function teardown() {
     cd "$curr_dir"
 
     repo_file_contents="
-    repo_name=\"doesnt_matter\"
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(
-        \"lib/src/srcfile1.txt\" \"srcfile1.txt\"
-        \"lib/src/\" \"lib/\"
-        \"lib/\" \" \"
-    )
+    [repo]
+    name=\"doesnt_matter\"
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"lib/src/srcfile1.txt\" = \"srcfile1.txt\"
+    \"lib/src/\" = \"lib/\"
+    \"lib/\" = \" \"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -399,9 +401,12 @@ function teardown() {
     cd "$curr_dir"
 
     repo_file_contents="
-    repo_name=\"doesnt_matter\"
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=\"lib/libfile1.txt\"
+    [repo]
+    name = \"doesnt_matter\"
+    remote = \"..$SEP$test_remote_repo2\"
+    
+    
+    include = \"lib/libfile1.txt\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -438,9 +443,12 @@ function teardown() {
     cd "$curr_dir"
 
     repo_file_contents="
-    repo_name=\"doesnt_matter\"
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=(\"src/\" \"lib\")
+    [repo]
+    name=\"doesnt_matter\"
+    remote = \"..$SEP$test_remote_repo2\"
+    
+    
+    include=[\"src/\", \"lib\"]
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -480,10 +488,13 @@ function teardown() {
     cd "$curr_dir"
 
     repo_file_contents="
-    repo_name=\"doesnt_matter\"
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=\"lib/\"
-    exclude=\"lib/test/\"
+    [repo]
+    name = \"doesnt_matter\"
+    remote = \"..$SEP$test_remote_repo2\"
+    
+    
+    include = \"lib/\"
+    exclude = \"lib/test/\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -523,8 +534,11 @@ function teardown() {
     cd "$curr_dir"
 
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=\"lib/\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+
+
+    include = \"lib/\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -562,8 +576,10 @@ function teardown() {
     cd "$curr_dir"
 
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(\"lib/\" \" \")
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"lib/\" = \" \"
     "
     echo "$repo_file_contents" > repo_file.sh
 
@@ -592,8 +608,10 @@ function teardown() {
     cd "$curr_dir"
 
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(\"lib/\" \" \")
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"lib/\" = \" \"
     "
     echo "$repo_file_contents" > repo_file.sh
 
@@ -625,8 +643,10 @@ function teardown() {
     cd "$curr_dir"
 
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(\"lib/\" \" \")
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"lib/\" = \" \"
     "
     echo "$repo_file_contents" > repo_file.sh
 
@@ -644,8 +664,10 @@ function teardown() {
 
 @test 'should not be able to use --topbase with --rebase' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(\"lib/\" \" \")
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"lib/\" = \" \"
     "
     echo "$repo_file_contents" > repo_file.sh
 
@@ -671,8 +693,11 @@ function teardown() {
     cd "$curr_dir"
 
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=\"lib/\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+    
+    include = \"lib/\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -708,8 +733,11 @@ function teardown() {
     echo "$(git log --oneline)"
 
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=\"file1.txt\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+    
+    include = \"file1.txt\"
     "
     echo "$repo_file_contents" > repo_file.sh
     git_log_before="$(git log --oneline)"
@@ -740,8 +768,11 @@ function teardown() {
     echo "$(git log --oneline)"
 
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=\"file1.txt\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+    
+    include = \"file1.txt\"
     "
     echo "$repo_file_contents" > repo_file.sh
     git_log_before="$(git log --oneline)"
@@ -767,8 +798,11 @@ function teardown() {
     echo "$(git log --oneline)"
 
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=\"file1.txt\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+
+
+    include = \"file1.txt\"
     "
     echo "$repo_file_contents" > repo_file.sh
     git_log_before="$(git log --oneline)"
@@ -804,11 +838,11 @@ function teardown() {
     # them, but i think it'd be too difficult due to multiple levels of
     # escaping, and also it being treated differently on windows vs linux
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(
-        \"dumbfile.txt\" \"du[mbfile.txt\"
-        \"spaghetti/\" \"dum'lib/\"
-    )
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"dumbfile.txt\" = \"du[mbfile.txt\"
+    \"spaghetti/\" = \"dum'lib/\"
     "
     echo "$repo_file_contents" > repo_file.sh
     echo "repo file contents:"
