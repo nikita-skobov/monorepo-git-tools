@@ -38,7 +38,7 @@ pub fn read_file_into_lines(filename: &str) -> Vec<String> {
 
 pub fn line_is_break(line: &String) -> bool {
     for c in line.chars() {
-        if c != ' ' && c != '#' {
+        if c != ' ' {
             return false;
         }
     }
@@ -273,5 +273,20 @@ mod test {
         assert_eq!(include_as[1], "some path/lib/");
         assert_eq!(include_as[2], "something/else");
         assert_eq!(include_as[3], " ");
+    }
+
+    #[test]
+    fn toml_comments_not_included() {
+        let toml_str = r#"
+            [repo]
+            name = "somename"
+            # comment1
+            # comment2
+            # comment3
+            branch = "somebranch"
+        "#;
+        let repofile = parse_from_lines(toml_str);
+        assert_eq!(repofile.repo_name.unwrap(), "somename");
+        assert_eq!(repofile.remote_branch.unwrap(), "somebranch");
     }
 }
