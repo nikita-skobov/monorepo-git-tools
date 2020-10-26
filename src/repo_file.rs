@@ -258,4 +258,20 @@ mod test {
         let repofileobj = parse_from_lines(toml_str);
         assert_eq!(expectedrepofileobj, repofileobj);
     }
+
+    #[test]
+    fn toml_space_parse_workd() {
+        let toml_str = r#"
+            [include_as]
+            " " = "some path/lib/"
+            "something/else" = " "
+        "#;
+        let repofile = parse_from_lines(toml_str);
+        let include_as = repofile.include_as.unwrap();
+        assert_eq!(include_as.len(), 4);
+        assert_eq!(include_as[0], " ");
+        assert_eq!(include_as[1], "some path/lib/");
+        assert_eq!(include_as[2], "something/else");
+        assert_eq!(include_as[3], " ");
+    }
 }
