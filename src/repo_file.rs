@@ -4,7 +4,7 @@ use std::io::{BufRead, BufReader};
 use toml::Value;
 use super::die;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 pub struct RepoFile {
     /// ## repo_name
     /// The name of the remote repository <br/>
@@ -314,7 +314,7 @@ fn should_parse_line(text: &String) -> bool {
     return !is_full_line_comment && !is_entirely_whitespace;
 }
 
-pub fn parse_repo_file(filename: &str) -> RepoFile {
+pub fn read_file_into_lines(filename: &str) -> Vec<String> {
     let repo_file_path = Path::new(filename);
     if !repo_file_path.exists() {
         die!("Failed to find repo_file: {}", filename);
@@ -327,7 +327,11 @@ pub fn parse_repo_file(filename: &str) -> RepoFile {
 
     let file_contents = file.unwrap();
     let reader = BufReader::new(file_contents);
-    let lines: Vec<String> = reader.lines().map(|x| x.unwrap()).collect();
+    reader.lines().map(|x| x.unwrap()).collect()
+}
+
+pub fn parse_repo_file(filename: &str) -> RepoFile {
+    let lines = read_file_into_lines(filename);
     return parse_repo_file_from_lines(lines);
 }
 
@@ -367,16 +371,11 @@ pub fn line_is_break(line: &String) -> bool {
 }
 
 pub fn parse_repo_file_from_toml(filename: &str) -> RepoFile {
-    let repo_file_path = Path::new(filename);
-    if !repo_file_path.exists() {
-        die!("Failed to find repo_file: {}", filename);
-    }
+    let lines = read_file_into_lines(filename);
+    parse_repo_file_from_toml_lines(lines)
+}
 
-    let file = File::open(repo_file_path);
-    if let Err(file_error) = file {
-        die!("Failed to open file: {}, {}", filename, file_error);
-    }
-
+pub fn parse_repo_file_from_toml_lines(lines: Vec<String>) -> RepoFile {
     // even though this is a toml file, and we have a toml parser
     // we still want to split by lines, and then parse specific sections
     // this is because if a user has:
@@ -388,9 +387,6 @@ pub fn parse_repo_file_from_toml(filename: &str) -> RepoFile {
     // then toml will parse the exclude array as if its part of the include table
     // so we split the file into sections separated by 2 'break' lines
     // a break line is a line that only contains whitespace or a comment
-    let file_contents = file.unwrap();
-    let reader = BufReader::new(file_contents);
-    let lines: Vec<String> = reader.lines().map(|x| x.unwrap()).collect();
     let mut last_line_was_break = false;
     let mut segment_indices = vec![];
     for (line_ind, line) in lines.iter().enumerate() {
@@ -431,27 +427,103 @@ pub fn parse_repo_file_from_toml(filename: &str) -> RepoFile {
         current_index = i;
     }
 
-    parse_repo_file_from_toml_segments(toml_segments)    
+    parse_repo_file_from_toml_segments(toml_segments)
 }
+
+pub fn toml_value_to_string_opt(toml_value: &Value) -> Option<String> {
+    match toml_value.as_str() {
+        Some(s) => Some(s.to_owned()),
+        None => None,
+    }
+}
+
+pub fn parse_repo_section(toml_value: &Value, repofile: &mut RepoFile) {
+    if let Value::Table(ref t) = toml_value {
+        for (k, v) in t {
+            match k.as_str() {
+                "remote" => repofile.remote_repo = toml_value_to_string_opt(v),
+                "name" => repofile.repo_name = toml_value_to_string_opt(v),
+                "branch" => repofile.remote_branch = toml_value_to_string_opt(v),
+                _ => (),
+            }
+        }
+    }
+}
+
+pub fn parse_include_as_section(toml_value: &Value, repofile: &mut RepoFile) {
+    if let Value::Table(ref t) = toml_value {
+        let mut include_as = vec![];
+        for (k, v) in t {
+            if let Some(s) = v.as_str() {
+                include_as.push(k.to_owned());
+                include_as.push(s.to_string());
+            }
+        }
+        repofile.include_as = Some(include_as);
+    }
+}
+
+pub fn toml_value_to_vec(toml_value: &Value) -> Vec<String> {
+    let mut toml_vec = vec![];
+    if let Value::Array(ref a) = toml_value {
+        for v in a {
+            if let Some(s) = v.as_str() {
+                toml_vec.push(s.to_owned());
+            }
+        }
+    } else if let Value::String(s) = toml_value {
+        toml_vec.push(s.to_owned());
+    }
+    toml_vec
+}
+
+pub fn parse_include_section(toml_value: &Value, repofile: &mut RepoFile) {
+    let toml_vec = toml_value_to_vec(toml_value);
+    if toml_vec.len() > 0 {
+        repofile.include = Some(toml_vec);
+    }
+}
+
+pub fn parse_exclude_section(toml_value: &Value, repofile: &mut RepoFile) {
+    let toml_vec = toml_value_to_vec(toml_value);
+    if toml_vec.len() > 0 {
+        repofile.exclude = Some(toml_vec);
+    }
+}
+
 
 pub fn parse_repo_file_from_toml_segments(
     toml_segments: Vec<String>
 ) -> RepoFile {
+    let mut repo_file = RepoFile::default();
     // now we have toml_segments where each segment can be its own toml file
     // we parse each into a toml::Value, and then apply the result into a repo file object
     for s in toml_segments {
-        let tomlvalue = s.parse::<Value>().unwrap();
-        println!("TOML SEGMENT:");
-        println!("{:#?}", tomlvalue);
+        let tomlvalue = s.parse::<Value>();
+        if tomlvalue.is_err() { continue; } // TODO: report parse error to user
+        let tomlvalue = tomlvalue.unwrap();
+
+        if let Value::Table(ref t) = tomlvalue {
+            for (k, v) in t {
+                match k.as_str() {
+                    "repo" => parse_repo_section(v, &mut repo_file),
+                    "include_as" => parse_include_as_section(v, &mut repo_file),
+                    "include" => parse_include_section(v, &mut repo_file),
+                    "exclude" => parse_exclude_section(v, &mut repo_file),
+                    _ => (),
+                }
+            }
+        }
     }
-    
-    RepoFile::new()
+
+    repo_file
 }
 
 #[cfg(test)]
 mod test {
     use super::RepoFile;
     use super::parse_repo_file_from_lines;
+    use super::parse_repo_file_from_toml_lines;
 
     #[test]
     #[should_panic(expected = "Invalid variable name")]
@@ -535,5 +607,28 @@ mod test {
         expectedrepofileobj.remote_branch = Some("something".into());
         let repofileobj = parse_repo_file_from_lines(lines);
         assert_eq!(expectedrepofileobj, repofileobj);
+    }
+
+    fn parse_from_lines(toml_str: &str) -> RepoFile {
+        let lines: Vec<String> = toml_str.split('\n').map(|s| s.to_string()).collect();
+        parse_repo_file_from_toml_lines(lines)
+    }
+
+    #[test]
+    fn toml_parse_repo_quotes_dont_matter() {
+        let toml_str1 = r#"
+            [repo]
+            "name" = "hello"
+            "remote" = "https://githost.com/repo"
+        "#;
+        let toml_str2 = r#"
+            [repo]
+            name = "hello"
+            remote = "https://githost.com/repo"
+        "#;
+        let repofile1 = parse_from_lines(toml_str1);
+        let repofile2 = parse_from_lines(toml_str2);
+        assert_eq!(repofile1, repofile2);
+        println!("{:#?}", repofile1);
     }
 }
