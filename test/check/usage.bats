@@ -71,7 +71,8 @@ function setup() {
     run $PROGRAM_PATH check repo_file.sh
     echo "$output"
     [[ "$output" == *"Upstream: HEAD"* ]]
-    [[ "$output" == *"Current: ..$SEP$test_remote_repo2 somebranch"* ]]
+    [[ "$output" == *"Current: *" ]]
+    [[ "$output" == *"$test_remote_repo2 somebranch"* ]]
 
     # if we specify --remote otherbranch, it should override the default
     run $PROGRAM_PATH check repo_file.sh --remote -b other
@@ -92,7 +93,8 @@ function setup() {
     run $PROGRAM_PATH check repo_file.sh --local
     echo "$output"
     [[ "$output" == *"Current: HEAD"* ]]
-    [[ "$output" == *"Upstream: ..$SEP$test_remote_repo2"* ]]
+    [[ "$output" == *"Upstream: "* ]]
+    [[ "$output" == *"$test_remote_repo2"* ]]
 
     run $PROGRAM_PATH check repo_file.sh --local --local-branch other
     echo "$output"
