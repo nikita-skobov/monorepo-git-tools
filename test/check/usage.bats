@@ -77,7 +77,8 @@ function setup() {
     run $PROGRAM_PATH check repo_file.sh --remote -b other
     echo "$output"
     [[ "$output" == *"Upstream: HEAD"* ]]
-    [[ "$output" == *"Current: ..$SEP$test_remote_repo2 other"* ]]
+    [[ "$output" == *"Current: "* ]]
+    [[ "$output" == *"$test_remote_repo2 other"* ]]
 }
 
 @test 'can optionally specify a local branch to check from/to' {
@@ -96,7 +97,8 @@ function setup() {
     run $PROGRAM_PATH check repo_file.sh --local --local-branch other
     echo "$output"
     [[ "$output" == *"Current: other"* ]]
-    [[ "$output" == *"Upstream: ..$SEP$test_remote_repo2"* ]]
+    [[ "$output" == *"Upstream: "* ]]
+    [[ "$output" == *"$test_remote_repo2"* ]]
 }
 
 
@@ -112,5 +114,6 @@ function setup() {
     run $PROGRAM_PATH check repo_file.sh
     echo "$output"
     [[ "$output" == *"Upstream: HEAD"* ]]
-    [[ "$output" == *"Current: ..$SEP$test_remote_repo2"* ]]
+    [[ "$output" == *"Current: "* ]]
+    [[ "$output" == *"$test_remote_repo2"* ]]
 }
