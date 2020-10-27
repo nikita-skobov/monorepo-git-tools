@@ -16,7 +16,7 @@ function set_seperator() {
     # I wanna use these tests for both windows (git bash)
     # and linux, so I need to change the separator
     if [[ -d /c/ ]]; then
-        SEP="\\"
+        SEP="\\\\"
     else
         SEP="/"
     fi
@@ -180,8 +180,10 @@ function teardown() {
 # with this when there are squash commits
 @test 'can get latest changes using \"topbase\"' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(\"lib/\" \" \")
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"lib/\" = \" \"
     "
     echo "$repo_file_contents" > repo_file.sh
     # the repo_file wont be committed

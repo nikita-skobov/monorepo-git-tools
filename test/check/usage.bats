@@ -16,7 +16,7 @@ function set_seperator() {
     # I wanna use these tests for both windows (git bash)
     # and linux, so I need to change the separator
     if [[ -d /c/ ]]; then
-        SEP="\\"
+        SEP="\\\\"
     else
         SEP="/"
     fi
@@ -61,8 +61,9 @@ function setup() {
 @test 'can optionally specify a remote branch to override repo file' {
     # by default it should be whatever is in the repo file branch:
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    remote_branch=\"somebranch\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    branch = \"somebranch\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -70,18 +71,21 @@ function setup() {
     run $PROGRAM_PATH check repo_file.sh
     echo "$output"
     [[ "$output" == *"Upstream: HEAD"* ]]
-    [[ "$output" == *"Current: ..$SEP$test_remote_repo2 somebranch"* ]]
+    [[ "$output" == *"Current: "* ]]
+    [[ "$output" == *"$test_remote_repo2 somebranch"* ]]
 
     # if we specify --remote otherbranch, it should override the default
     run $PROGRAM_PATH check repo_file.sh --remote -b other
     echo "$output"
     [[ "$output" == *"Upstream: HEAD"* ]]
-    [[ "$output" == *"Current: ..$SEP$test_remote_repo2 other"* ]]
+    [[ "$output" == *"Current: "* ]]
+    [[ "$output" == *"$test_remote_repo2 other"* ]]
 }
 
 @test 'can optionally specify a local branch to check from/to' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -89,19 +93,22 @@ function setup() {
     run $PROGRAM_PATH check repo_file.sh --local
     echo "$output"
     [[ "$output" == *"Current: HEAD"* ]]
-    [[ "$output" == *"Upstream: ..$SEP$test_remote_repo2"* ]]
+    [[ "$output" == *"Upstream: "* ]]
+    [[ "$output" == *"$test_remote_repo2"* ]]
 
     run $PROGRAM_PATH check repo_file.sh --local --local-branch other
     echo "$output"
     [[ "$output" == *"Current: other"* ]]
-    [[ "$output" == *"Upstream: ..$SEP$test_remote_repo2"* ]]
+    [[ "$output" == *"Upstream: "* ]]
+    [[ "$output" == *"$test_remote_repo2"* ]]
 }
 
 
 @test 'uses remote_repo:HEAD by default' {
     # by default it should be whatever is in the repo file branch:
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -109,5 +116,6 @@ function setup() {
     run $PROGRAM_PATH check repo_file.sh
     echo "$output"
     [[ "$output" == *"Upstream: HEAD"* ]]
-    [[ "$output" == *"Current: ..$SEP$test_remote_repo2"* ]]
+    [[ "$output" == *"Current: "* ]]
+    [[ "$output" == *"$test_remote_repo2"* ]]
 }

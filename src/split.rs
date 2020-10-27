@@ -264,7 +264,7 @@ impl<'a> Runner<'a> {
     pub fn get_repo_file(mut self) -> Self {
         // safe to unwrap because its required
         let repo_file_name = self.repo_file_path.unwrap();
-        self.repo_file = repo_file::parse_repo_file(repo_file_name);
+        self.repo_file = repo_file::parse_repo_file_from_toml(repo_file_name);
         if self.verbose {
             println!("{}got repo file: {}", self.log_p, repo_file_name);
         }
