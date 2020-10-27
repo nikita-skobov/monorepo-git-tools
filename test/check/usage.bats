@@ -71,7 +71,7 @@ function setup() {
     run $PROGRAM_PATH check repo_file.sh
     echo "$output"
     [[ "$output" == *"Upstream: HEAD"* ]]
-    [[ "$output" == *"Current: *" ]]
+    [[ "$output" == *"Current: "* ]]
     [[ "$output" == *"$test_remote_repo2 somebranch"* ]]
 
     # if we specify --remote otherbranch, it should override the default
