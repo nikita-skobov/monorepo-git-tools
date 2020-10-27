@@ -25,7 +25,7 @@ function set_seperator() {
     # I wanna use these tests for both windows (git bash)
     # and linux, so I need to change the separator
     if [[ -d /c/ ]]; then
-        SEP="\\"
+        SEP="\\\\"
     else
         SEP="/"
     fi
