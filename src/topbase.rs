@@ -98,44 +98,19 @@ impl<'a> Topbase for Runner<'a> {
             return self;
         }
 
-        let args = match num_commits_to_take {
-            // if there's nothing to topbase, then we want to just
-            // rebase the last commit onto the upstream branch.
-            // this will allow our current branch to be fast-forwardable
-            // onto upstream (well really its going to be the exact same branch)
-            0 => {
-                // if current branch only has one commit, dont use the <branch>~1
-                // git rebase syntax. it will cause git rebase to fail
-                let rebase_last_one = match num_commits_of_current > 1 {
-                    true => "~1",
-                    false => "",
-                };
-                let last_commit_arg = format!("{}{}", current_branch, rebase_last_one);
-                let args = vec![
-                    "git".into(), "rebase".into(), "--onto".into(),
-                    upstream_branch.clone(),
-                    last_commit_arg,
-                    current_branch.clone()
-                ];
-                args
-            },
-            // if we need to topbase the entirety of the current branch
-            // it will be better to do a regular rebase
-            n => {
-                if n == num_commits_of_current {
-                    let args = vec![
-                        "git".into(), "rebase".into(), upstream_branch.clone(),
-                    ];
-                    args
-                } else {
-                    vec![]
-                }
-            },
+        // if we need to topbase the entirety of the current branch
+        // it will be better to do a regular rebase
+        let args = if num_commits_to_take == num_commits_of_current {
+            let args = vec![
+                "git".into(), "rebase".into(), upstream_branch.clone(),
+            ];
+            args
+        } else {
+            vec![]
         };
 
         // args will have non-zero length only if
-        //  - we need to topbase all commits
-        //  - we found no commits to topbase
+        // we need to topbase all commits
         if args.len() != 0 {
             if self.dry_run {
                 let arg_str = args.join(" ");
