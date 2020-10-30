@@ -309,9 +309,9 @@ function teardown() {
     # setup the test remote repo:
     cd "$BATS_TMPDIR/test_remote_repo2"
 
-    echo "1a" > 1a.txt && git add 1a.txt && git commit -m "1a"
-    echo "2b" > 2b.txt && git add 2b.txt && git commit -m "2b"
-    echo "3c" > 3c.txt && git add 3c.txt && git commit -m "3c"
+    echo "1a" > 1a.txt && git add 1a.txt && git commit -m "commit_1a"
+    echo "2b" > 2b.txt && git add 2b.txt && git commit -m "commit_2b"
+    echo "3c" > 3c.txt && git add 3c.txt && git commit -m "commit_3c"
     cd "$curr_dir"
 
     repo_file_contents="
@@ -335,9 +335,9 @@ function teardown() {
     [[ $git_branch == "doesnt_matter" ]]
     # because n was 2, there should only be the top 2 commits
     [[ $num_commits == "2" ]]
-    [[ $git_log_now != *"1a"* ]]
-    [[ $git_log_now == *"2b"* ]]
-    [[ $git_log_now == *"3c"* ]]
+    [[ $git_log_now != *"commit_1a"* ]]
+    [[ $git_log_now == *"commit_2b"* ]]
+    [[ $git_log_now == *"commit_3c"* ]]
 }
 
 @test 'properly handles nested folder renames/moves' {
@@ -741,14 +741,14 @@ function teardown() {
     "
     echo "$repo_file_contents" > repo_file.sh
     git_log_before="$(git log --oneline)"
+    git_branch_before="$(git branch)"
     run $PROGRAM_PATH split-in repo_file.sh -t --verbose
     echo "$output"
     echo "$(git log --oneline)"
     git_log_now="$(git log --oneline)"
     [[ $status == "0" ]]
-    [[ $output == *"rebasing non-interactively"* ]]
-    # it should still rebase because that will make the output
-    # branch fast-forwardable
+    [[ $output == *"Nothing to topbase"* ]]
+    [[ "$(git branch)" == $git_branch_before ]]
     [[ $git_log_now == $git_log_before ]]
 }
 
@@ -776,14 +776,14 @@ function teardown() {
     "
     echo "$repo_file_contents" > repo_file.sh
     git_log_before="$(git log --oneline)"
+    git_branch_before="$(git branch)"
     run $PROGRAM_PATH split-in repo_file.sh -t --verbose
     echo "$output"
     echo "$(git log --oneline)"
     git_log_now="$(git log --oneline)"
     [[ $status == "0" ]]
-    [[ $output == *"rebasing non-interactively"* ]]
-    # it should still rebase because that will make the output
-    # branch fast-forwardable
+    [[ $output == *"Nothing to topbase"* ]]
+    [[ "$(git branch)" == $git_branch_before ]]
     [[ $git_log_now == $git_log_before ]]
 }
 
