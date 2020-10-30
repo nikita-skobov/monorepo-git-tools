@@ -80,6 +80,24 @@ impl<'a> Topbase for Runner<'a> {
             println!("{}no commit of {} exists in {}. rebasing non-interactively", self.log_p, current_branch, upstream_branch);
         }
 
+        // if nothing to take, dont topbase
+        // instead go back to upstream, and then
+        // delete delete the current branch
+        if num_commits_to_take == 0 {
+            println!("Nothing to topbase. Returning to {}", upstream_branch);
+            match git_helpers3::checkout_branch(upstream_branch.as_str(), false) {
+                Err(e) => die!("Failed to checkout back to upstream branch: {}", e),
+                _ => (),
+            }
+            println!("Deleting {}", current_branch);
+            match git_helpers3::delete_branch(current_branch.as_str()) {
+                Err(e) => die!("Failed to delete temporary branch {}: {}", current_branch, e),
+                _ => (),
+            }
+
+            return self;
+        }
+
         let args = match num_commits_to_take {
             // if there's nothing to topbase, then we want to just
             // rebase the last commit onto the upstream branch.

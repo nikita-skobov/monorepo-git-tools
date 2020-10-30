@@ -741,14 +741,14 @@ function teardown() {
     "
     echo "$repo_file_contents" > repo_file.sh
     git_log_before="$(git log --oneline)"
+    git_branch_before="$(git branch)"
     run $PROGRAM_PATH split-in repo_file.sh -t --verbose
     echo "$output"
     echo "$(git log --oneline)"
     git_log_now="$(git log --oneline)"
     [[ $status == "0" ]]
-    [[ $output == *"rebasing non-interactively"* ]]
-    # it should still rebase because that will make the output
-    # branch fast-forwardable
+    [[ $output == *"Nothing to topbase"* ]]
+    [[ "$(git branch)" == $git_branch_before ]]
     [[ $git_log_now == $git_log_before ]]
 }
 
@@ -776,14 +776,14 @@ function teardown() {
     "
     echo "$repo_file_contents" > repo_file.sh
     git_log_before="$(git log --oneline)"
+    git_branch_before="$(git branch)"
     run $PROGRAM_PATH split-in repo_file.sh -t --verbose
     echo "$output"
     echo "$(git log --oneline)"
     git_log_now="$(git log --oneline)"
     [[ $status == "0" ]]
-    [[ $output == *"rebasing non-interactively"* ]]
-    # it should still rebase because that will make the output
-    # branch fast-forwardable
+    [[ $output == *"Nothing to topbase"* ]]
+    [[ "$(git branch)" == $git_branch_before ]]
     [[ $git_log_now == $git_log_before ]]
 }
 
