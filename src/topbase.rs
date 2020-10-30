@@ -68,18 +68,6 @@ impl<'a> Topbase for Runner<'a> {
         let current_branch = current_branch.replace("refs/heads/", "");
         let upstream_branch = upstream_branch.replace("refs/heads/", "");
 
-        // log the special cases
-        if num_commits_to_take == 0 {
-            // if we have found that the most recent commit of current_branch already exists
-            // on the upstream branch, we should just rebase normally (so that the branch can be fast-forwardable)
-            // instead of rebasing interactively
-            println!("{}most recent commit of {} exists in {}. rebasing non-interactively", self.log_p, current_branch, upstream_branch);
-        } else if num_commits_to_take == num_commits_of_current {
-            // if we are trying to topbase on a branch that hasnt been rebased yet,
-            // we dont need to topbase, and instead we need to do a regular rebase
-            println!("{}no commit of {} exists in {}. rebasing non-interactively", self.log_p, current_branch, upstream_branch);
-        }
-
         // if nothing to take, dont topbase
         // instead go back to upstream, and then
         // delete delete the current branch
@@ -107,6 +95,10 @@ impl<'a> Topbase for Runner<'a> {
         // if we need to topbase the entirety of the current branch
         // it will be better to do a regular rebase
         let args = if num_commits_to_take == num_commits_of_current {
+            // if we are trying to topbase on a branch that hasnt been rebased yet,
+            // we dont need to topbase, and instead we need to do a regular rebase
+            println!("{}no commit of {} exists in {}. rebasing non-interactively", self.log_p, current_branch, upstream_branch);
+
             let args = vec![
                 "git".into(), "rebase".into(), upstream_branch.clone(),
             ];
