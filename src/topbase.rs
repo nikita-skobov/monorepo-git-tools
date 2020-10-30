@@ -84,6 +84,12 @@ impl<'a> Topbase for Runner<'a> {
         // instead go back to upstream, and then
         // delete delete the current branch
         if num_commits_to_take == 0 {
+            if self.dry_run {
+                println!("{}Nothing to topbase. Returning to {}", self.log_p, upstream_branch);
+                println!("{}Deleting {}", self.log_p, current_branch);
+                return self;
+            }
+
             println!("Nothing to topbase. Returning to {}", upstream_branch);
             match git_helpers3::checkout_branch(upstream_branch.as_str(), false) {
                 Err(e) => die!("Failed to checkout back to upstream branch: {}", e),
