@@ -293,3 +293,16 @@ function teardown() {
     [[ "$git_log_now" == *" N"* ]]
     [[ "$git_log_now" == *" O"* ]]
 }
+
+@test 'can generate a repo file' {
+    run $PROGRAM_PATH split-in-as "..$SEP$test_remote_repo2" --as abc/ --gen-repo-file --verbose
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ "$(git branch --show-current)" == "test_remote_repo2" ]]
+    [[ -f meta.rf ]]
+    meta_rf_contents=$(<meta.rf)
+    [[ "$meta_rf_contents" == *"[repo]"* ]]
+    [[ "$meta_rf_contents" == *"remote = \"..$SEP$test_remote_repo2\""* ]]
+    [[ "$meta_rf_contents" == *"[include_as]"* ]]
+    [[ "$meta_rf_contents" == *"\"abc/\" = \" \""* ]]
+}
