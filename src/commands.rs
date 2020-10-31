@@ -28,6 +28,7 @@ pub const LOCAL_BRANCH_ARG: &'static str = "local-branch";
 pub const RECURSIVE_ARG: [&'static str; 2] = ["recursive", "r"];
 pub const ALL_ARG: [&'static str; 2] = ["all", "a"];
 pub const NUM_COMMITS_ARG: &'static str = "num-commits";
+pub const GEN_REPO_FILE_ARG: [&'static str; 2] = ["gen-repo-file", "g"];
 
 const SPLIT_IN_STR: &'static str = "split-in";
 const SPLIT_IN_AS_STR: &'static str = "split-in-as";
@@ -53,6 +54,7 @@ const REMOTE_ARG_DESCRIPTION: &'static str = "check if the remote has commits no
 const REMOTE_BRANCH_ARG_DESCRIPTION: &'static str = "check updates to/from a specific remote branch instead of what's in the repo file";
 const LOCAL_BRANCH_ARG_DESCRIPTION: &'static str = "check updates to/from a specific local branch instead of the current HEAD";
 const NUM_COMMITS_ARG_DESCRIPTION: &'static str = "when pulling from remote, limit to n commits from the current tip. This is probably only useful the first time you do a split-in";
+const GEN_REPO_FILE_ARG_DESCRIPTION: &'static str = "generate a repo file from the provided remote repo and the --as argument gets mapped to [include_as]";
 
 #[derive(Clone)]
 pub enum CommandName {
@@ -234,6 +236,12 @@ pub fn split_in_as<'a, 'b>() -> App<'a, 'b> {
                 .takes_value(true)
                 .value_name(OUTPUT_BRANCH_NAME)
                 .help("name of branch that will be created with new split history")
+        )
+        .arg(
+            Arg::with_name(GEN_REPO_FILE_ARG[0])
+                .long(GEN_REPO_FILE_ARG[0])
+                .short(GEN_REPO_FILE_ARG[1])
+                .help(GEN_REPO_FILE_ARG_DESCRIPTION)
         )
         .arg(
             Arg::with_name(NUM_COMMITS_ARG)

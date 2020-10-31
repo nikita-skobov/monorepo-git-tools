@@ -3,6 +3,7 @@ use clap::ArgMatches;
 use super::commands::INPUT_BRANCH_ARG;
 use super::commands::AS_SUBDIR_ARG;
 use super::commands::REPO_URI_ARG;
+use super::commands::GEN_REPO_FILE_ARG;
 use super::split::panic_if_array_invalid;
 use super::split::Runner;
 use super::split::has_both_topbase_and_rebase;
@@ -10,6 +11,7 @@ use super::git_helpers3;
 use super::exec_helpers;
 use super::split::try_get_repo_name_from_remote_repo;
 use super::repo_file::RepoFile;
+use super::repo_file::generate_repo_file_toml;
 use super::die;
 use std::convert::From;
 use std::fs;
@@ -434,13 +436,40 @@ pub fn run_split_in_as(matches: &ArgMatches) {
     }
 
     match runner.status {
-        0 => println!("{}Success!", log_p),
+        0 => {
+            if matches.occurrences_of(GEN_REPO_FILE_ARG[0]) > 0 {
+                let repo_file_name = runner.output_branch.unwrap_or("meta".into());
+                match generate_repo_file(&repo_file_name, &runner.repo_file) {
+                    Err(e) => println!("Failed to generate repo file: {}", e),
+                    Ok(_) => (),
+                }
+            }
+            println!("{}Success!", log_p)
+        },
         c => {
             std::process::exit(c);
         },
     };
 }
 
+
+pub fn generate_repo_file(
+    repo_name: &str,
+    repofile: &RepoFile
+) -> Result<(), String> {
+    let repo_file_path_str = format!("{}.rf", repo_name);
+    let repo_file_path = std::path::PathBuf::from(&repo_file_path_str);
+    if repo_file_path.exists() {
+        let err_str = format!("{}.rf already exists", repo_name);
+        return Err(err_str);
+    }
+
+    let repo_file_str = generate_repo_file_toml(repofile);
+    match std::fs::write(repo_file_path_str, repo_file_str) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
 
 #[cfg(test)]
 mod test {
