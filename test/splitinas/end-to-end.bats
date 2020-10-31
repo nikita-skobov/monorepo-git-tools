@@ -302,7 +302,8 @@ function teardown() {
     [[ -f test_remote_repo2.rf ]]
     meta_rf_contents=$(<test_remote_repo2.rf)
     [[ "$meta_rf_contents" == *"[repo]"* ]]
-    [[ "$meta_rf_contents" == *"remote = \"..$SEP$test_remote_repo2\""* ]]
+    [[ "$meta_rf_contents" == *"remote = "* ]]
+    [[ "$meta_rf_contents" == *"\"$test_remote_repo2\""* ]]
     [[ "$meta_rf_contents" == *"[include_as]"* ]]
     [[ "$meta_rf_contents" == *"\"abc/\" = \" \""* ]]
 }
