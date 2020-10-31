@@ -299,8 +299,8 @@ function teardown() {
     echo "$output"
     [[ $status == "0" ]]
     [[ "$(git branch --show-current)" == "test_remote_repo2" ]]
-    [[ -f meta.rf ]]
-    meta_rf_contents=$(<meta.rf)
+    [[ -f test_remote_repo2.rf ]]
+    meta_rf_contents=$(<test_remote_repo2.rf)
     [[ "$meta_rf_contents" == *"[repo]"* ]]
     [[ "$meta_rf_contents" == *"remote = \"..$SEP$test_remote_repo2\""* ]]
     [[ "$meta_rf_contents" == *"[include_as]"* ]]
