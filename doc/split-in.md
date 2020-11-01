@@ -16,6 +16,8 @@ FLAGS:
 
 OPTIONS:
         --input-branch <branch-name>     split in from a local branch in this repository
+        --num-commits <n>                when pulling from remote, limit to n commits from the current tip. This is
+                                         probably only useful the first time you do a split-in
     -o, --output-branch <branch-name>    name of branch that will be created with new split history
     -r, --rebase <rebase>                after generating a branch with rewritten history, rebase that branch such that
                                          it can be fast forwarded back into the comparison branch. For split-in, the

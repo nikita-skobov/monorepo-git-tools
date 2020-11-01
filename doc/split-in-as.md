@@ -8,14 +8,18 @@ USAGE:
     mgt split-in-as [FLAGS] [OPTIONS] <git-repo-uri> --as <subdirectory>
 
 FLAGS:
-    -d, --dry-run    Print out the steps taken, but don't actually run or change anything.
-    -h, --help       Prints help information
-    -V, --version    Prints version information
-    -v, --verbose    show more detailed logs
+    -d, --dry-run          Print out the steps taken, but don't actually run or change anything.
+    -g, --gen-repo-file    generate a repo file from the provided remote repo and the --as argument gets mapped to
+                           [include_as]
+    -h, --help             Prints help information
+    -V, --version          Prints version information
+    -v, --verbose          show more detailed logs
 
 OPTIONS:
         --as <subdirectory>              path relative to root of the local repository that will contain the entire
                                          repository being split
+        --num-commits <n>                when pulling from remote, limit to n commits from the current tip. This is
+                                         probably only useful the first time you do a split-in
     -o, --output-branch <branch-name>    name of branch that will be created with new split history
     -r, --rebase <rebase>                after generating a branch with rewritten history, rebase that branch such that
                                          it can be fast forwarded back into the comparison branch. For split-in, the
