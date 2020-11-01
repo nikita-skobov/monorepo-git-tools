@@ -79,7 +79,22 @@ impl<'a> CheckUpdates for Runner<'a> {
         );
 
         if should_summarize {
-            summarize_updates(commits_to_take, commit_summaries);
+            let command_to_take = match self.repo_file_path {
+                None => None,
+                Some(file_path) => {
+                    let split_mode = if current_is_remote {
+                        "split-in"
+                    } else {
+                        "split-out"
+                    };
+                    // TODO: calculate if it can be topbased/rebased/whatever...
+                    // here we just assume that it can be topbased...
+                    let command_string = "To perform this update you can run: ";
+                    let command_string = format!("\n{}\nmgt {} {} --topbase", command_string, split_mode, file_path);
+                    Some(command_string)
+                }
+            };
+            summarize_updates(command_to_take, commits_to_take, commit_summaries);
         }
 
         if should_clean_fetch_head {
@@ -98,6 +113,7 @@ impl<'a> CheckUpdates for Runner<'a> {
 }
 
 pub fn summarize_updates(
+    command_string: Option<String>,
     commits_to_take: Vec<Oid>,
     commit_summaries: Vec<String>,
 ) {
@@ -109,6 +125,9 @@ pub fn summarize_updates(
                 let id = &commits_to_take[i];
                 let summary = &commit_summaries[i];
                 println!("{} {}", id.short(), summary);
+            }
+            if let Some(command_string) = command_string {
+                println!("{}", command_string);
             }
         }
     }
@@ -438,7 +457,7 @@ pub fn run_check(matches: &ArgMatches) {
     }
 
     for file in files_to_check {
-        println!("--- Checking {}", file);
+        println!("---\nChecking {}", file);
         let mut runner = Runner::new(matches);
         runner.repo_file_path = Some(file.as_str());
         let runner = runner.save_current_dir()
