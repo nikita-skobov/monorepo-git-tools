@@ -2,10 +2,39 @@
 
 I created `mgt` with the intention of defining `repo_files`
 that contain information on how to split out/in local repositories back
-and forth between remote repositories. A `repo_file` is just a text file
-that has variables that describe how your repository should be split. The
-syntax is bash-like and only supports variables, strings, lists of strings,
-and comments.
+and forth between remote repositories. A `repo_file` is a toml file
+that has variables that describe how your repository should be split. There is
+a slight parsing issue with the toml parser which requires that certain sections
+(`include` and `exclude`) to be at least 2 new lines apart from the
+sections before them. Alternatively, these sections can be placed before
+any other section to avoid this issue.
+
+For example:
+
+```toml
+[repo]
+name = "my repo"
+
+include = ["this"]
+```
+
+The above is bad because there is only one newline between `[repo]` and `include`.
+The parser will detect `include` as part of the `[repo]` section. To avoid this issue,
+you can do either:
+
+```
+# good:
+[repo]
+name = "my repo"
+
+
+include = ["this"]
+
+# also good:
+include = ["this"]
+[repo]
+name = "my repo"
+```
 
 Here is a commented `repo_file` that explains what some of the common variables do.
 
