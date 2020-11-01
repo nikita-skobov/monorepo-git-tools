@@ -16,7 +16,7 @@ function set_seperator() {
     # I wanna use these tests for both windows (git bash)
     # and linux, so I need to change the separator
     if [[ -d /c/ ]]; then
-        SEP="\\"
+        SEP="\\\\"
     else
         SEP="/"
     fi
@@ -51,10 +51,10 @@ function teardown() {
 
 @test 'can use same repo_file for split-in and split-out' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(
-        \"this/path/will/be/created/\" \" \"
-    )
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"this/path/will/be/created/\" = \" \"
     "
 
     echo "$repo_file_contents" > repo_file.sh
@@ -87,10 +87,10 @@ function teardown() {
 
 @test 'split-in by default should fail if the output branch it wants to create already exists' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(
-        \"this/path/will/be/created/\" \" \"
-    )
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"this/path/will/be/created/\" = \" \"
     "
 
     # make sure it doesnt exist first
@@ -116,8 +116,11 @@ function teardown() {
 
 @test 'split-out by default should fail if the output branch it wants to create already exists' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=\"test_remote_repo.txt\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+    
+    include = \"test_remote_repo.txt\"
     "
 
     # make sure it doesnt exist first

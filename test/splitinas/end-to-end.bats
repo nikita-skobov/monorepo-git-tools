@@ -16,7 +16,7 @@ function set_seperator() {
     # I wanna use these tests for both windows (git bash)
     # and linux, so I need to change the separator
     if [[ -d /c/ ]]; then
-        SEP="\\"
+        SEP="\\\\"
     else
         SEP="/"
     fi
@@ -180,8 +180,10 @@ function teardown() {
 # with this when there are squash commits
 @test 'can get latest changes using \"topbase\"' {
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(\"lib/\" \" \")
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"lib/\" = \" \"
     "
     echo "$repo_file_contents" > repo_file.sh
     # the repo_file wont be committed
@@ -290,4 +292,18 @@ function teardown() {
     [[ "$git_log_now" == *" M"* ]]
     [[ "$git_log_now" == *" N"* ]]
     [[ "$git_log_now" == *" O"* ]]
+}
+
+@test 'can generate a repo file' {
+    run $PROGRAM_PATH split-in-as "..$SEP$test_remote_repo2" --as abc/ --gen-repo-file --verbose
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ "$(git branch --show-current)" == "test_remote_repo2" ]]
+    [[ -f test_remote_repo2.rf ]]
+    meta_rf_contents=$(<test_remote_repo2.rf)
+    [[ "$meta_rf_contents" == *"[repo]"* ]]
+    [[ "$meta_rf_contents" == *"remote = "* ]]
+    [[ "$meta_rf_contents" == *"\"$test_remote_repo2\""* ]]
+    [[ "$meta_rf_contents" == *"[include_as]"* ]]
+    [[ "$meta_rf_contents" == *"\"abc/\" = \" \""* ]]
 }

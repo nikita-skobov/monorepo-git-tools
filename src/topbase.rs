@@ -1,7 +1,9 @@
 use clap::ArgMatches;
 use std::collections::HashSet;
 
-use super::git_helpers;
+use super::git_helpers3;
+use super::git_helpers3::Commit;
+use super::git_helpers3::Oid;
 use super::exec_helpers;
 use super::split::Runner;
 use super::check::topbase_check_alg;
@@ -17,20 +19,15 @@ pub trait Topbase {
 
 impl<'a> Topbase for Runner<'a> {
     fn topbase(mut self) -> Self {
-        let repo = match self.repo {
-            Some(ref r) => r,
-            None => die!("failed to get repo?"),
-        };
-
         // for split commands, we always use current ref,
         // but for topbase command, we check if user provided a top branch
         // if user provided one, we use that, otherwise we use current
         let current_branch = if let Some(ref b) = self.topbase_top_ref {
             b.clone()
         } else {
-            match git_helpers::get_current_ref(repo) {
-                Some(s) => s,
-                None => {
+            match git_helpers3::get_current_ref() {
+                Ok(s) => s,
+                Err(_) => {
                     println!("Failed to get current branch. not going to rebase");
                     return self;
                 },
@@ -47,7 +44,7 @@ impl<'a> Topbase for Runner<'a> {
         };
 
         let all_upstream_blobs = get_all_blobs_in_branch(upstream_branch.as_str());
-        let all_commits_of_current = match git_helpers::get_all_commits_from_ref(repo, current_branch.as_str()) {
+        let all_commits_of_current = match git_helpers3::get_all_commits_from_ref(current_branch.as_str()) {
             Ok(v) => v,
             Err(e) => die!("Failed to get all commits! {}", e),
         };
@@ -55,9 +52,9 @@ impl<'a> Topbase for Runner<'a> {
         let num_commits_of_current = all_commits_of_current.len();
         let mut num_commits_to_take = 0;
         let mut rebase_data = vec![];
-        let mut cb = |c: &git2::Commit| {
+        let mut cb = |c: &Commit| {
             num_commits_to_take += 1;
-            let rebase_interactive_entry = format!("pick {} {}\n", c.id(), c.summary().unwrap());
+            let rebase_interactive_entry = format!("pick {} {}\n", c.id.long(), c.summary);
             rebase_data.push(rebase_interactive_entry);
         };
         topbase_check_alg(all_commits_of_current, all_upstream_blobs, &mut cb);
@@ -71,56 +68,47 @@ impl<'a> Topbase for Runner<'a> {
         let current_branch = current_branch.replace("refs/heads/", "");
         let upstream_branch = upstream_branch.replace("refs/heads/", "");
 
-        // log the special cases
+        // if nothing to take, dont topbase
+        // instead go back to upstream, and then
+        // delete delete the current branch
         if num_commits_to_take == 0 {
-            // if we have found that the most recent commit of current_branch already exists
-            // on the upstream branch, we should just rebase normally (so that the branch can be fast-forwardable)
-            // instead of rebasing interactively
-            println!("{}most recent commit of {} exists in {}. rebasing non-interactively", self.log_p, current_branch, upstream_branch);
-        } else if num_commits_to_take == num_commits_of_current {
+            if self.dry_run {
+                println!("{}Nothing to topbase. Returning to {}", self.log_p, upstream_branch);
+                println!("{}Deleting {}", self.log_p, current_branch);
+                return self;
+            }
+
+            println!("Nothing to topbase. Returning to {}", upstream_branch);
+            match git_helpers3::checkout_branch(upstream_branch.as_str(), false) {
+                Err(e) => die!("Failed to checkout back to upstream branch: {}", e),
+                _ => (),
+            }
+            println!("Deleting {}", current_branch);
+            match git_helpers3::delete_branch(current_branch.as_str()) {
+                Err(e) => die!("Failed to delete temporary branch {}: {}", current_branch, e),
+                _ => (),
+            }
+
+            return self;
+        }
+
+        // if we need to topbase the entirety of the current branch
+        // it will be better to do a regular rebase
+        let args = if num_commits_to_take == num_commits_of_current {
             // if we are trying to topbase on a branch that hasnt been rebased yet,
             // we dont need to topbase, and instead we need to do a regular rebase
             println!("{}no commit of {} exists in {}. rebasing non-interactively", self.log_p, current_branch, upstream_branch);
-        }
 
-        let args = match num_commits_to_take {
-            // if there's nothing to topbase, then we want to just
-            // rebase the last commit onto the upstream branch.
-            // this will allow our current branch to be fast-forwardable
-            // onto upstream (well really its going to be the exact same branch)
-            0 => {
-                // if current branch only has one commit, dont use the <branch>~1
-                // git rebase syntax. it will cause git rebase to fail
-                let rebase_last_one = match num_commits_of_current > 1 {
-                    true => "~1",
-                    false => "",
-                };
-                let last_commit_arg = format!("{}{}", current_branch, rebase_last_one);
-                let args = vec![
-                    "git".into(), "rebase".into(), "--onto".into(),
-                    upstream_branch.clone(),
-                    last_commit_arg,
-                    current_branch.clone()
-                ];
-                args
-            },
-            // if we need to topbase the entirety of the current branch
-            // it will be better to do a regular rebase
-            n => {
-                if n == num_commits_of_current {
-                    let args = vec![
-                        "git".into(), "rebase".into(), upstream_branch.clone(),
-                    ];
-                    args
-                } else {
-                    vec![]
-                }
-            },
+            let args = vec![
+                "git".into(), "rebase".into(), upstream_branch.clone(),
+            ];
+            args
+        } else {
+            vec![]
         };
 
         // args will have non-zero length only if
-        //  - we need to topbase all commits
-        //  - we found no commits to topbase
+        // we need to topbase all commits
         if args.len() != 0 {
             if self.dry_run {
                 let arg_str = args.join(" ");

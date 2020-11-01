@@ -16,7 +16,7 @@ function set_seperator() {
     # I wanna use these tests for both windows (git bash)
     # and linux, so I need to change the separator
     if [[ -d /c/ ]]; then
-        SEP="\\"
+        SEP="\\\\"
     else
         SEP="/"
     fi
@@ -84,7 +84,10 @@ function setup() {
     cd "$curr_dir"
 
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+
     include=\"abc.txt\"
     "
     echo "$repo_file_contents" > repo_file.sh
@@ -109,12 +112,18 @@ function setup() {
 
     mkdir -p repo_file_dir
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+
+
     include=\"abc.txt\"
     "
     echo "$repo_file_contents" > repo_file_dir/repo_file1.rf
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+
+
     include=\"xyz.txt\"
     "
     echo "$repo_file_contents" > repo_file_dir/repo_file2.rf
@@ -145,12 +154,18 @@ function setup() {
 
     mkdir -p repo_file_dir
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+
+
     include=\"abc.txt\"
     "
     echo "$repo_file_contents" > repo_file_dir/repo_file1.txt
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+
+
     include=\"xyz.txt\"
     "
     echo "$repo_file_contents" > repo_file_dir/repo_file2.txt
@@ -178,17 +193,26 @@ function setup() {
     mkdir -p repo_file_dir
     mkdir -p repo_file_dir/recurse
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+    
     include=\"abc.txt\"
     "
     echo "$repo_file_contents" > repo_file_dir/repo_file1.rf
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+    
     include=\"xyz.txt\"
     "
     echo "$repo_file_contents" > repo_file_dir/repo_file2.rf
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+    
     include=\"qqq.txt\"
     "
     echo "$repo_file_contents" > repo_file_dir/recurse/repo_file3.rf
@@ -223,8 +247,11 @@ function setup() {
     cd "$curr_dir"
 
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=(\"abc.txt\" \"xyz.txt\")
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+    
+    include = [\"abc.txt\", \"xyz.txt\"]
     "
     echo "$repo_file_contents" > repo_file.sh
     # simulate a point that is 'even' with the remote
@@ -253,7 +280,10 @@ function setup() {
     # the fact that remote has xyz.txt should be irrelevant
     # to this check
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+    
     include=\"abc.txt\"
     "
     echo "$repo_file_contents" > repo_file.sh
@@ -283,10 +313,10 @@ function setup() {
     # the fact that remote has xyz.txt should be irrelevant
     # to this check
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(
-        \"abc.txt\" \"abcd.txt\"
-    )
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \"abc.txt\" = \"abcd.txt\"
     "
     echo "$repo_file_contents" > repo_file.sh
     # simulate a point that is 'even' with the remote
@@ -315,8 +345,11 @@ function setup() {
     # the fact that remote has xyz.txt should be irrelevant
     # to this check
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    exclude=(\"xy z.txt\" \"abcd.txt\")
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+    
+    exclude=[\"xy z.txt\", \"abcd.txt\"]
     "
     echo "$repo_file_contents" > repo_file.sh
     echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
@@ -346,9 +379,12 @@ function setup() {
     # the fact that remote has xyz.txt should be irrelevant
     # to this check
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include=(\"some path/\")
-    exclude=(\"some path/lib/\")
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+    
+    include = \"some path/\"
+    exclude = \"some path/lib/\"
     "
     echo "$repo_file_contents" > repo_file.sh
     echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
@@ -379,10 +415,10 @@ function setup() {
     # the fact that remote has xyz.txt should be irrelevant
     # to this check
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(
-        \" \" \"some path/lib/\"
-    )
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \" \" = \"some path/lib/\"
     "
     echo "$repo_file_contents" > repo_file.sh
     echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
@@ -413,10 +449,12 @@ function setup() {
     # the fact that remote has xyz.txt should be irrelevant
     # to this check
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(
-        \" \" \"some path/lib/\"
-    )
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \" \" = \"some path/lib/\"
+    
+    
     exclude=\"some path/lib/xy z.txt\"
     "
     echo "$repo_file_contents" > repo_file.sh
@@ -446,10 +484,10 @@ function setup() {
     # the fact that remote has xyz.txt should be irrelevant
     # to this check
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(
-        \" \" \"some path/lib/\"
-    )
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \" \" = \"some path/lib/\"
     "
     echo "$repo_file_contents" > repo_file.sh
     echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
@@ -480,11 +518,13 @@ function setup() {
     # the fact that remote has xyz.txt should be irrelevant
     # to this check
     repo_file_contents="
-    remote_repo=\"..$SEP$test_remote_repo2\"
-    include_as=(
-        \" \" \"some path/lib/\"
-    )
-    exclude=\"xy z.txt\"
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \" \" = \"some path/lib/\"
+
+
+    exclude = \"xy z.txt\"
     "
     echo "$repo_file_contents" > repo_file.sh
     echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"

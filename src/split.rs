@@ -12,9 +12,10 @@ use super::commands::VERBOSE_ARG;
 use super::commands::REBASE_ARG;
 use super::commands::TOPBASE_ARG;
 use super::commands::OUTPUT_BRANCH_ARG;
+use super::commands::NUM_COMMITS_ARG;
 use super::repo_file;
 use super::repo_file::RepoFile;
-use super::git_helpers;
+use super::git_helpers3;
 use super::exec_helpers;
 use super::die;
 
@@ -33,12 +34,13 @@ pub struct Runner<'a> {
     pub repo_root_dir: PathBuf,
     pub topbase_top_ref: Option<String>,
     pub repo_original_ref: Option<String>,
-    pub repo: Option<git2::Repository>,
     pub input_branch: Option<String>,
     pub output_branch: Option<String>,
     pub include_arg_str: Option<Vec<String>>,
     pub include_as_arg_str: Option<Vec<String>>,
     pub exclude_arg_str: Option<Vec<String>>,
+    // only relevant to split-in
+    pub num_commits: Option<u32>,
     pub status: i32,
 }
 
@@ -50,6 +52,14 @@ impl<'a> Runner<'a> {
         let is_topbase = matches.occurrences_of(TOPBASE_ARG[0]) > 0;
         let output_branch = matches.value_of(OUTPUT_BRANCH_ARG[0]);
         let repo_file_path = matches.value_of(REPO_FILE_ARG);
+        let num_commits = matches.value_of(NUM_COMMITS_ARG);
+        let num_commits = match num_commits {
+            None => None,
+            Some(s) => match s.parse::<u32>() {
+                Err(_) => None,
+                Ok(u) => Some(u),
+            },
+        };
         Runner {
             repo_file_path: repo_file_path,
             status: 0,
@@ -63,11 +73,11 @@ impl<'a> Runner<'a> {
             topbase_top_ref: None,
             repo_original_ref: None,
             current_dir: PathBuf::new(),
-            repo: None,
             repo_root_dir: PathBuf::new(),
             include_arg_str: None,
             include_as_arg_str: None,
             exclude_arg_str: None,
+            num_commits: num_commits,
             log_p: if is_dry_run { "   # " } else { "" },
             input_branch: None,
             output_branch: if let Some(branch_name) = output_branch {
@@ -86,9 +96,9 @@ impl<'a> Runner<'a> {
     // get the current ref that this git repo is pointing to
     // save it for later
     pub fn save_current_ref(mut self) -> Self {
-        self.repo_original_ref = match self.repo {
-            Some(ref repo) => git_helpers::get_current_ref(repo),
-            None => None,
+        self.repo_original_ref = match git_helpers3::get_current_ref() {
+            Ok(s) => Some(s),
+            Err(_) => None,
         };
         self
     }
@@ -100,24 +110,21 @@ impl<'a> Runner<'a> {
             return self;
         }
 
-        match self.repo {
-            Some(ref r) => {
-                let success = git_helpers::make_orphan_branch_and_checkout(
-                    orphan_branch,
-                    r,
-                ).is_ok();
-                if ! success {
-                    die!("Failed to checkout orphan branch");
-                }
-                // on a new orphan branch our existing files appear in the stage
-                // we need to essentially do "git rm -rf ."
-                let success = git_helpers::remove_index_and_files(r).is_ok();
-                if ! success {
-                    die!("Failed to remove git indexed files after making orphan");
-                }
-            },
-            _ => die!("Something went horribly wrong!"),
-        };
+        let success = git_helpers3::make_orphan_branch_and_checkout(
+            orphan_branch,
+        ).is_ok();
+        if ! success {
+            die!("Failed to checkout orphan branch");
+        }
+        // on a new orphan branch our existing files appear in the stage
+        // we need to do "git rm -rf ."
+        // the 'dot' should be safe to do as long as
+        // we are in the root of the repository, but this method
+        // should only be called after we cd into the root
+        let success = git_helpers3::remove_index_and_files().is_ok();
+        if ! success {
+            die!("Failed to remove git indexed files after making orphan");
+        }
         if self.verbose {
             println!("{}created and checked out orphan branch {}", self.log_p, orphan_branch);
         }
@@ -186,29 +193,24 @@ impl<'a> Runner<'a> {
             Some(new_remote_branch) => Some(new_remote_branch),
         };
 
-        match self.repo {
-            None => die!("Failed to find repo?"),
-            Some(ref r) => {
-                match (self.dry_run, &self.input_branch) {
-                    (true, Some(branch_name)) => println!("git merge {}", branch_name),
-                    (true, None) => println!("git pull {}", remote_repo.unwrap()),
-                    (false, Some(branch_name)) => {
-                        println!("{}Merging {}", self.log_p, branch_name);
-                        git_helpers::merge_branches(&r, &branch_name[..], None);
-                    },
-                    (false, None) => {
-                        let remote_repo_name = remote_repo.clone().unwrap_or("?".into());
-                        let remote_branch_name = remote_branch.clone().unwrap_or("".into());
-                        let remote_string = if remote_branch_name != "" {
-                            format!("{}:{}", remote_repo_name, remote_branch_name)
-                        } else { format!("{}", remote_repo_name) };
-                        println!("{}Pulling from {}", self.log_p, remote_string);
-                        let res = git_helpers::pull(&r, &remote_repo.unwrap()[..], remote_branch);
-                        if res.is_err() {
-                            die!("Failed to pull remote repo {}", remote_string);
-                        }
-                    },
-                };
+        match (self.dry_run, &self.input_branch) {
+            (true, Some(branch_name)) => println!("git merge {}", branch_name),
+            (true, None) => println!("git pull {}", remote_repo.unwrap()),
+            (false, Some(branch_name)) => {
+                println!("{}Merging {}", self.log_p, branch_name);
+                git_helpers3::merge_branch(&branch_name[..]);
+            },
+            (false, None) => {
+                let remote_repo_name = remote_repo.clone().unwrap_or("?".into());
+                let remote_branch_name = remote_branch.clone().unwrap_or("".into());
+                let remote_string = if remote_branch_name != "" {
+                    format!("{}:{}", remote_repo_name, remote_branch_name)
+                } else { format!("{}", remote_repo_name) };
+                println!("{}Pulling from {}", self.log_p, remote_string);
+                let res = git_helpers3::pull(&remote_repo.unwrap()[..], remote_branch, self.num_commits);
+                if res.is_err() {
+                    die!("Failed to pull remote repo {}", remote_string);
+                }
             },
         };
         self
@@ -262,7 +264,7 @@ impl<'a> Runner<'a> {
     pub fn get_repo_file(mut self) -> Self {
         // safe to unwrap because its required
         let repo_file_name = self.repo_file_path.unwrap();
-        self.repo_file = repo_file::parse_repo_file(repo_file_name);
+        self.repo_file = repo_file::parse_repo_file_from_toml(repo_file_name);
         if self.verbose {
             println!("{}got repo file: {}", self.log_p, repo_file_name);
         }
@@ -281,9 +283,12 @@ impl<'a> Runner<'a> {
         self
     }
     pub fn get_repository_from_current_dir(mut self) -> Self {
-        let (repo, repo_path) = git_helpers::get_repository_and_root_directory(&self.current_dir);
-        self.repo = Some(repo);
-        self.repo_root_dir = repo_path;
+        let repo_path = match git_helpers3::get_repo_root() {
+            Ok(p) => p,
+            Err(_) => die!("Must run this command from a git repository"),
+        };
+
+        self.repo_root_dir = PathBuf::from(repo_path);
         if self.verbose {
             println!("{}found repo path: {}", self.log_p, self.repo_root_dir.display());
         }
