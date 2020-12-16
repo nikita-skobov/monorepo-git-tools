@@ -19,7 +19,8 @@ use super::topbase::get_all_blobs_from_commit_with_callback;
 use super::topbase::BlobCheckValue;
 use super::topbase::BlobCheck;
 use super::topbase::blob_check_callback_default;
-use std::{collections::HashSet, path::PathBuf};
+use std::collections::HashSet;
+use std::path::PathBuf;
 
 pub trait CheckUpdates {
     fn check(
