@@ -50,6 +50,13 @@ pub fn parse_repo_file_from_toml(filename: &str) -> RepoFile {
     parse_repo_file_from_toml_lines(lines)
 }
 
+pub fn parse_repo_file_from_toml_path<P: AsRef<Path>>(filename: P) -> RepoFile {
+    match filename.as_ref().to_str() {
+        None => die!("Failed to find repo file: {:?}", filename.as_ref()),
+        Some(s) => parse_repo_file_from_toml(s)
+    }
+}
+
 pub fn parse_repo_file_from_toml_lines(lines: Vec<String>) -> RepoFile {
     // even though this is a toml file, and we have a toml parser
     // we still want to split by lines, and then parse specific sections
