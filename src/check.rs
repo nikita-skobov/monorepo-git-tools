@@ -1,89 +1,58 @@
-use clap::ArgMatches;
+use std::collections::HashSet;
+use std::path::PathBuf;
 
 use super::git_helpers3;
 use super::git_helpers3::Commit;
 use super::git_helpers3::Oid;
 use super::exec_helpers;
-use super::split::Runner;
 use super::repo_file::RepoFile;
-use super::split;
 use super::die;
-use super::commands::REPO_FILE_ARG;
-use super::commands::LOCAL_ARG;
-use super::commands::RECURSIVE_ARG;
-use super::commands::ALL_ARG;
-use super::commands::REMOTE_BRANCH_ARG;
-use super::commands::LOCAL_BRANCH_ARG;
 use super::topbase::get_all_blobs_in_branch;
 use super::topbase::get_all_blobs_from_commit_with_callback;
 use super::topbase::BlobCheckValue;
 use super::topbase::BlobCheck;
 use super::topbase::blob_check_callback_default;
-use std::collections::HashSet;
-use std::path::PathBuf;
+use super::repo_file;
+use super::cli::MgtCommandCheck;
 
-pub trait CheckUpdates {
-    fn check(
-        self,
-        upstream_branch: &str,
-        current_branch: &str,
-        current_is_remote: bool,
-        should_clean_fetch_head: bool,
-        should_summarize: bool,
-    ) -> Self;
+pub struct Checker<'a> {
+    upstream_branch: String,
+    current_branch: String,
+    current_is_remote: bool,
+    repo_file: &'a RepoFile,
 }
 
-impl<'a> CheckUpdates for Runner<'a> {
-    // check if upstream branch needs to get updates from current
-    fn check(
-        self,
-        upstream_branch: &str,
-        current_branch: &str,
+impl<'a> Checker<'a> {
+    /// just an alias to call create_checker via Checker::create
+    /// instead of calling the function itself :shruf:
+    pub fn create<S: ToString>(
         current_is_remote: bool,
+        local_branch: Option<S>,
+        remote_branch: Option<S>,
+        repo_file: &'a RepoFile,
+    ) -> Checker {
+        create_checker(current_is_remote, local_branch, remote_branch, repo_file)
+    }
+
+    pub fn check_for_updates(
+        &self,
+        repo_file_path: Option<&str>,
         should_clean_fetch_head: bool,
         should_summarize: bool,
-    ) -> Self {
-        // TODO: probably need to add blob_applies_to_repo_file here?
-        // I think in most cases this isnt necessary, but I should
-        // try to think of what edge cases this would be needed
-        let all_upstream_blobs = get_all_blobs_in_branch(upstream_branch);
-        let all_commits_of_current = match git_helpers3::get_all_commits_from_ref(current_branch) {
-            Ok(v) => v,
-            Err(e) => die!("Failed to get all commits! {}", e),
-        };
-        // println!("GOT ALL UPSTREAM BLOBS: {}", all_upstream_blobs.len());
-        // println!("GOT ALL CURRENT COMMITS: {}", all_commits_of_current.len());
-
-        let mut commits_to_take = vec![];
-        let mut commit_summaries = vec![];
-        let mut summarize_cb = |c: &Commit| {
-            if should_summarize {
-                commits_to_take.push(c.id.clone());
-                commit_summaries.push(c.summary.clone());
-            }
-        };
-        let should_take_blob_cb = |c: &BlobCheck| {
-            if ! blob_path_applies_to_repo_file(&c.path, &self.repo_file, current_is_remote) {
-                let blob_check_none: Option<BlobCheckValue> = None;
-                return blob_check_none;
-            }
-            blob_check_callback_default(c)
-        };
-
-        // TODO: maybe have different algorithms for checking if theres updates?
-        topbase_check_alg_with_callback(
-            all_commits_of_current,
-            all_upstream_blobs,
-            &mut summarize_cb,
-            Some(&should_take_blob_cb),
-            true,
+    ) {
+        let (commits_to_take, commit_summaries) = check_for_updates(
+            self.repo_file,
+            &self.upstream_branch,
+            &self.current_branch,
+            self.current_is_remote,
+            should_summarize
         );
 
         if should_summarize {
-            let command_to_take = match self.repo_file_path {
+            let command_to_take = match repo_file_path {
                 None => None,
                 Some(file_path) => {
-                    let split_mode = if current_is_remote {
+                    let split_mode = if self.current_is_remote {
                         "split-in"
                     } else {
                         "split-out"
@@ -99,17 +68,9 @@ impl<'a> CheckUpdates for Runner<'a> {
         }
 
         if should_clean_fetch_head {
-            // TODO
-            // match clean_fetch(&self.repo_root_dir) {
-            //     Ok(tf) => {
-            //         println!("Succesfully deleted FETCH_HEAD");
-            //         println!("git prune successful? {}", tf);
-            //     },
-            //     Err(e) => die!("Failed to delete FETCH_HEAD:\n{}", e),
-            // };
+            // TODO: clean fetch head...
+            // hard to do because of gits auto gc?
         }
-
-        self
     }
 }
 
@@ -255,58 +216,6 @@ pub fn topbase_check_alg<F>(
     );
 }
 
-// the above check method will do the checking, and is useful
-// for other commands that already have the branch names, and data fetched
-// this method will get the information it needs specifically for the check
-// command, and fetch it appropriately. it will return the name of the upstream branch
-// and the name of the current branch to pass on to the actual check method above
-fn setup_check(runner: &Runner) -> (String, String, bool) {
-    // 'current' is the branch that potentially
-    // has the most recent updates
-    let mut current_is_remote = true;
-    if runner.matches.is_present(LOCAL_ARG[0]) {
-        current_is_remote = false;
-    }
-    // nice variable name... easier to read imo
-    let upstream_is_remote = ! current_is_remote;
-
-    let (current, upstream) = match current_is_remote {
-        true => (get_remote_branch(runner), get_local_branch(runner)),
-        false => (get_local_branch(runner), get_remote_branch(runner)),
-    };
-
-    // whichever is the remote one will be in the format of <uri>?<ref>
-    // so we need to know which to be able to split by :
-    // checking if upstream should get updates from current
-    println!("Current: {}", get_formatted_remote_or_branch_str(&current, current_is_remote));
-    println!("Upstream: {}", get_formatted_remote_or_branch_str(&upstream, upstream_is_remote));
-
-    // probably want to have two modes eventually:
-    // default is to fetch entire remote branch and then run the git diff-tree, and rev-list
-    // to determine if theres updates
-    // but optionally it would be nice to do an iterative fetch where it just fetches
-    // one commit at a time via --deepen=1 (initially it needs to be --depth=1)
-    // and then checks the diff-tree on that commit.
-    let (remote, branch) = match upstream_is_remote {
-        true => get_branch_and_remote_from_str(upstream.as_str()),
-        false => get_branch_and_remote_from_str(current.as_str()),
-    };
-
-    // println!("REMOTE AND BRANCH: {}, {}", remote, branch);
-    fetch_branch(remote, branch);
-
-    let upstream_branch = match upstream_is_remote {
-        true => "FETCH_HEAD".to_string(),
-        false => upstream,
-    };
-    let current_branch = match current_is_remote {
-        true => "FETCH_HEAD".to_string(),
-        false => current,
-    };
-
-    (upstream_branch, current_branch, current_is_remote)
-}
-
 fn get_formatted_remote_or_branch_str(branch_and_remote: &str, is_remote: bool) -> String {
     match is_remote {
         false => branch_and_remote.clone().to_string(),
@@ -355,7 +264,7 @@ pub fn fetch_branch(remote: &str, branch: &str) {
 }
 
 // delete FETCH_HEAD and gc
-pub fn clean_fetch(path_to_repo_root: &PathBuf) -> std::io::Result<bool> {
+pub fn _clean_fetch(path_to_repo_root: &PathBuf) -> std::io::Result<bool> {
     let mut fetch_head = PathBuf::from(path_to_repo_root);
     fetch_head.push(".git");
     fetch_head.push("FETCH_HEAD");
@@ -371,43 +280,12 @@ pub fn clean_fetch(path_to_repo_root: &PathBuf) -> std::io::Result<bool> {
     Ok(true)
 }
 
-fn get_local_branch(runner: &Runner) -> String {
-    match runner.matches.value_of(LOCAL_BRANCH_ARG) {
-        Some(s) => format!("{}", s),
-        None => "HEAD".to_string(),
-    }
-}
-
-fn get_remote_branch(runner: &Runner) -> String {
-    let remote_repo = match runner.repo_file.remote_repo {
-        Some(ref s) => s,
-        None => die!("repo file missing remote_repo"),
-    };
-    // check if user provided a --remote <branch>
-    let mut remote_branch = match runner.matches.value_of(REMOTE_BRANCH_ARG[0]) {
-        None => "",
-        Some(s) => s,
-    };
-    if remote_branch == "" {
-        remote_branch = match runner.repo_file.remote_branch {
-            Some(ref s) => s,
-            None => "HEAD",
-        };
-    }
-
-    // format it with a question mark because:
-    //    1. we need a way to parse out the branch name
-    //    2. a ? is not valid for git branches, so wont conflict
-    format!("{}?{}", remote_repo,remote_branch)
-}
-
 // get all repo files that end in .rf
 // optionally pass a recursive flag to recurse into subdirs
 // optionally pass a any flag to get files that end in any extension
 pub fn get_all_repo_files(
     dir: &str, recursive: bool, any: bool
-) -> std::io::Result<Vec<String>>
-{
+) -> std::io::Result<Vec<String>> {
     // TODO: idk is this good enough?
     // should this be dynamic? should the
     // default be something different.. should
@@ -439,34 +317,205 @@ pub fn get_all_repo_files(
     Ok(out_vec)
 }
 
-pub fn run_check(matches: &ArgMatches) {
-    // safe to unwrap because it is required
-    let repo_file_path = matches.value_of(REPO_FILE_ARG).unwrap();
-    let repo_file_pathbuf: PathBuf = repo_file_path.into();
-    let mut files_to_check = vec![];
-    if repo_file_pathbuf.is_file() {
-        files_to_check.push(repo_file_path.to_string());
+pub fn run_check(cmd: &mut MgtCommandCheck) {
+    // remote is true by default, unless --local
+    // was specified
+    if !cmd.local {
+        cmd.remote = true;
+    }
+
+    let repo_file_path = if cmd.repo_file.len() < 1 {
+        die!("Must provide repo file path");
+    } else {
+        cmd.repo_file[0].clone()
+    };
+
+    let repo_file_pathbuf: PathBuf = repo_file_path.clone().into();
+    let files_to_check = if repo_file_pathbuf.is_file() {
+        vec![repo_file_path.to_string()]
     } else {
         // iterate over that folder and find all repo files
-        let should_recurse = matches.is_present(RECURSIVE_ARG[0]);
-        let any_extension = matches.is_present(ALL_ARG[0]);
-        let repo_files = get_all_repo_files(repo_file_path, should_recurse, any_extension);
-        files_to_check = match repo_files {
+        let repo_files = get_all_repo_files(
+            &repo_file_path,
+            cmd.recursive,
+            cmd.all,
+        );
+        match repo_files {
             Ok(files) => files,
             Err(e) => die!("Failed to read repo file directory: {}", e),
-        };
-    }
+        }
+    };
 
     for file in files_to_check {
         println!("---\nChecking {}", file);
-        let mut runner = Runner::new(matches);
-        runner.repo_file_path = Some(file.as_str());
-        let runner = runner.save_current_dir()
-            .get_repository_from_current_dir()
-            .get_repo_file();
-
-        let (upstream, current, current_is_remote) = setup_check(&runner);
-
-        runner.check(&upstream[..], &current[..], current_is_remote, true, true);
+        let repo_file = repo_file::parse_repo_file_from_toml_path(&file);
+        let current_is_remote = cmd.remote;
+        let checker = Checker::create(
+            current_is_remote,
+            cmd.local_branch.clone(),
+            cmd.remote_branch.clone(),
+            &repo_file
+        );
+        checker.check_for_updates(
+            Some(&file),
+            true,
+            true
+        );
     }
+}
+
+/// create the checker struct that is setup and ready
+/// to run the check operation
+pub fn create_checker<S: ToString>(
+    current_is_remote: bool,
+    local_branch: Option<S>,
+    remote_branch: Option<S>,
+    repo_file: &RepoFile,
+) -> Checker {
+    // 'current' is NOT the branch we are currently on
+    // but rather its the branch that potentially
+    // has the most recent updates
+    let upstream_is_remote = ! current_is_remote;
+
+    let current = get_current_branch_name(
+        repo_file,
+        current_is_remote,
+        &local_branch,
+        &remote_branch,
+    );
+    let upstream = get_upstream_branch_name(
+        repo_file,
+        current_is_remote,
+        &local_branch,
+        &remote_branch,
+    );
+
+    // whichever is the remote one will be in the format of <uri>?<ref>
+    // so we need to know which to be able to split by :
+    // checking if upstream should get updates from current
+    println!("Current: {}", get_formatted_remote_or_branch_str(&current, current_is_remote));
+    println!("Upstream: {}", get_formatted_remote_or_branch_str(&upstream, upstream_is_remote));
+
+    // probably want to have two modes eventually:
+    // default is to fetch entire remote branch and then run the git diff-tree, and rev-list
+    // to determine if theres updates
+    // but optionally it would be nice to do an iterative fetch where it just fetches
+    // one commit at a time via --deepen=1 (initially it needs to be --depth=1)
+    // and then checks the diff-tree on that commit.
+    let (remote, branch) = match upstream_is_remote {
+        true => get_branch_and_remote_from_str(upstream.as_str()),
+        false => get_branch_and_remote_from_str(current.as_str()),
+    };
+
+    // println!("REMOTE AND BRANCH: {}, {}", remote, branch);
+    fetch_branch(remote, branch);
+
+    let upstream_branch = match upstream_is_remote {
+        true => "FETCH_HEAD".to_string(),
+        false => upstream,
+    };
+    let current_branch = match current_is_remote {
+        true => "FETCH_HEAD".to_string(),
+        false => current,
+    };
+
+    Checker { upstream_branch, current_branch, current_is_remote, repo_file }
+}
+
+fn get_current_branch_name<S: ToString>(
+    repo_file: &RepoFile,
+    current_is_remote: bool,
+    local_branch: &Option<S>,
+    remote_branch: &Option<S>,
+) -> String {
+    if current_is_remote {
+        get_remote_branch2(repo_file, remote_branch)
+    } else {
+        match local_branch {
+            Some(ref s) => s.to_string(),
+            None => "HEAD".to_string(),
+        }
+    }
+}
+
+/// this does the same as get_current_branch_name
+/// except it should do the opposite based
+/// on the current_is_remote flag
+fn get_upstream_branch_name<S: ToString>(
+    repo_file: &RepoFile,
+    current_is_remote: bool,
+    local_branch: &Option<S>,
+    remote_branch: &Option<S>,
+) -> String {
+    get_current_branch_name(repo_file, !current_is_remote, local_branch, remote_branch)
+}
+
+fn get_remote_branch2<S: ToString>(
+    repo_file: &RepoFile,
+    remote_branch: &Option<S>,
+) -> String {
+    let remote_repo = match repo_file.remote_repo {
+        Some(ref s) => s,
+        None => die!("repo file missing remote_repo"),
+    };
+    // check if user provided a --remote <branch>
+    let remote_branch = match remote_branch {
+        Some(ref s) => s.to_string(),
+        None => match repo_file.remote_branch {
+            Some(ref s) => s.to_string(),
+            None => "HEAD".to_string(),
+        }
+    };
+
+    // format it with a question mark because:
+    //    1. we need a way to parse out the branch name
+    //    2. a ? is not valid for git branches, so wont conflict
+    format!("{}?{}", remote_repo,remote_branch)
+}
+
+/// check if upstream branch needs to get updates from current
+fn check_for_updates(
+    repo_file: &RepoFile,
+    upstream_branch: &str,
+    current_branch: &str,
+    current_is_remote: bool,
+    should_summarize: bool,
+) -> (Vec<Oid>, Vec<String>) {
+    // TODO: probably need to add blob_applies_to_repo_file here?
+    // I think in most cases this isnt necessary, but I should
+    // try to think of what edge cases this would be needed
+    let all_upstream_blobs = get_all_blobs_in_branch(upstream_branch);
+    let all_commits_of_current = match git_helpers3::get_all_commits_from_ref(current_branch) {
+        Ok(v) => v,
+        Err(e) => die!("Failed to get all commits! {}", e),
+    };
+    // println!("GOT ALL UPSTREAM BLOBS: {}", all_upstream_blobs.len());
+    // println!("GOT ALL CURRENT COMMITS: {}", all_commits_of_current.len());
+
+    let mut commits_to_take = vec![];
+    let mut commit_summaries = vec![];
+    let mut summarize_cb = |c: &Commit| {
+        if should_summarize {
+            commits_to_take.push(c.id.clone());
+            commit_summaries.push(c.summary.clone());
+        }
+    };
+    let should_take_blob_cb = |c: &BlobCheck| {
+        if ! blob_path_applies_to_repo_file(&c.path, repo_file, current_is_remote) {
+            let blob_check_none: Option<BlobCheckValue> = None;
+            return blob_check_none;
+        }
+        blob_check_callback_default(c)
+    };
+
+    // TODO: maybe have different algorithms for checking if theres updates?
+    topbase_check_alg_with_callback(
+        all_commits_of_current,
+        all_upstream_blobs,
+        &mut summarize_cb,
+        Some(&should_take_blob_cb),
+        true,
+    );
+
+    (commits_to_take, commit_summaries)
 }

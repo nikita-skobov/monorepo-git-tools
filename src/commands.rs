@@ -384,6 +384,6 @@ pub fn run_command(name: &str, matches: &ArgMatches) {
         SplitOut => run_split_out(matches.subcommand_matches(name).unwrap()),
         SplitOutAs => run_split_out_as(matches.subcommand_matches(name).unwrap()),
         Topbase => run_topbase(matches.subcommand_matches(name).unwrap()),
-        Check => run_check(matches.subcommand_matches(name).unwrap()),
+        Check => (),
     }
 }
