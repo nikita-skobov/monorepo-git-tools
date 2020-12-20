@@ -1,5 +1,8 @@
 use gumdrop::Options;
 
+use die::die;
+use super::check::run_check;
+
 #[derive(Debug, Options)]
 pub struct MgtCommandCheck {
     // flags
@@ -10,6 +13,7 @@ pub struct MgtCommandCheck {
 
     // options
     pub local_branch: Option<String>,
+    #[options(short = "b")]
     pub remote_branch: Option<String>,
 
     // positional arg: repo_file
@@ -32,16 +36,27 @@ pub struct MgtCommandSplit {
     pub num_commits: Option<u32>,
     #[options(short = "o")]
     pub output_branch: Option<String>,
-    #[options(short = "r")]
+
+    #[options(no_long, short = "r")]
+    pub rebase_flag: bool,
     pub rebase: Option<String>,
-    #[options(short = "t")]
+
+    #[options(no_long, short = "t")]
+    pub topbase_flag: bool,
     pub topbase: Option<String>,
+
     #[options(long = "as")]
     pub as_subdir: Option<String>,
 
     // for program use, not by user
     #[options(skip)]
     pub direction: Option<Direction>,
+
+    // positional arg: repo_file
+    // (its a vec to appease gumdrop cli parser
+    // but really itll be one string)
+    #[options(free)]
+    pub repo_file: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -74,7 +89,7 @@ pub enum MgtSubcommands {
 }
 
 
-pub fn print_usage(mgt_opts: &impl Options) {
+pub fn print_usage<A: AsRef<impl Options>>(mgt_opts: A) {
     let version_str = format!(
         "{} {}",
         env!("CARGO_PKG_VERSION"),
@@ -85,7 +100,7 @@ pub fn print_usage(mgt_opts: &impl Options) {
     let app_name = env!("CARGO_PKG_NAME");
     let space = "  ";
 
-    let mut command = mgt_opts as &dyn Options;
+    let mut command = mgt_opts.as_ref() as &dyn Options;
     let mut command_str = String::new();
 
     loop {
@@ -108,9 +123,9 @@ pub fn print_usage(mgt_opts: &impl Options) {
         space,
         app_name
     );
-    println!("{}", mgt_opts.self_usage());
+    println!("{}", mgt_opts.as_ref().self_usage());
 
-    if let Some(cmds) = mgt_opts.self_command_list() {
+    if let Some(cmds) = mgt_opts.as_ref().self_command_list() {
         println!();
         println!("Available commands:");
         println!("{}", cmds);
@@ -133,6 +148,12 @@ pub struct Mgt {
     pub command: Option<MgtSubcommands>,
 }
 
+impl AsRef<Mgt> for Mgt {
+    fn as_ref(&self) -> &Mgt {
+        self
+    }
+}
+
 impl Mgt {
     pub fn new() -> Mgt {
         Mgt {
@@ -152,7 +173,7 @@ pub fn get_cli_input() -> Mgt {
         Err(e) => {
             println!("Failed to parse cli input: {}\n", e);
             let dummy_mgt = Mgt::new();
-            print_usage(&dummy_mgt);
+            print_usage(dummy_mgt);
             std::process::exit(2);
         }
         Ok(m) => m,
@@ -160,18 +181,25 @@ pub fn get_cli_input() -> Mgt {
 }
 
 /// validate the input options, and adjust as needed
-/// print an error message and exit if invalid
-pub fn validate_input_or_exit(mgt_opts: &mut Mgt) {
-    match mgt_opts.command {
+/// print an error message and exit if invalid.
+/// otherwise, call each commands run function
+pub fn validate_input_and_run(mgt_opts: Mgt) {
+    let mut mgt_opts = mgt_opts;
+    match mgt_opts.command.take() {
         None => (),
-        Some(ref mut command) => match command {
-            MgtSubcommands::Help(ref mut cmd) => {
+        Some(mut command) => match command {
+            MgtSubcommands::Help(_) => {
                 // TODO: print help for the specific command
-                print_usage(mgt_opts);
+                print_usage(&mgt_opts);
                 std::process::exit(0);
             },
-            MgtSubcommands::Check(ref mut cmd) => (),
-            MgtSubcommands::Topbase(ref mut cmd) => (),
+            MgtSubcommands::Check(mut cmd) => {
+                if cmd.remote && cmd.local {
+                    die!("--remote cannot be used with --local");
+                }
+                run_check(&mut cmd);
+            },
+            MgtSubcommands::Topbase(ref mut _cmd) => (),
 
             MgtSubcommands::SplitIn(ref mut cmd) => {
                 cmd.direction = Some(Direction::In);
