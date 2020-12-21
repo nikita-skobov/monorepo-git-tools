@@ -59,7 +59,7 @@ function teardown() {
     run $PROGRAM_PATH split-out-as --as this/path/exists
     echo "$output"
     [[ $status != "0" ]]
-    [[ $output == *"required arguments"* ]]
+    [[ $output == *"Must provide an --output-branch"* ]]
 }
 
 @test 'moves everything in --as to the root of the newly created repo' {
