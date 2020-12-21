@@ -2,6 +2,7 @@ use gumdrop::Options;
 
 use die::die;
 use super::check::run_check;
+use super::topbase::run_topbase;
 
 #[derive(Debug, Options)]
 pub struct MgtCommandCheck {
@@ -24,7 +25,13 @@ pub struct MgtCommandCheck {
 }
 
 #[derive(Debug, Options)]
-pub struct MgtCommandTopbase {}
+pub struct MgtCommandTopbase {
+    #[options(free)]
+    pub base_or_top: Vec<String>,
+
+    pub dry_run: bool,
+    pub verbose: bool,
+}
 
 #[derive(Debug, Options)]
 pub struct MgtCommandSplit {
@@ -199,7 +206,11 @@ pub fn validate_input_and_run(mgt_opts: Mgt) {
                 }
                 run_check(&mut cmd);
             },
-            MgtSubcommands::Topbase(ref mut _cmd) => (),
+            MgtSubcommands::Topbase(mut cmd) => {
+                cmd.verbose = cmd.verbose || mgt_opts.verbose;
+                cmd.dry_run = cmd.dry_run || mgt_opts.dry_run;
+                run_topbase(&mut cmd);
+            },
 
             MgtSubcommands::SplitIn(ref mut cmd) => {
                 cmd.direction = Some(Direction::In);
