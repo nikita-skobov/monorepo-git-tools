@@ -379,8 +379,8 @@ pub fn run_command(name: &str, matches: &ArgMatches) {
         UnknownCommand => (),
         // it is safe to unwrap here because this function is called
         // if we know that the name subcommand exists
-        SplitIn => run_split_in(matches.subcommand_matches(name).unwrap()),
-        SplitInAs => run_split_in_as(matches.subcommand_matches(name).unwrap()),
+        SplitIn => (),
+        SplitInAs => (),
         SplitOut => (),
         SplitOutAs => (),
         Topbase => (),

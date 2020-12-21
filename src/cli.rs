@@ -4,6 +4,8 @@ use die::die;
 use super::check::run_check;
 use super::split_out::run_split_out;
 use super::split_out::run_split_out_as;
+use super::split_in::run_split_in;
+use super::split_in::run_split_in_as;
 use super::topbase::run_topbase;
 
 #[derive(Debug, Options)]
@@ -217,10 +219,28 @@ pub fn validate_input_and_run(mgt_opts: Mgt) {
             },
 
             MgtSubcommands::SplitIn(ref mut cmd) => {
+                cmd.verbose = mgt_opts.verbose || cmd.verbose;
+                cmd.dry_run = mgt_opts.dry_run || cmd.dry_run;
                 cmd.direction = Some(Direction::In);
+
+                if cmd.topbase_flag && cmd.topbase.is_none() {
+                    cmd.topbase = Some("".into());
+                }
+                if cmd.rebase_flag && cmd.rebase.is_none() {
+                    cmd.rebase = Some("".into())
+                }
+                if cmd.rebase.is_some() && cmd.topbase.is_some() {
+                    die!("Cannot use both --topbase and --rebase");
+                }
+
+                run_split_in(cmd);
             },
             MgtSubcommands::SplitInAs(ref mut cmd) => {
+                cmd.verbose = mgt_opts.verbose || cmd.verbose;
+                cmd.dry_run = mgt_opts.dry_run || cmd.dry_run;
                 cmd.direction = Some(Direction::In);
+
+                run_split_in_as(cmd);
             },
 
             MgtSubcommands::SplitOut(ref mut cmd) => {
