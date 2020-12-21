@@ -4,12 +4,9 @@ use std::path::Path;
 use std::fmt::Display;
 use std::{collections::HashSet, path::PathBuf};
 
-use super::commands::INPUT_BRANCH_ARG;
-use super::split::panic_if_array_invalid;
 use super::split_out;
 use super::git_helpers3;
 use super::exec_helpers;
-use super::split::try_get_repo_name_from_remote_repo;
 use super::repo_file::RepoFile;
 use super::repo_file::generate_repo_file_toml;
 use super::die;
@@ -401,7 +398,7 @@ fn validate_repo_file(
     let missing_include = repo_file.include.is_none();
 
     if missing_remote_repo && missing_input_branch && ! missing_output_branch {
-        die!("Must provide either repo_name in your repofile, or specify a --{} argument", INPUT_BRANCH_ARG);
+        die!("Must provide either repo_name in your repofile, or specify a --input-branch argument");
     }
 
     if missing_include && missing_include_as {
@@ -409,7 +406,7 @@ fn validate_repo_file(
     }
 
     if missing_repo_name && !missing_remote_repo && missing_output_branch {
-        let output_branch_str = try_get_repo_name_from_remote_repo(
+        let output_branch_str = core::try_get_repo_name_from_remote_repo(
             repo_file.remote_repo.clone().unwrap()
         );
         repo_file.repo_name = Some(output_branch_str.clone());
@@ -423,8 +420,8 @@ fn validate_repo_file(
         cmd.output_branch = Some(output_branch_str);
     }
 
-    panic_if_array_invalid(&repo_file.include, true, "include");
-    panic_if_array_invalid(&repo_file.include_as, false, "include_as");
+    core::panic_if_array_invalid(&repo_file.include, true, "include");
+    core::panic_if_array_invalid(&repo_file.include_as, false, "include_as");
 }
 
 fn generate_arg_strings(

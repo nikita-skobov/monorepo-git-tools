@@ -1,9 +1,7 @@
-use super::split::panic_if_array_invalid;
-use super::split::try_get_repo_name_from_remote_repo;
+use super::core;
 use super::repo_file::RepoFile;
 use super::repo_file;
 use super::die;
-use super::core;
 use super::cli::MgtCommandSplit;
 
 // iterate over both the include, and include_as
@@ -247,7 +245,7 @@ pub fn validate_repo_file(
     }
 
     if missing_output_branch && missing_repo_name && !missing_remote_repo {
-        let output_branch_str = try_get_repo_name_from_remote_repo(
+        let output_branch_str = core::try_get_repo_name_from_remote_repo(
             repo_file.remote_repo.clone().unwrap()
         );
         repo_file.repo_name = Some(output_branch_str.clone());
@@ -257,8 +255,8 @@ pub fn validate_repo_file(
         *output_branch = Some(repo_file.repo_name.clone().unwrap());
     }
 
-    panic_if_array_invalid(&repo_file.include, true, "include");
-    panic_if_array_invalid(&repo_file.include_as, false, "include_as");
+    core::panic_if_array_invalid(&repo_file.include, true, "include");
+    core::panic_if_array_invalid(&repo_file.include_as, false, "include_as");
 }
 
 
