@@ -1,6 +1,9 @@
 use std::env;
 use die::die;
 use std::path::PathBuf;
+use std::path::MAIN_SEPARATOR;
+
+use git_url_parse::GitUrl;
 
 use super::exec_helpers;
 use super::git_helpers3;
@@ -399,4 +402,85 @@ pub fn generate_filter_arg_vec<'a>(
     arg_vec.push("--force");
 
     arg_vec
+}
+
+pub fn panic_if_array_invalid(var: &Option<Vec<String>>, can_be_single: bool, varname: &str) {
+    match var {
+        Some(v) => {
+            if ! include_var_valid(&v, can_be_single) {
+                die!("{} is invalid. Must be either a single string, or an even length array of strings", varname);
+            }
+        },
+        _ => (),
+    };
+}
+
+// works for include, or include_as
+// the variable is valid if it is a single item,
+// or if it is multiple items, it is valid if it has an even length
+pub fn include_var_valid(var: &Vec<String>, can_be_single: bool) -> bool {
+    let vlen = var.len();
+    if vlen == 1 && can_be_single {
+        return true;
+    }
+    if vlen >= 1 && vlen % 2 == 0 {
+        return true;
+    }
+    return false;
+}
+
+pub fn try_get_repo_name_with_slash_type(remote_repo: &String, slash_type: char) -> String {
+    let mut out_str = remote_repo.clone().trim_end().to_string();
+    if !is_valid_remote_repo(&remote_repo) {
+        out_str = "".into();
+    }
+    if out_str.ends_with(slash_type) {
+        out_str.pop();
+    }
+    if !out_str.contains(slash_type) {
+        out_str = "".into();
+    }
+    out_str = get_string_after_last_slash(out_str, slash_type);
+    out_str = get_string_before_first_dot(out_str);
+
+    return out_str;
+}
+
+pub fn is_valid_remote_repo(remote_repo: &String) -> bool {
+    GitUrl::parse(remote_repo).is_ok()
+}
+
+// try to parse the remote repo
+pub fn try_get_repo_name_from_remote_repo(remote_repo: String) -> String {
+    let slash_type = MAIN_SEPARATOR;
+    let next_slash_type = if slash_type == '/' { '\\' } else { '/' };
+
+    // try to use native slash first:
+    let mut repo_name = try_get_repo_name_with_slash_type(&remote_repo, slash_type);
+    if repo_name == "" {
+        repo_name = try_get_repo_name_with_slash_type(&remote_repo, next_slash_type);
+    }
+
+    if repo_name == "" {
+        die!("Failed to parse repo_name from remote_repo: {}", remote_repo);
+    }
+
+    repo_name
+}
+
+
+fn get_string_after_last_slash(s: String, slash_type: char) -> String {
+    let mut pieces = s.rsplit(slash_type);
+    match pieces.next() {
+        Some(p) => p.into(),
+        None => s.into(),
+    }
+}
+
+fn get_string_before_first_dot(s: String) -> String {
+    let mut pieces = s.split('.');
+    match pieces.next() {
+        Some(p) => p.into(),
+        None => s.into(),
+    }
 }
