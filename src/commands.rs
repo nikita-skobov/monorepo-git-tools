@@ -381,8 +381,8 @@ pub fn run_command(name: &str, matches: &ArgMatches) {
         // if we know that the name subcommand exists
         SplitIn => run_split_in(matches.subcommand_matches(name).unwrap()),
         SplitInAs => run_split_in_as(matches.subcommand_matches(name).unwrap()),
-        SplitOut => run_split_out(matches.subcommand_matches(name).unwrap()),
-        SplitOutAs => run_split_out_as(matches.subcommand_matches(name).unwrap()),
+        SplitOut => (),
+        SplitOutAs => (),
         Topbase => (),
         Check => (),
     }

@@ -2,6 +2,8 @@ use gumdrop::Options;
 
 use die::die;
 use super::check::run_check;
+use super::split_out::run_split_out;
+use super::split_out::run_split_out_as;
 use super::topbase::run_topbase;
 
 #[derive(Debug, Options)]
@@ -37,6 +39,8 @@ pub struct MgtCommandTopbase {
 pub struct MgtCommandSplit {
     #[options(short = "g")]
     pub generate_repo_file: bool,
+    pub verbose: bool,
+    pub dry_run: bool,
 
 
     pub input_branch: Option<String>,
@@ -220,10 +224,26 @@ pub fn validate_input_and_run(mgt_opts: Mgt) {
             },
 
             MgtSubcommands::SplitOut(ref mut cmd) => {
+                cmd.verbose = mgt_opts.verbose || cmd.verbose;
+                cmd.dry_run = mgt_opts.dry_run || cmd.dry_run;
                 cmd.direction = Some(Direction::Out);
+
+                if cmd.topbase_flag && cmd.topbase.is_none() {
+                    cmd.topbase = Some("".into());
+                }
+                if cmd.rebase_flag && cmd.rebase.is_none() {
+                    cmd.rebase = Some("".into())
+                }
+                if cmd.rebase.is_some() && cmd.topbase.is_some() {
+                    die!("Cannot use both --topbase and --rebase");
+                }
+                run_split_out(cmd);
             },
             MgtSubcommands::SplitOutAs(ref mut cmd) => {
+                cmd.verbose = mgt_opts.verbose || cmd.verbose;
+                cmd.dry_run = mgt_opts.dry_run || cmd.dry_run;
                 cmd.direction = Some(Direction::Out);
+                run_split_out_as(cmd);
             }
         },
     }
