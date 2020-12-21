@@ -150,7 +150,7 @@ pub fn run_split_out_from_repo_file(
         println!("{}Running filter commands on temporary branch: {}", log_p, b);
     }
 
-    arg_strings.filter(
+    arg_strings.filter_out(
         &cmd.output_branch,
         cmd.dry_run,
         cmd.verbose

@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use super::exec_helpers;
 use super::git_helpers3;
 use super::repo_file::RepoFile;
+use super::cli::Direction;
 
 /// argument strings to be executed when
 /// running git-filter-repo
@@ -15,7 +16,7 @@ pub struct ArgStrings {
 }
 
 impl ArgStrings {
-    pub fn filter(
+    pub fn filter_out(
         &self,
         output_branch: &Option<String>,
         dry_run: bool,
@@ -23,6 +24,21 @@ impl ArgStrings {
     ) {
         filter_all_arg_strs(
             self,
+            Direction::Out,
+            output_branch,
+            dry_run,
+            verbose,
+        )
+    }
+    pub fn filter_in(
+        &self,
+        output_branch: &Option<String>,
+        dry_run: bool,
+        verbose: bool,
+    ) {
+        filter_all_arg_strs(
+            self,
+            Direction::In,
             output_branch,
             dry_run,
             verbose,
@@ -265,31 +281,56 @@ pub fn populate_empty_branch_with_remote_commits(
 
 pub fn filter_all_arg_strs(
     arg_strs: &ArgStrings,
+    direction: Direction,
     output_branch: &Option<String>,
     dry_run: bool,
     verbose: bool,
 ) {
-    filter_from_arg_str(
-        &arg_strs.include,
-        output_branch,
-        dry_run,
-        verbose,
-        "Filtering include",
-    );
-    filter_from_arg_str(
-        &arg_strs.exclude,
-        output_branch,
-        dry_run,
-        verbose,
-        "Filtering exclude",
-    );
-    filter_from_arg_str(
-        &arg_strs.include_as,
-        output_branch,
-        dry_run,
-        verbose,
-        "Filtering include_as",
-    );
+    if let Direction::Out = direction {
+        filter_from_arg_str(
+            &arg_strs.include,
+            output_branch,
+            dry_run,
+            verbose,
+            "Filtering include",
+        );
+        filter_from_arg_str(
+            &arg_strs.exclude,
+            output_branch,
+            dry_run,
+            verbose,
+            "Filtering exclude",
+        );
+        filter_from_arg_str(
+            &arg_strs.include_as,
+            output_branch,
+            dry_run,
+            verbose,
+            "Filtering include_as",
+        );
+    } else if let Direction::In = direction {
+        filter_from_arg_str(
+            &arg_strs.exclude,
+            output_branch,
+            dry_run,
+            verbose,
+            "Filtering exclude",
+        );
+        filter_from_arg_str(
+            &arg_strs.include_as,
+            output_branch,
+            dry_run,
+            verbose,
+            "Filtering include_as",
+        );
+        filter_from_arg_str(
+            &arg_strs.include,
+            output_branch,
+            dry_run,
+            verbose,
+            "Filtering include",
+        );
+    }
 }
 
 pub fn filter_from_arg_str(
