@@ -671,7 +671,7 @@ function teardown() {
     "
     echo "$repo_file_contents" > repo_file.sh
 
-    run $PROGRAM_PATH split-in repo_file.sh --rebase --topbase --verbose
+    run $PROGRAM_PATH split-in repo_file.sh -r -t --verbose
     echo "$output"
     [[ $status != "0" ]]
     [[ "$output" != *"Success!"* ]]
