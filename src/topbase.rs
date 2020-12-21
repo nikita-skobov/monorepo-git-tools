@@ -11,7 +11,7 @@ use super::cli::MgtCommandTopbase;
 /// because its the branch that is going to receive commits (if any)
 /// and the 'current' branch is the top branch. by default the 'current'
 /// branch is also the one that the user is currently on.
-fn topbase(
+pub fn topbase(
     current_branch: String,
     upstream_branch: String,
     dry_run: bool,
