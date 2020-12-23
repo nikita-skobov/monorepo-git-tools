@@ -240,6 +240,16 @@ pub fn validate_input_and_run(mgt_opts: Mgt) {
                 cmd.dry_run = mgt_opts.dry_run || cmd.dry_run;
                 cmd.direction = Some(Direction::In);
 
+                if cmd.topbase_flag && cmd.topbase.is_none() {
+                    cmd.topbase = Some("".into());
+                }
+                if cmd.rebase_flag && cmd.rebase.is_none() {
+                    cmd.rebase = Some("".into())
+                }
+                if cmd.rebase.is_some() && cmd.topbase.is_some() {
+                    die!("Cannot use both --topbase and --rebase");
+                }
+
                 run_split_in_as(cmd);
             },
 
