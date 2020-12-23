@@ -256,7 +256,8 @@ pub fn run_split_in(cmd: &mut MgtCommandSplit) {
     };
 
     let repo_file = repo_file::parse_repo_file_from_toml_path(&repo_file_path);
-    run_split_in_from_repo_file(cmd, repo_file)
+    let is_split_in_as = false;
+    run_split_in_from_repo_file(cmd, repo_file, is_split_in_as)
 }
 
 pub fn run_split_in_as(cmd: &mut MgtCommandSplit) {
@@ -275,12 +276,14 @@ pub fn run_split_in_as(cmd: &mut MgtCommandSplit) {
         include_as_src.into(), " ".into(),
     ]);
     repo_file.remote_repo = Some(repo_uri.into());
-    run_split_in_from_repo_file(cmd, repo_file);
+    let is_split_in_as = true;
+    run_split_in_from_repo_file(cmd, repo_file, is_split_in_as);
 }
 
 pub fn run_split_in_from_repo_file(
     cmd: &mut MgtCommandSplit,
     repo_file: RepoFile,
+    split_in_as: bool,
 ) {
     let mut repo_file = repo_file;
     core::verify_dependencies();
@@ -350,15 +353,27 @@ pub fn run_split_in_from_repo_file(
         Ok(())
     };
 
-    if let Ok(_) = res {
-        println!("{}Success!", log_p);
-    } else if let Err(e) = res {
+    if let Err(e) = res {
         die!("{}", e);
     }
+
+    // only allow repo file generation for split-in-as
+    // subcommand. split-in already has a repo file...
+    if split_in_as && cmd.generate_repo_file {
+        let repo_file_name = match cmd.output_branch {
+            Some(ref n) => n,
+            None => "meta",
+        };
+        match generate_repo_file(repo_file_name, &repo_file) {
+            Err(e) => die!("Failed to generate repo file: {}", e),
+            Ok(_) => (),
+        }
+    }
+
+    println!("{}Success!", log_p);
 }
 
-// TODO: use this when detecting a --gen-repo-file option
-pub fn _generate_repo_file(
+pub fn generate_repo_file(
     repo_name: &str,
     repofile: &RepoFile
 ) -> Result<(), String> {

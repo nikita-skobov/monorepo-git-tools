@@ -39,7 +39,7 @@ pub struct MgtCommandTopbase {
 
 #[derive(Debug, Options)]
 pub struct MgtCommandSplit {
-    #[options(short = "g")]
+    #[options(short = "g", long = "gen-repo-file")]
     pub generate_repo_file: bool,
     pub verbose: bool,
     pub dry_run: bool,
