@@ -101,13 +101,16 @@ pub enum MgtSubcommands {
     SplitOutAs(MgtCommandSplit),
 }
 
-
-pub fn print_usage<A: AsRef<impl Options>>(mgt_opts: A) {
-    let version_str = format!(
+pub fn get_version_str() -> String {
+    format!(
         "{} {}",
         env!("CARGO_PKG_VERSION"),
         env!("LATEST_COMMIT"),
-    );
+    )
+}
+
+pub fn print_usage<A: AsRef<impl Options>>(mgt_opts: A) {
+    let version_str = get_version_str();
     let author = env!("CARGO_PKG_AUTHORS");
     let about = env!("CARGO_PKG_DESCRIPTION");
     let app_name = env!("CARGO_PKG_NAME");
@@ -182,7 +185,7 @@ impl Mgt {
 
 pub fn get_cli_input() -> Mgt {
     let args = ::std::env::args().collect::<Vec<_>>();
-    match <Mgt as Options>::parse_args_default(&args[1..]) {
+    let cli = match <Mgt as Options>::parse_args_default(&args[1..]) {
         Err(e) => {
             println!("Failed to parse cli input: {}\n", e);
             let dummy_mgt = Mgt::new();
@@ -190,7 +193,19 @@ pub fn get_cli_input() -> Mgt {
             std::process::exit(2);
         }
         Ok(m) => m,
+    };
+
+    if cli.help {
+        print_usage(&cli);
+        std::process::exit(0);
     }
+
+    if cli.version {
+        println!("{}", get_version_str());
+        std::process::exit(0);
+    }
+
+    cli
 }
 
 /// validate the input options, and adjust as needed
