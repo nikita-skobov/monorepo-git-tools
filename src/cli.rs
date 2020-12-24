@@ -263,7 +263,7 @@ pub fn get_cli_input() -> Mgt {
 
     if cli.command.is_none() {
         print_usage(&cli);
-        std::process::exit(1);
+        std::process::exit(0);
     }
 
     let is_help = match cli.command {
