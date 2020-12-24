@@ -39,6 +39,7 @@ pub struct MgtCommandCheck {
     pub local: bool,
     pub recursive: bool,
     pub remote: bool,
+    pub help: bool,
 
     // options
     pub local_branch: Option<String>,
@@ -59,6 +60,7 @@ pub struct MgtCommandTopbase {
 
     pub dry_run: bool,
     pub verbose: bool,
+    pub help: bool,
 }
 
 #[derive(Debug, Options)]
@@ -67,6 +69,7 @@ pub struct MgtCommandSplit {
     pub generate_repo_file: bool,
     pub verbose: bool,
     pub dry_run: bool,
+    pub help: bool,
 
 
     pub input_branch: Option<String>,
@@ -253,11 +256,6 @@ pub fn get_cli_input() -> Mgt {
         Ok(m) => m,
     };
 
-    if cli.help {
-        print_usage(&cli);
-        std::process::exit(0);
-    }
-
     if cli.version {
         println!("{}", get_version_str());
         std::process::exit(0);
@@ -275,24 +273,37 @@ pub fn get_cli_input() -> Mgt {
             // and running below
             MgtSubcommands::Help(_) => false,
             MgtSubcommands::Check(c) => {
-                print_usage(&c);
-                true
+                if cli.help || c.help {
+                    print_usage(&c);
+                    true
+                } else { false }
             }
             MgtSubcommands::Topbase(t) => {
-                print_usage(&t);
-                true
+                if cli.help || t.help {
+                    print_usage(&t);
+                    true
+                } else { false }
             }
             MgtSubcommands::SplitIn(s) |
             MgtSubcommands::SplitInAs(s) |
             MgtSubcommands::SplitOut(s) |
             MgtSubcommands::SplitOutAs(s) => {
-                print_usage(&s);
-                true
+                if cli.help || s.help {
+                    print_usage(&s);
+                    true
+                } else { false }
             }
         }
     };
 
     if is_help {
+        std::process::exit(0);
+    }
+
+    // check for global program help
+    // vs the above which checked for subcommand help
+    if cli.help {
+        print_usage(&cli);
         std::process::exit(0);
     }
 
