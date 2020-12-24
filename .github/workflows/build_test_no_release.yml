@@ -1,5 +1,9 @@
 name: Build, and Test
 
+defaults:
+  run:
+    shell: bash
+
 on:
   workflow_dispatch:
     inputs:
@@ -30,8 +34,13 @@ jobs:
           toolchain: stable
           target: ${{ matrix.job.target }}
           profile: minimal
-      - name: install_bats
-        uses: mig4/setup-bats@v1.2.0
+#      - name: install_bats
+#        uses: mig4/setup-bats@v1.2.0
+      - name: install_bats2
+        run: |
+          git clone https://github.com/bats-core/bats-core.git
+          cd bats-core
+          ./install.sh /usr/local
       - name: checkout_code
         uses: actions/checkout@v2.3.2
       - name: install_git_filter_repo
