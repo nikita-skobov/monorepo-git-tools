@@ -1,5 +1,9 @@
 name: Build, and Test
 
+defaults:
+  run:
+    shell: bash
+
 on:
   workflow_dispatch:
     inputs:
@@ -31,7 +35,19 @@ jobs:
           target: ${{ matrix.job.target }}
           profile: minimal
       - name: install_bats
-        uses: mig4/setup-bats@v1.2.0
+        run: |
+          git clone https://github.com/bats-core/bats-core.git
+          cd bats-core
+          # git bash does not have sudo, so if on windows, just do regular install
+          # but if on linux you need sudo to install this
+          if [[ -d /c/ ]]; then
+              ./install.sh $HOME
+          else
+              sudo ./install.sh /usr/local
+          fi
+          # check if its installed
+          bats --help
+          
       - name: checkout_code
         uses: actions/checkout@v2.3.2
       - name: install_git_filter_repo
