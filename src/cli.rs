@@ -194,6 +194,12 @@ impl AsRef<Mgt> for Mgt {
 impl AsRef<MgtCommandCheck> for MgtCommandCheck {
     fn as_ref(&self) -> &MgtCommandCheck { self }
 }
+impl AsRef<MgtCommandTopbase> for MgtCommandTopbase {
+    fn as_ref(&self) -> &MgtCommandTopbase { self }
+}
+impl AsRef<MgtCommandSplit> for MgtCommandSplit {
+    fn as_ref(&self) -> &MgtCommandSplit { self }
+}
 
 impl Mgt {
     pub fn new() -> Mgt {
@@ -260,6 +266,34 @@ pub fn get_cli_input() -> Mgt {
     if cli.command.is_none() {
         print_usage(&cli);
         std::process::exit(1);
+    }
+
+    let is_help = match cli.command {
+        None => false,
+        Some(ref cmd) => match cmd {
+            // the help subcommand gets its own validation
+            // and running below
+            MgtSubcommands::Help(_) => false,
+            MgtSubcommands::Check(c) => {
+                print_usage(&c);
+                true
+            }
+            MgtSubcommands::Topbase(t) => {
+                print_usage(&t);
+                true
+            }
+            MgtSubcommands::SplitIn(s) |
+            MgtSubcommands::SplitInAs(s) |
+            MgtSubcommands::SplitOut(s) |
+            MgtSubcommands::SplitOutAs(s) => {
+                print_usage(&s);
+                true
+            }
+        }
+    };
+
+    if is_help {
+        std::process::exit(0);
     }
 
     cli
