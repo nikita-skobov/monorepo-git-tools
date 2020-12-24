@@ -1,118 +1,20 @@
-use clap::ArgMatches;
-
-use super::commands::INPUT_BRANCH_ARG;
-use super::commands::AS_SUBDIR_ARG;
-use super::commands::REPO_URI_ARG;
-use super::commands::GEN_REPO_FILE_ARG;
-use super::split::panic_if_array_invalid;
-use super::split::Runner;
-use super::split::has_both_topbase_and_rebase;
-use super::git_helpers3;
-use super::exec_helpers;
-use super::split::try_get_repo_name_from_remote_repo;
-use super::repo_file::RepoFile;
-use super::repo_file::generate_repo_file_toml;
-use super::die;
 use std::convert::From;
 use std::fs;
 use std::path::Path;
 use std::fmt::Display;
 use std::{collections::HashSet, path::PathBuf};
 
-pub trait SplitIn {
-    fn validate_repo_file(self) -> Self;
-    fn generate_arg_strings(self) -> Self;
-    fn make_and_checkout_output_branch(self) -> Self;
-}
+use super::split_out;
+use super::git_helpers3;
+use super::exec_helpers;
+use super::repo_file::RepoFile;
+use super::repo_file::generate_repo_file_toml;
+use super::die;
+use super::repo_file;
+use super::cli::MgtCommandSplit;
+use super::core;
+use super::topbase;
 
-impl<'a> SplitIn for Runner<'a> {
-    fn validate_repo_file(mut self) -> Self {
-        self.input_branch = match self.matches.value_of(INPUT_BRANCH_ARG) {
-            None => None,
-            Some(branch_name) => {
-                if ! git_helpers3::branch_exists(branch_name) {
-                    die!("You specified an input branch of {}, but that branch was not found", branch_name);
-                }
-                Some(branch_name.into())
-            },
-        };
-
-        let missing_output_branch = self.output_branch.is_none();
-        let missing_input_branch = self.input_branch.is_none();
-        let missing_repo_name = self.repo_file.repo_name.is_none();
-        let missing_remote_repo = self.repo_file.remote_repo.is_none();
-        let missing_include_as = self.repo_file.include_as.is_none();
-        let missing_include = self.repo_file.include.is_none();
-
-        if missing_remote_repo && missing_input_branch && ! missing_output_branch {
-            die!("Must provide either repo_name in your repofile, or specify a --{} argument", INPUT_BRANCH_ARG);
-        }
-
-        if missing_include && missing_include_as {
-            die!("Must provide either include or include_as in your repofile");
-        }
-
-        if missing_repo_name && !missing_remote_repo && missing_output_branch {
-            let output_branch_str = try_get_repo_name_from_remote_repo(
-                self.repo_file.remote_repo.clone().unwrap()
-            );
-            self.repo_file.repo_name = Some(output_branch_str.clone());
-            self.output_branch = Some(output_branch_str);
-        } else if missing_output_branch && ! missing_repo_name {
-            // make the repo_name the output branch name
-            self.output_branch = Some(self.repo_file.repo_name.clone().unwrap());
-        } else if missing_output_branch && ! missing_input_branch {
-            // make the output_branch the name of the input_branch -reverse
-            let output_branch_str = format!("{}-reverse", self.input_branch.clone().unwrap());
-            self.output_branch = Some(output_branch_str);
-        }
-
-        panic_if_array_invalid(&self.repo_file.include, true, "include");
-        panic_if_array_invalid(&self.repo_file.include_as, false, "include_as");
-
-        self
-    }
-
-    fn generate_arg_strings(mut self) -> Self {
-        let include_as_arg_str = generate_split_out_arg_include_as(&self.repo_file);
-        let exclude_arg_str = generate_split_out_arg_exclude(&self.repo_file);
-        let include_arg_str = generate_split_out_arg_include(&self.repo_file);
-
-        if self.verbose {
-            println!("{}include_arg_str: {}", self.log_p, include_arg_str.join(" "));
-            println!("{}include_as_arg_str: {}", self.log_p, include_as_arg_str.join(" "));
-            println!("{}exclude_arg_str: {}", self.log_p, exclude_arg_str.join(" "));
-        }
-
-        if include_arg_str.len() != 0 {
-            self.include_arg_str = Some(include_arg_str);
-        }
-        if include_as_arg_str.len() != 0 {
-            self.include_as_arg_str = Some(include_as_arg_str);
-        }
-        if exclude_arg_str.len() != 0 {
-            self.exclude_arg_str = Some(exclude_arg_str);
-        }
-
-        self
-    }
-
-    fn make_and_checkout_output_branch(mut self) -> Self {
-        let output_branch_name = self.output_branch.clone().unwrap();
-
-        self.make_and_checkout_orphan_branch(output_branch_name.as_str())
-    }
-}
-
-pub fn path_is_ignored(path: &PathBuf) -> bool {
-    let path_str = format!("{:?}", path);
-    if path.starts_with(".git") || path.starts_with("./.git") {
-        return true;
-    }
-
-    exec_helpers::executed_successfully(
-        &["git", "check-ignore", path.to_str().unwrap()])
-}
 
 /// get a vector of paths of files that git knows about
 /// starting from the root of the repo
@@ -346,112 +248,130 @@ pub fn generate_split_out_arg_exclude(repofile: &RepoFile) -> Vec<String> {
     }
 }
 
-pub fn run_split_in(matches: &ArgMatches) {
-    if has_both_topbase_and_rebase(matches) {
-        die!("Cannot use both --topbase and --rebase");
-    }
-
-    let runner = Runner::new(matches)
-        .get_repo_file()
-        .save_current_dir()
-        .get_repository_from_current_dir()
-        .save_current_ref()
-        .verify_dependencies()
-        .validate_repo_file()
-        .change_to_repo_root()
-        .safe_to_proceed()
-        .make_and_checkout_output_branch()
-        .populate_empty_branch_with_remote_commits()
-        .generate_arg_strings();
-
-    let log_p = runner.log_p.clone();
-    let temp_branch = runner.output_branch.clone().unwrap_or("\"\"".into());
-    println!("{}Running filter commands on temporary branch: {}", log_p, temp_branch);
-    let mut runner = runner
-        .filter_exclude()
-        .filter_include_as()
-        .filter_include();
-
-    // if we should rebase (or topbase), we need to refresh the repository index
-    // since the above filtering commands changed some stuff that
-    // our in-memory repository representation does not know about
-    // idk if this is the best way to do it, but its simplest
-    if runner.should_topbase {
-        println!("{}Topbasing", log_p);
-        use super::topbase::Topbase;
-        runner = runner.get_repository_from_current_dir().topbase();
-    } else if runner.should_rebase {
-        println!("{}Rebasing", log_p);
-        runner = runner.get_repository_from_current_dir().rebase();
-    }
-
-    match runner.status {
-        0 => println!("{}Success!", log_p),
-        c => {
-            std::process::exit(c);
-        },
+pub fn run_split_in(cmd: &mut MgtCommandSplit) {
+    let repo_file_path = if cmd.repo_file.len() < 1 {
+        die!("Must provide repo path argument");
+    } else {
+        cmd.repo_file[0].clone()
     };
+
+    let repo_file = repo_file::parse_repo_file_from_toml_path(&repo_file_path);
+    let is_split_in_as = false;
+    run_split_in_from_repo_file(cmd, repo_file, is_split_in_as)
 }
 
-pub fn run_split_in_as(matches: &ArgMatches) {
-    if has_both_topbase_and_rebase(matches) {
-        die!("Cannot use both --topbase and --rebase");
-    }
-
-    // should be safe to unwrap because its a required argument
-    let include_as_src = matches.value_of(AS_SUBDIR_ARG).unwrap();
-    let repo_uri = matches.value_of(REPO_URI_ARG).unwrap();
-    let mut runner = Runner::new(matches);
-    runner.repo_file.include_as = Some(vec![
+pub fn run_split_in_as(cmd: &mut MgtCommandSplit) {
+    let include_as_src = match cmd.as_subdir {
+        Some(ref s) => s,
+        None => die!("Must provide an --as <subdirectory> option"),
+    };
+    // the field is called repo_file, but in split-in-as
+    // its actually the repo_uri
+    let repo_uri = match cmd.repo_file.len() {
+        0 => die!("Must provide a git-repo-uri for split-in-as"),
+        _ => cmd.repo_file[0].clone(),
+    };
+    let mut repo_file = RepoFile::new();
+    repo_file.include_as = Some(vec![
         include_as_src.into(), " ".into(),
     ]);
-    runner.repo_file.remote_repo = Some(repo_uri.into());
-
-    let runner = runner.save_current_dir()
-        .get_repository_from_current_dir()
-        .save_current_ref()
-        .verify_dependencies()
-        .validate_repo_file()
-        .change_to_repo_root()
-        .safe_to_proceed()
-        .make_and_checkout_output_branch()
-        .populate_empty_branch_with_remote_commits()
-        .generate_arg_strings();
-
-    let log_p = runner.log_p.clone();
-    let temp_branch = runner.output_branch.clone().unwrap_or("\"\"".into());
-    println!("{}Running filter commands on temporary branch: {}", log_p, temp_branch);
-    let mut runner = runner
-        .filter_exclude()
-        .filter_include_as()
-        .filter_include();
-
-    if runner.should_topbase {
-        println!("{}Topbasing", log_p);
-        use super::topbase::Topbase;
-        runner = runner.get_repository_from_current_dir().topbase();
-    } else if runner.should_rebase {
-        println!("{}Rebasing", log_p);
-        runner = runner.get_repository_from_current_dir().rebase();
-    }
-
-    match runner.status {
-        0 => {
-            if matches.occurrences_of(GEN_REPO_FILE_ARG[0]) > 0 {
-                let repo_file_name = runner.output_branch.unwrap_or("meta".into());
-                match generate_repo_file(&repo_file_name, &runner.repo_file) {
-                    Err(e) => println!("Failed to generate repo file: {}", e),
-                    Ok(_) => (),
-                }
-            }
-            println!("{}Success!", log_p)
-        },
-        c => {
-            std::process::exit(c);
-        },
-    };
+    repo_file.remote_repo = Some(repo_uri.into());
+    let is_split_in_as = true;
+    run_split_in_from_repo_file(cmd, repo_file, is_split_in_as);
 }
 
+pub fn run_split_in_from_repo_file(
+    cmd: &mut MgtCommandSplit,
+    repo_file: RepoFile,
+    split_in_as: bool,
+) {
+    let mut repo_file = repo_file;
+    core::verify_dependencies();
+    validate_repo_file(cmd, &mut repo_file);
+    core::go_to_repo_root();
+    core::safe_to_proceed();
+    let current_ref = core::get_current_ref();
+
+    let orphan_branch_name = match cmd.output_branch {
+        Some(ref s) => s,
+        None => die!("Failed to parse a valid output branch. you may alternatively provide one with --output-branch <branch_name>"),
+    };
+
+    core::make_and_checkout_orphan_branch(
+        orphan_branch_name,
+        cmd.dry_run,
+        cmd.verbose,
+    );
+
+    let remote_branch: Option<&str> = match &repo_file.remote_branch {
+        Some(branch_name) => Some(branch_name.as_str()),
+        None => None,
+    };
+    // if user provided a remote_branch name
+    // on the command line, let that override what
+    // is present in the repo file:
+    let remote_branch = match split_out::get_remote_branch_from_args(cmd) {
+        None => remote_branch,
+        Some(new_remote_branch) => Some(new_remote_branch.as_str()),
+    };
+
+    core::populate_empty_branch_with_remote_commits(
+        &repo_file,
+        cmd.input_branch.as_deref(),
+        remote_branch,
+        cmd.num_commits,
+        cmd.dry_run
+    );
+
+    let arg_strings = generate_arg_strings(&repo_file, cmd.dry_run, cmd.verbose);
+
+    let log_p = if cmd.dry_run { "   # " } else { "" };
+    if let Some(ref b) = cmd.output_branch {
+        println!("{}Running filter commands on temporary branch: {}", log_p, b);
+    }
+
+    arg_strings.filter_in(
+        &cmd.output_branch,
+        cmd.dry_run,
+        cmd.verbose
+    );
+
+    let res = if cmd.topbase.is_some() {
+        println!("{}Topbasing", log_p);
+        let should_add_branch_label = false;
+        topbase::topbase(
+            cmd.output_branch.clone().unwrap(),
+            current_ref.unwrap(),
+            cmd.dry_run,
+            cmd.verbose,
+            should_add_branch_label,
+        )
+    } else if cmd.rebase.is_some() {
+        println!("{}Rebasing", log_p);
+        core::rebase(current_ref, cmd.dry_run, cmd.verbose)
+    } else {
+        Ok(())
+    };
+
+    if let Err(e) = res {
+        die!("{}", e);
+    }
+
+    // only allow repo file generation for split-in-as
+    // subcommand. split-in already has a repo file...
+    if split_in_as && cmd.generate_repo_file {
+        let repo_file_name = match cmd.output_branch {
+            Some(ref n) => n,
+            None => "meta",
+        };
+        match generate_repo_file(repo_file_name, &repo_file) {
+            Err(e) => die!("Failed to generate repo file: {}", e),
+            Ok(_) => (),
+        }
+    }
+
+    println!("{}Success!", log_p);
+}
 
 pub fn generate_repo_file(
     repo_name: &str,
@@ -468,6 +388,89 @@ pub fn generate_repo_file(
     match std::fs::write(repo_file_path_str, repo_file_str) {
         Ok(_) => Ok(()),
         Err(e) => Err(e.to_string()),
+    }
+}
+
+fn validate_repo_file(
+    cmd: &mut MgtCommandSplit,
+    repo_file: &mut RepoFile,
+) {
+    let input_branch = match cmd.input_branch {
+        None => None,
+        Some(ref branch_name) => {
+            if ! git_helpers3::branch_exists(&branch_name) {
+                die!("You specified an input branch of {}, but that branch was not found", branch_name);
+            }
+            Some(branch_name.clone())
+        },
+    };
+
+    let missing_output_branch = cmd.output_branch.is_none();
+    let missing_input_branch = cmd.input_branch.is_none();
+    let missing_repo_name = repo_file.repo_name.is_none();
+    let missing_remote_repo = repo_file.remote_repo.is_none();
+    let missing_include_as = repo_file.include_as.is_none();
+    let missing_include = repo_file.include.is_none();
+
+    if missing_remote_repo && missing_input_branch && ! missing_output_branch {
+        die!("Must provide either repo_name in your repofile, or specify a --input-branch argument");
+    }
+
+    if missing_include && missing_include_as {
+        die!("Must provide either include or include_as in your repofile");
+    }
+
+    if missing_repo_name && !missing_remote_repo && missing_output_branch {
+        let output_branch_str = core::try_get_repo_name_from_remote_repo(
+            repo_file.remote_repo.clone().unwrap()
+        );
+        repo_file.repo_name = Some(output_branch_str.clone());
+        cmd.output_branch = Some(output_branch_str);
+    } else if missing_output_branch && ! missing_repo_name {
+        // make the repo_name the output branch name
+        cmd.output_branch = Some(repo_file.repo_name.clone().unwrap());
+    } else if missing_output_branch && ! missing_input_branch {
+        // make the output_branch the name of the input_branch -reverse
+        let output_branch_str = format!("{}-reverse", input_branch.clone().unwrap());
+        cmd.output_branch = Some(output_branch_str);
+    }
+
+    core::panic_if_array_invalid(&repo_file.include, true, "include");
+    core::panic_if_array_invalid(&repo_file.include_as, false, "include_as");
+}
+
+fn generate_arg_strings(
+    repo_file: &RepoFile,
+    dry_run: bool,
+    verbose: bool,
+) -> core::ArgStrings {
+    let log_p = if dry_run { " #  " } else { "" };
+    let include_as_arg_str = generate_split_out_arg_include_as(repo_file);
+    let exclude_arg_str = generate_split_out_arg_exclude(repo_file);
+    let include_arg_str = generate_split_out_arg_include(repo_file);
+
+    if verbose {
+        println!("{}include_arg_str: {}", log_p, include_arg_str.join(" "));
+        println!("{}include_as_arg_str: {}", log_p, include_as_arg_str.join(" "));
+        println!("{}exclude_arg_str: {}", log_p, exclude_arg_str.join(" "));
+    }
+
+    let include = if include_arg_str.len() != 0 {
+        Some(include_arg_str)
+    } else { None };
+
+    let include_as = if include_as_arg_str.len() != 0 {
+        Some(include_as_arg_str)
+    } else { None };
+
+    let exclude = if exclude_arg_str.len() != 0 {
+        Some(exclude_arg_str)
+    } else { None };
+
+    core::ArgStrings {
+        include_as,
+        include,
+        exclude,
     }
 }
 

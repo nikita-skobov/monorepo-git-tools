@@ -78,7 +78,7 @@ function teardown() {
     [[ $output == *"$version_str"* ]]
 }
 
-@test 'can use dry run as -d or --dry-run' {
+@test 'can use dry run with --dry-run' {
     test_folder="$BATS_TMPDIR/genusage"
     mkdir -p "$test_folder"
     BATS_TMPDIR="$test_folder"
@@ -90,14 +90,6 @@ function teardown() {
     test_remote_repo2="test_remote_repo2"
     cd $BATS_TMPDIR/test_remote_repo
     run $PROGRAM_PATH split-in-as "..$SEP$test_remote_repo2" --as somesubdir --dry-run
-    echo "$output"
-
-    # some pattern matching test to make sure it outputs git commands in the dry run output
-    [[ $output == *"git pull ..$SEP$test_remote_repo2"* ]]
-    [[ $status == "0" ]]
-
-    # now do the same but with -d
-    run $PROGRAM_PATH split-in-as "..$SEP$test_remote_repo2" --as somesubdir -d
     echo "$output"
 
     # some pattern matching test to make sure it outputs git commands in the dry run output

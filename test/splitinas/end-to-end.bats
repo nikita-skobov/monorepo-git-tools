@@ -92,7 +92,7 @@ function teardown() {
     ((made_commits += 1))
     cd "$curr_dir"
 
-    run $PROGRAM_PATH split-in-as "..$SEP$test_remote_repo2" --as abc/ --verbose --rebase
+    run $PROGRAM_PATH split-in-as "..$SEP$test_remote_repo2" --as abc/ --verbose -r
     echo "$output"
     [[ $status == "0" ]]
     [[ "$(git branch --show-current)" == "test_remote_repo2" ]]
@@ -138,7 +138,7 @@ function teardown() {
     ((made_commits += 1))
     cd "$curr_dir"
 
-    run $PROGRAM_PATH split-in-as "..$SEP$test_remote_repo2" --as abc/ --verbose --rebase
+    run $PROGRAM_PATH split-in-as "..$SEP$test_remote_repo2" --as abc/ --verbose -r
     echo "$output"
     [[ $status == "0" ]]
     [[ "$(git branch --show-current)" == "test_remote_repo2" ]]
@@ -167,7 +167,7 @@ function teardown() {
     git branch -D test_remote_repo2
     latest_commit="$(git log --oneline -n 1)"
     
-    run $PROGRAM_PATH split-in-as "..$SEP$test_remote_repo2" --as abc/ --verbose --rebase
+    run $PROGRAM_PATH split-in-as "..$SEP$test_remote_repo2" --as abc/ --verbose -r
     echo "$output"
     new_latest_commit="$(git log --oneline -n 1)"
     [[ $status == "0" ]]
@@ -208,7 +208,7 @@ function teardown() {
 
     # split in the remote repo into our local repo and squash merge
     cd "$curr_dir"
-    run $PROGRAM_PATH split-in repo_file.sh --rebase -o outbranch
+    run $PROGRAM_PATH split-in repo_file.sh -r -o outbranch
     git checkout master > /dev/null
     git merge --squash outbranch > /dev/null
     git commit -m "X" > /dev/null
