@@ -40,7 +40,18 @@ jobs:
         run: |
           git clone https://github.com/bats-core/bats-core.git
           cd bats-core
-          ./install.sh /usr/local
+          # git bash does not have sudo, so if on windows, just do regular install
+          # but if on linux you need sudo to install this
+          if [[ -d /c/ ]]; then
+              ./install.sh /usr/local
+          else
+              sudo ./install.sh /usr/local
+          fi
+          # check if its installed
+          ls -l /usr/local/bin
+          /usr/local/bin/bats --help
+          bats --help
+          
       - name: checkout_code
         uses: actions/checkout@v2.3.2
       - name: install_git_filter_repo
