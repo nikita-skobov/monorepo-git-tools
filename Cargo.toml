@@ -11,6 +11,7 @@ edition = "2018"
 toml =  { version = "0.5.7", features = ["preserve_order"] }
 git-url-parse = "0.3.0"
 die = { path="die" }
+gumdrop = { git = "https://github.com/nikita-skobov/gumdrop" }
 
 [features]
 gittests = []
