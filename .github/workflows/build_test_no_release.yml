@@ -31,7 +31,7 @@ jobs:
           target: ${{ matrix.job.target }}
           profile: minimal
       - name: install_bats
-        uses: mig4/setup-bats@v1.0.1
+        uses: mig4/setup-bats@v1.2.0
       - name: checkout_code
         uses: actions/checkout@v2.3.2
       - name: install_git_filter_repo
