@@ -34,22 +34,18 @@ jobs:
           toolchain: stable
           target: ${{ matrix.job.target }}
           profile: minimal
-#      - name: install_bats
-#        uses: mig4/setup-bats@v1.2.0
-      - name: install_bats2
+      - name: install_bats
         run: |
           git clone https://github.com/bats-core/bats-core.git
           cd bats-core
           # git bash does not have sudo, so if on windows, just do regular install
           # but if on linux you need sudo to install this
           if [[ -d /c/ ]]; then
-              ./install.sh /usr/local
+              ./install.sh $HOME
           else
               sudo ./install.sh /usr/local
           fi
           # check if its installed
-          ls -l /usr/local/bin
-          /usr/local/bin/bats --help
           bats --help
           
       - name: checkout_code
