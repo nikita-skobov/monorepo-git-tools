@@ -1,3 +1,4 @@
+// use std::str::FromStr;
 use gumdrop::Options;
 
 use die::die;
@@ -7,6 +8,29 @@ use super::split_out::run_split_out_as;
 use super::split_in::run_split_in;
 use super::split_in::run_split_in_as;
 use super::topbase::run_topbase;
+
+// TODO: implement way to use
+// --rebase
+// --rebase branchname
+// --rebase --other-args
+// ...
+// #[derive(Debug)]
+// pub struct OptionalOption<T: From<String>> {
+//     val: Option<T>,
+// }
+
+// impl<T: From<String>> FromStr for OptionalOption<T> {
+//     type Err = String;
+
+//     fn from_str(s: &str) -> Result<Self, Self::Err> {
+//         let s_string = s.to_string();
+//         let o = OptionalOption {
+//             val: Some(s_string.into())
+//         };
+
+//         Ok(o)
+//     }
+// }
 
 #[derive(Debug, Options)]
 pub struct MgtCommandCheck {
@@ -165,9 +189,10 @@ pub struct Mgt {
 }
 
 impl AsRef<Mgt> for Mgt {
-    fn as_ref(&self) -> &Mgt {
-        self
-    }
+    fn as_ref(&self) -> &Mgt { self }
+}
+impl AsRef<MgtCommandCheck> for MgtCommandCheck {
+    fn as_ref(&self) -> &MgtCommandCheck { self }
 }
 
 impl Mgt {
@@ -182,6 +207,33 @@ impl Mgt {
     }
 }
 
+// TODO: use optional args
+// pub fn get_cli_input_with_retries(args: Option<Vec<String>>) -> Result<Mgt, gumdrop::Error> {
+//     let mut args = match args {
+//         Some(v) => v,
+//         None => ::std::env::args().collect::<Vec<_>>(),
+//     };
+
+//     match <Mgt as Options>::parse_args_default(&args[1..]) {
+//         Err(e) => {
+//             // if its a missing argument, see if its something we can recover
+//             // by checking if it can be an optional option
+//             if let gumdrop::ErrorKind::MissingArgument(ref s) = e.kind {
+//                 match s.as_str() {
+//                     "-r" | "--rebase" => {
+//                         let arg_pos = args.iter().position(|a| a == s).unwrap();
+//                         args.insert(arg_pos + 1, "".into());
+//                         get_cli_input_with_retries(Some(args))
+//                     },
+//                     _ => Err(e),
+//                 }
+//             } else {
+//                 Err(e)
+//             }
+//         }
+//         Ok(m) => Ok(m),
+//     }
+// }
 
 pub fn get_cli_input() -> Mgt {
     let args = ::std::env::args().collect::<Vec<_>>();
@@ -203,6 +255,11 @@ pub fn get_cli_input() -> Mgt {
     if cli.version {
         println!("{}", get_version_str());
         std::process::exit(0);
+    }
+
+    if cli.command.is_none() {
+        print_usage(&cli);
+        std::process::exit(1);
     }
 
     cli
