@@ -151,7 +151,26 @@ pub fn print_usage<A: AsRef<impl Options>>(
         cmd_name,
         usage_line
     );
-    let sub_usage = mgt_opts.as_ref().format_sub_usage_string_sensible();
+
+    let filters = if cmd_name.contains("split-out-as") {
+        Some(vec!["input-branch", "gen-repo-file", "num-commits", "--rebase", "--topbase"])
+    } else if cmd_name.contains("split-out") {
+        Some(vec!["input-branch", "gen-repo-file", "--as", "num-commits"])
+    } else if cmd_name.contains("split-in-as") {
+        Some(vec!["input-branch"])
+    } else if cmd_name.contains("split-in") {
+        Some(vec!["gen-repo-file", "--as"])
+    } else {
+        None
+    };
+
+    let sub_usage = mgt_opts.as_ref()
+        .format_sub_usage_string_with_filters(
+            Some(100),
+            Some(4),
+            Some(4),
+            filters,
+        );
     println!("{}", sub_usage);
 }
 
