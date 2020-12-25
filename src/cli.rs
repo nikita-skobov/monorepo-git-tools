@@ -42,8 +42,9 @@ pub struct MgtCommandCheck {
     pub help: bool,
 
     // options
+    #[options(meta = "BRANCH-NAME")]
     pub local_branch: Option<String>,
-    #[options(short = "b")]
+    #[options(short = "b", meta = "BRANCH-NAME")]
     pub remote_branch: Option<String>,
 
     // positional arg: repo_file
@@ -136,28 +137,30 @@ pub fn get_version_str() -> String {
     )
 }
 
-pub fn print_usage<A: AsRef<impl Options>>(mgt_opts: A) {
+pub fn print_usage<A: AsRef<impl Options>>(
+    mgt_opts: A,
+    subcommand_name: Option<&str>,
+    usage_line: Option<&str>,
+) {
+    let space = "    ";
+    let cmd_name = subcommand_name.unwrap_or("mgt");
+    let usage_line = usage_line.unwrap_or("[FLAGS] [OPTIONS] <repo_file>");
+
+    println!("USAGE:\n{}{} {}\n",
+        space,
+        cmd_name,
+        usage_line
+    );
+    let sub_usage = mgt_opts.as_ref().format_sub_usage_string_sensible();
+    println!("{}", sub_usage);
+}
+
+pub fn print_program_usage<A: AsRef<impl Options>>(mgt_opts: A) {
     let version_str = get_version_str();
     let author = env!("CARGO_PKG_AUTHORS");
     let about = env!("CARGO_PKG_DESCRIPTION");
     let app_name = env!("CARGO_PKG_NAME");
-    let space = "  ";
-
-    let mut command = mgt_opts.as_ref() as &dyn Options;
-    let mut command_str = String::new();
-
-    loop {
-        if let Some(new_command) = command.command() {
-            command = new_command;
-
-            if let Some(name) = new_command.command_name() {
-                command_str.push(' ');
-                command_str.push_str(name);
-            }
-        } else {
-            break;
-        }
-    }
+    let space = "    ";
 
     println!("{} {}\n{}\n{}\n\nUSAGE:\n{}{} [SUBCOMMAND] [OPTIONS]\n",
         app_name, version_str,
@@ -166,10 +169,10 @@ pub fn print_usage<A: AsRef<impl Options>>(mgt_opts: A) {
         space,
         app_name
     );
-    println!("{}", mgt_opts.as_ref().self_usage());
+    let sub_usage = mgt_opts.as_ref().format_sub_usage_string_sensible();
+    println!("{}", sub_usage);
 
     if let Some(cmds) = mgt_opts.as_ref().self_command_list() {
-        println!();
         println!("Available commands:");
         println!("{}", cmds);
     }
@@ -250,7 +253,7 @@ pub fn get_cli_input() -> Mgt {
         Err(e) => {
             println!("Failed to parse cli input: {}\n", e);
             let dummy_mgt = Mgt::new();
-            print_usage(dummy_mgt);
+            print_program_usage(dummy_mgt);
             std::process::exit(2);
         }
         Ok(m) => m,
@@ -262,7 +265,7 @@ pub fn get_cli_input() -> Mgt {
     }
 
     if cli.command.is_none() {
-        print_usage(&cli);
+        print_program_usage(&cli);
         std::process::exit(0);
     }
 
@@ -274,13 +277,13 @@ pub fn get_cli_input() -> Mgt {
             MgtSubcommands::Help(_) => false,
             MgtSubcommands::Check(c) => {
                 if cli.help || c.help {
-                    print_usage(&c);
+                    print_usage(&c, Some("mgt check"), None);
                     true
                 } else { false }
             }
             MgtSubcommands::Topbase(t) => {
                 if cli.help || t.help {
-                    print_usage(&t);
+                    print_usage(&t, Some("mgt topbase"), Some("[FLAGS] <base> [top]"));
                     true
                 } else { false }
             }
@@ -288,8 +291,15 @@ pub fn get_cli_input() -> Mgt {
             MgtSubcommands::SplitInAs(s) |
             MgtSubcommands::SplitOut(s) |
             MgtSubcommands::SplitOutAs(s) => {
+                let subcommand_name = cli.command_name().unwrap();
+                let usage_line = if subcommand_name == "split-out-as" {
+                    Some("[FLAGS] --as <subdirectory> --output-branch <branch-name>")
+                } else if subcommand_name == "split-in-as" {
+                    Some("[FLAGS] [OPTIONS] <git-repo-uri> --as <subdirectory>")
+                } else { None };
+                let subcommand_name = format!("mgt {}", subcommand_name);
                 if cli.help || s.help {
-                    print_usage(&s);
+                    print_usage(&s, Some(&subcommand_name), usage_line);
                     true
                 } else { false }
             }
@@ -303,7 +313,7 @@ pub fn get_cli_input() -> Mgt {
     // check for global program help
     // vs the above which checked for subcommand help
     if cli.help {
-        print_usage(&cli);
+        print_program_usage(&cli);
         std::process::exit(0);
     }
 
@@ -320,7 +330,7 @@ pub fn validate_input_and_run(mgt_opts: Mgt) {
         Some(mut command) => match command {
             MgtSubcommands::Help(_) => {
                 // TODO: print help for the specific command
-                print_usage(&mgt_opts);
+                print_program_usage(&mgt_opts);
                 std::process::exit(0);
             },
             MgtSubcommands::Check(mut cmd) => {
