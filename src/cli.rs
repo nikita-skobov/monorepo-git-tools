@@ -35,16 +35,20 @@ use super::topbase::run_topbase;
 #[derive(Debug, Options)]
 pub struct MgtCommandCheck {
     // flags
+    #[options(help = "if the <repo-file> is a directory, by default mgt only looks for files ending in .rf, but with the --all flag, you are telling mgt to get any file it finds from the <repo-file> directory")]
     pub all: bool,
+    #[options(help = "check if the local branch has commits not present in remote")]
     pub local: bool,
+    #[options(help = "if the <repo-file> is a directory, get all files in this directory recursively")]
     pub recursive: bool,
+    #[options(help = "check if the remote has commits not present in this local branch. This is the default")]
     pub remote: bool,
     pub help: bool,
 
     // options
-    #[options(meta = "BRANCH-NAME")]
+    #[options(meta = "BRANCH-NAME", help = "check updates to/from a specific local branch instead of the current HEAD")]
     pub local_branch: Option<String>,
-    #[options(short = "b", meta = "BRANCH-NAME")]
+    #[options(short = "b", meta = "BRANCH-NAME", help = "check updates to/from a specific remote branch instead of what's in the repo file")]
     pub remote_branch: Option<String>,
 
     // positional arg: repo_file
@@ -59,34 +63,41 @@ pub struct MgtCommandTopbase {
     #[options(free)]
     pub base_or_top: Vec<String>,
 
+    #[options(help = "Print out the steps taken, but don't actually run or change anything.")]
     pub dry_run: bool,
+    #[options(help = "Prints verbose information")]
     pub verbose: bool,
     pub help: bool,
 }
 
 #[derive(Debug, Options)]
 pub struct MgtCommandSplit {
-    #[options(short = "g", long = "gen-repo-file")]
+    #[options(short = "g", long = "gen-repo-file", help = "generate a repo file from the provided remote repo and the --as argument gets mapped to [include_as]")]
     pub generate_repo_file: bool,
+    #[options(help = "Prints verbose information")]
     pub verbose: bool,
+    #[options(help = "Print out the steps taken, but don't actually run or change anything.")]
     pub dry_run: bool,
     pub help: bool,
 
-
+    #[options(help = "split in from a local branch in this repository")]
     pub input_branch: Option<String>,
+    #[options(meta = "N", help = "when pulling from remote, limit to N commits from the current tip. This is probably only useful the first time you do a split-in")]
     pub num_commits: Option<u32>,
-    #[options(short = "o")]
+    #[options(short = "o", help = "name of branch that will be created with new split history")]
     pub output_branch: Option<String>,
 
-    #[options(no_long, short = "r")]
+    #[options(no_long, short = "r", help = "after generating a branch with rewritten history, rebase that branch such that it can be fast forwarded back into the comparison branch. for split-in that is the branch you started on. For split-out, that is the remote branch")]
     pub rebase_flag: bool,
+    #[options(meta = "BRANCH-NAME", help = "like the -r flag, but you can specify the name of the branch you want to use as the comparison branch instead of using the default")]
     pub rebase: Option<String>,
 
-    #[options(no_long, short = "t")]
+    #[options(no_long, short = "t", help = "like rebase, but it finds a fork point by stopping at the first commit that two branches have in common. This is useful as an 'update' mechanism.")]
     pub topbase_flag: bool,
+    #[options(meta = "BRANCH-NAME", help = "like the -t flag, but you can specify the name of the remote branch that will be used instead of what is defined in your repo file")]
     pub topbase: Option<String>,
 
-    #[options(long = "as")]
+    #[options(long = "as", help = "path relative to root of the local repository that will contain the entire repository being split")]
     pub as_subdir: Option<String>,
 
     // for program use, not by user
