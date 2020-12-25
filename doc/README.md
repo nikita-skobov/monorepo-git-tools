@@ -1,6 +1,6 @@
 # `mgt`
 
-> this file was automatically generated on 2020-11-01
+> this file was automatically generated on 2020-12-25
 
 Below you'll find a list of links to documentation pages, as well as the
 automatically generated output of `mgt --help`
@@ -19,26 +19,25 @@ automatically generated output of `mgt --help`
 ## `mgt help`
 
 ```
-mgt 3.0.0 e211271
+mgt 4.0.0 e64da68
 Nikita Skobov
 Git tools that enable easy bidirectional sync between multiple repositories
 
 USAGE:
-    mgt [SUBCOMMAND]
+    mgt [SUBCOMMAND] [OPTIONS]
 
 FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+    --dry-run        Dont run anything. Just print output of what a run would do. 
+    --verbose        More detailed output 
+    -h, --help       Prints help information 
+    -V, --version    Prints version information 
 
-SUBCOMMANDS:
-    check           check if remote has commits not present in local or vice versa
-    help            Prints this message or the help of the given subcommand(s)
-    split-in        fetch and rewrite a remote repository's history onto a new branch such that it only contains
-                    certain paths according to a repo-file
-    split-in-as     fetch the entirety of a remote repository and place it in a subdirectory of this repository
-    split-out       rewrite this repository history onto a new branch such that it only contains certain paths
-                    according to a repo-file
-    split-out-as    make a new repository (via a branch) that only contains commits that are part of a subdirectory
-    topbase         rebases top branch onto bottom branch keeping only the first commits until it finds a commit
-                    from top where all blobs exist in the bottom branch.
+Available commands:
+  help
+  check         check if there are changes ready to be pushed or pulled
+  topbase       rebase top branch onto bottom branch but stop the rebase after the first shared commit
+  split-in      fetch and rewrite a remote repository's history onto a new branch according to the repo file rules
+  split-in-as   fetch and rewrite a remote repository's history onto a new branch and into the --as <subdirectory>
+  split-out     create a new branch with this repository's history rewritten according to the repo file rules
+  split-out-as  create a new branch with this repository's history rewritten according to the --as <subdirectory>
 ```
