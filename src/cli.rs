@@ -158,28 +158,38 @@ pub fn print_usage<A: AsRef<impl Options>>(
     let usage_line = usage_line.unwrap_or("[FLAGS] [OPTIONS] <repo_file>");
 
     // TODO: modify gumdrop
+    // to easily print positional descriptions!
+    let repo_file_desc = "    <repo-file>    path to file that contains instructions of how to split a repository";
+
+    // TODO: modify gumdrop
     // to be able to get these descriptions without
     // hardcoding them twice!
-    let (desc, filters) = if cmd_name.contains("split-out-as") {
+    let (positional_desc, desc, filters) = if cmd_name.contains("split-out-as") {
+        let p_desc = None;
         let desc = "create a new branch with this repository's history rewritten according to the --as <subdirectory>";
-        (desc, Some(vec!["input-branch", "gen-repo-file", "num-commits", "--rebase", "--topbase"]))
+        (p_desc, desc, Some(vec!["input-branch", "gen-repo-file", "num-commits", "--rebase", "--topbase"]))
     } else if cmd_name.contains("split-out") {
+        let p_desc = Some(repo_file_desc);
         let desc = "create a new branch with this repository's history rewritten according to the repo file rules";
-        (desc, Some(vec!["input-branch", "gen-repo-file", "--as", "num-commits"]))
+        (p_desc, desc, Some(vec!["input-branch", "gen-repo-file", "--as", "num-commits"]))
     } else if cmd_name.contains("split-in-as") {
+        let p_desc = Some("    <git-repo-uri>    a valid git url of the repository to split in");
         let desc = "fetch and rewrite a remote repository's history onto a new branch and into the --as <subdirectory>";
-        (desc, Some(vec!["input-branch"]))
+        (p_desc, desc, Some(vec!["input-branch"]))
     } else if cmd_name.contains("split-in") {
+        let p_desc = Some(repo_file_desc);
         let desc = "fetch and rewrite a remote repository's history onto a new branch according to the repo file rules";
-        (desc, Some(vec!["gen-repo-file", "--as"]))
+        (p_desc, desc, Some(vec!["gen-repo-file", "--as"]))
     } else if cmd_name.contains("topbase") {
+        let p_desc = Some("    <base>    the branch to rebase onto.\n    [top]     the branch that will be rebased. defaults to current branch");
         let desc = "rebase top branch onto bottom branch but stop the rebase after the first shared commit";
-        (desc, None)
+        (p_desc, desc, None)
     } else if cmd_name.contains("check") {
+        let p_desc = Some(repo_file_desc);
         let desc = "check if there are changes ready to be pushed or pulled";
-        (desc, None)
+        (p_desc, desc, None)
     } else {
-        ("", None)
+        (None, "", None)
     };
 
     println!("{}\n", desc);
@@ -198,6 +208,11 @@ pub fn print_usage<A: AsRef<impl Options>>(
             filters,
         );
     println!("{}", sub_usage);
+
+    if let Some(ref p) = positional_desc {
+        println!("POSITIONAL:");
+        println!("{}", p)
+    }
 }
 
 pub fn print_program_usage<A: AsRef<impl Options>>(mgt_opts: A) {
