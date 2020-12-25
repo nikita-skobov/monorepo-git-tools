@@ -35,15 +35,20 @@ use super::topbase::run_topbase;
 #[derive(Debug, Options)]
 pub struct MgtCommandCheck {
     // flags
+    #[options(help = "if the <repo-file> is a directory, by default mgt only looks for files ending in .rf, but with the --all flag, you are telling mgt to get any file it finds from the <repo-file> directory")]
     pub all: bool,
+    #[options(help = "check if the local branch has commits not present in remote")]
     pub local: bool,
+    #[options(help = "if the <repo-file> is a directory, get all files in this directory recursively")]
     pub recursive: bool,
+    #[options(help = "check if the remote has commits not present in this local branch. This is the default")]
     pub remote: bool,
     pub help: bool,
 
     // options
+    #[options(meta = "BRANCH-NAME", help = "check updates to/from a specific local branch instead of the current HEAD")]
     pub local_branch: Option<String>,
-    #[options(short = "b")]
+    #[options(short = "b", meta = "BRANCH-NAME", help = "check updates to/from a specific remote branch instead of what's in the repo file")]
     pub remote_branch: Option<String>,
 
     // positional arg: repo_file
@@ -58,34 +63,41 @@ pub struct MgtCommandTopbase {
     #[options(free)]
     pub base_or_top: Vec<String>,
 
+    #[options(help = "Print out the steps taken, but don't actually run or change anything.")]
     pub dry_run: bool,
+    #[options(help = "Prints verbose information")]
     pub verbose: bool,
     pub help: bool,
 }
 
 #[derive(Debug, Options)]
 pub struct MgtCommandSplit {
-    #[options(short = "g", long = "gen-repo-file")]
+    #[options(short = "g", long = "gen-repo-file", help = "generate a repo file from the provided remote repo and the --as argument gets mapped to [include_as]")]
     pub generate_repo_file: bool,
+    #[options(help = "Prints verbose information")]
     pub verbose: bool,
+    #[options(help = "Print out the steps taken, but don't actually run or change anything.")]
     pub dry_run: bool,
     pub help: bool,
 
-
+    #[options(help = "split in from a local branch in this repository")]
     pub input_branch: Option<String>,
+    #[options(meta = "N", help = "when pulling from remote, limit to N commits from the current tip. This is probably only useful the first time you do a split-in")]
     pub num_commits: Option<u32>,
-    #[options(short = "o")]
+    #[options(short = "o", help = "name of branch that will be created with new split history")]
     pub output_branch: Option<String>,
 
-    #[options(no_long, short = "r")]
+    #[options(no_long, short = "r", help = "after generating a branch with rewritten history, rebase that branch such that it can be fast forwarded back into the comparison branch. for split-in that is the branch you started on. For split-out, that is the remote branch")]
     pub rebase_flag: bool,
+    #[options(meta = "BRANCH-NAME", help = "like the -r flag, but you can specify the name of the branch you want to use as the comparison branch instead of using the default")]
     pub rebase: Option<String>,
 
-    #[options(no_long, short = "t")]
+    #[options(no_long, short = "t", help = "like rebase, but it finds a fork point by stopping at the first commit that two branches have in common. This is useful as an 'update' mechanism.")]
     pub topbase_flag: bool,
+    #[options(meta = "BRANCH-NAME", help = "like the -t flag, but you can specify the name of the remote branch that will be used instead of what is defined in your repo file")]
     pub topbase: Option<String>,
 
-    #[options(long = "as")]
+    #[options(long = "as", help = "path relative to root of the local repository that will contain the entire repository being split")]
     pub as_subdir: Option<String>,
 
     // for program use, not by user
@@ -136,28 +148,79 @@ pub fn get_version_str() -> String {
     )
 }
 
-pub fn print_usage<A: AsRef<impl Options>>(mgt_opts: A) {
+pub fn print_usage<A: AsRef<impl Options>>(
+    mgt_opts: A,
+    subcommand_name: Option<&str>,
+    usage_line: Option<&str>,
+) {
+    let space = "    ";
+    let cmd_name = subcommand_name.unwrap_or("mgt");
+    let usage_line = usage_line.unwrap_or("[FLAGS] [OPTIONS] <repo_file>");
+
+    // TODO: modify gumdrop
+    // to easily print positional descriptions!
+    let repo_file_desc = "    <repo-file>    path to file that contains instructions of how to split a repository";
+
+    // TODO: modify gumdrop
+    // to be able to get these descriptions without
+    // hardcoding them twice!
+    let (positional_desc, desc, filters) = if cmd_name.contains("split-out-as") {
+        let p_desc = None;
+        let desc = "create a new branch with this repository's history rewritten according to the --as <subdirectory>";
+        (p_desc, desc, Some(vec!["input-branch", "gen-repo-file", "num-commits", "--rebase", "--topbase"]))
+    } else if cmd_name.contains("split-out") {
+        let p_desc = Some(repo_file_desc);
+        let desc = "create a new branch with this repository's history rewritten according to the repo file rules";
+        (p_desc, desc, Some(vec!["input-branch", "gen-repo-file", "--as", "num-commits"]))
+    } else if cmd_name.contains("split-in-as") {
+        let p_desc = Some("    <git-repo-uri>    a valid git url of the repository to split in");
+        let desc = "fetch and rewrite a remote repository's history onto a new branch and into the --as <subdirectory>";
+        (p_desc, desc, Some(vec!["input-branch"]))
+    } else if cmd_name.contains("split-in") {
+        let p_desc = Some(repo_file_desc);
+        let desc = "fetch and rewrite a remote repository's history onto a new branch according to the repo file rules";
+        (p_desc, desc, Some(vec!["gen-repo-file", "--as"]))
+    } else if cmd_name.contains("topbase") {
+        let p_desc = Some("    <base>    the branch to rebase onto.\n    [top]     the branch that will be rebased. defaults to current branch");
+        let desc = "rebase top branch onto bottom branch but stop the rebase after the first shared commit";
+        (p_desc, desc, None)
+    } else if cmd_name.contains("check") {
+        let p_desc = Some(repo_file_desc);
+        let desc = "check if there are changes ready to be pushed or pulled";
+        (p_desc, desc, None)
+    } else {
+        (None, "", None)
+    };
+
+    println!("{}\n", desc);
+
+    println!("USAGE:\n{}{} {}\n",
+        space,
+        cmd_name,
+        usage_line
+    );
+
+    let sub_usage = mgt_opts.as_ref()
+        .format_sub_usage_string_with_filters(
+            Some(100),
+            Some(4),
+            Some(4),
+            filters,
+        );
+    println!("{}", sub_usage);
+
+    if let Some(ref p) = positional_desc {
+        println!("POSITIONAL:");
+        println!("{}", p)
+    }
+}
+
+pub fn print_program_usage<A: AsRef<impl Options>>(mgt_opts: A) {
     let version_str = get_version_str();
     let author = env!("CARGO_PKG_AUTHORS");
     let about = env!("CARGO_PKG_DESCRIPTION");
     let app_name = env!("CARGO_PKG_NAME");
-    let space = "  ";
-
-    let mut command = mgt_opts.as_ref() as &dyn Options;
-    let mut command_str = String::new();
-
-    loop {
-        if let Some(new_command) = command.command() {
-            command = new_command;
-
-            if let Some(name) = new_command.command_name() {
-                command_str.push(' ');
-                command_str.push_str(name);
-            }
-        } else {
-            break;
-        }
-    }
+    let space = "    ";
 
     println!("{} {}\n{}\n{}\n\nUSAGE:\n{}{} [SUBCOMMAND] [OPTIONS]\n",
         app_name, version_str,
@@ -166,10 +229,10 @@ pub fn print_usage<A: AsRef<impl Options>>(mgt_opts: A) {
         space,
         app_name
     );
-    println!("{}", mgt_opts.as_ref().self_usage());
+    let sub_usage = mgt_opts.as_ref().format_sub_usage_string_sensible();
+    println!("{}", sub_usage);
 
     if let Some(cmds) = mgt_opts.as_ref().self_command_list() {
-        println!();
         println!("Available commands:");
         println!("{}", cmds);
     }
@@ -250,7 +313,7 @@ pub fn get_cli_input() -> Mgt {
         Err(e) => {
             println!("Failed to parse cli input: {}\n", e);
             let dummy_mgt = Mgt::new();
-            print_usage(dummy_mgt);
+            print_program_usage(dummy_mgt);
             std::process::exit(2);
         }
         Ok(m) => m,
@@ -262,7 +325,7 @@ pub fn get_cli_input() -> Mgt {
     }
 
     if cli.command.is_none() {
-        print_usage(&cli);
+        print_program_usage(&cli);
         std::process::exit(0);
     }
 
@@ -274,13 +337,13 @@ pub fn get_cli_input() -> Mgt {
             MgtSubcommands::Help(_) => false,
             MgtSubcommands::Check(c) => {
                 if cli.help || c.help {
-                    print_usage(&c);
+                    print_usage(&c, Some("mgt check"), None);
                     true
                 } else { false }
             }
             MgtSubcommands::Topbase(t) => {
                 if cli.help || t.help {
-                    print_usage(&t);
+                    print_usage(&t, Some("mgt topbase"), Some("[FLAGS] <base> [top]"));
                     true
                 } else { false }
             }
@@ -288,8 +351,15 @@ pub fn get_cli_input() -> Mgt {
             MgtSubcommands::SplitInAs(s) |
             MgtSubcommands::SplitOut(s) |
             MgtSubcommands::SplitOutAs(s) => {
+                let subcommand_name = cli.command_name().unwrap();
+                let usage_line = if subcommand_name == "split-out-as" {
+                    Some("[FLAGS] --as <subdirectory> --output-branch <branch-name>")
+                } else if subcommand_name == "split-in-as" {
+                    Some("[FLAGS] [OPTIONS] <git-repo-uri> --as <subdirectory>")
+                } else { None };
+                let subcommand_name = format!("mgt {}", subcommand_name);
                 if cli.help || s.help {
-                    print_usage(&s);
+                    print_usage(&s, Some(&subcommand_name), usage_line);
                     true
                 } else { false }
             }
@@ -303,7 +373,7 @@ pub fn get_cli_input() -> Mgt {
     // check for global program help
     // vs the above which checked for subcommand help
     if cli.help {
-        print_usage(&cli);
+        print_program_usage(&cli);
         std::process::exit(0);
     }
 
@@ -320,7 +390,7 @@ pub fn validate_input_and_run(mgt_opts: Mgt) {
         Some(mut command) => match command {
             MgtSubcommands::Help(_) => {
                 // TODO: print help for the specific command
-                print_usage(&mgt_opts);
+                print_program_usage(&mgt_opts);
                 std::process::exit(0);
             },
             MgtSubcommands::Check(mut cmd) => {
