@@ -146,23 +146,38 @@ pub fn print_usage<A: AsRef<impl Options>>(
     let cmd_name = subcommand_name.unwrap_or("mgt");
     let usage_line = usage_line.unwrap_or("[FLAGS] [OPTIONS] <repo_file>");
 
+    // TODO: modify gumdrop
+    // to be able to get these descriptions without
+    // hardcoding them twice!
+    let (desc, filters) = if cmd_name.contains("split-out-as") {
+        let desc = "create a new branch with this repository's history rewritten according to the --as <subdirectory>";
+        (desc, Some(vec!["input-branch", "gen-repo-file", "num-commits", "--rebase", "--topbase"]))
+    } else if cmd_name.contains("split-out") {
+        let desc = "create a new branch with this repository's history rewritten according to the repo file rules";
+        (desc, Some(vec!["input-branch", "gen-repo-file", "--as", "num-commits"]))
+    } else if cmd_name.contains("split-in-as") {
+        let desc = "fetch and rewrite a remote repository's history onto a new branch and into the --as <subdirectory>";
+        (desc, Some(vec!["input-branch"]))
+    } else if cmd_name.contains("split-in") {
+        let desc = "fetch and rewrite a remote repository's history onto a new branch according to the repo file rules";
+        (desc, Some(vec!["gen-repo-file", "--as"]))
+    } else if cmd_name.contains("topbase") {
+        let desc = "rebase top branch onto bottom branch but stop the rebase after the first shared commit";
+        (desc, None)
+    } else if cmd_name.contains("check") {
+        let desc = "check if there are changes ready to be pushed or pulled";
+        (desc, None)
+    } else {
+        ("", None)
+    };
+
+    println!("{}\n", desc);
+
     println!("USAGE:\n{}{} {}\n",
         space,
         cmd_name,
         usage_line
     );
-
-    let filters = if cmd_name.contains("split-out-as") {
-        Some(vec!["input-branch", "gen-repo-file", "num-commits", "--rebase", "--topbase"])
-    } else if cmd_name.contains("split-out") {
-        Some(vec!["input-branch", "gen-repo-file", "--as", "num-commits"])
-    } else if cmd_name.contains("split-in-as") {
-        Some(vec!["input-branch"])
-    } else if cmd_name.contains("split-in") {
-        Some(vec!["gen-repo-file", "--as"])
-    } else {
-        None
-    };
 
     let sub_usage = mgt_opts.as_ref()
         .format_sub_usage_string_with_filters(
