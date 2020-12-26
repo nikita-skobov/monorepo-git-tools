@@ -47,7 +47,7 @@ Next we will run `mgt split-in` to take the remote repository
 defined in the above file, fetch it, and rewrite the paths to match our rules according to the `[include_as]` section:
 
 ```sh
-mgt split-in meta.rf -r --num-commits 1
+mgt split-in meta.rf --rebase --num-commits 1
 # output:
 Pulling from https://github.com/nikita-skobov/monorepo-git-tools
 Running filter commands on temporary branch: monorepo-git-tools
@@ -55,7 +55,7 @@ Rebasing
 Success!
 ```
 
-We also passed 2 arguments: `-r` (a short flag for rebase) will automatically rebase the temporary created branch onto our current branch for us, and `--num-commits 1` will only fetch 1 commit from the latest HEAD of the remote repository.
+We also passed 2 arguments: `--rebase` will automatically rebase the temporary created branch onto our current branch for us, and `--num-commits 1` will only fetch 1 commit from the latest HEAD of the remote repository.
 
 After running the above, we will be in a branch called `monorepo-git-tools` that was created for us, and then rebased such that it can now be fast forwared into master. Let's now merge into master, and then delete the temporary branch:
 

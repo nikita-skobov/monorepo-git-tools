@@ -1,4 +1,3 @@
-// use std::str::FromStr;
 use gumdrop::Options;
 
 use die::die;
@@ -8,29 +7,6 @@ use super::split_out::run_split_out_as;
 use super::split_in::run_split_in;
 use super::split_in::run_split_in_as;
 use super::topbase::run_topbase;
-
-// TODO: implement way to use
-// --rebase
-// --rebase branchname
-// --rebase --other-args
-// ...
-// #[derive(Debug)]
-// pub struct OptionalOption<T: From<String>> {
-//     val: Option<T>,
-// }
-
-// impl<T: From<String>> FromStr for OptionalOption<T> {
-//     type Err = String;
-
-//     fn from_str(s: &str) -> Result<Self, Self::Err> {
-//         let s_string = s.to_string();
-//         let o = OptionalOption {
-//             val: Some(s_string.into())
-//         };
-
-//         Ok(o)
-//     }
-// }
 
 #[derive(Debug, Options)]
 pub struct MgtCommandCheck {
@@ -87,14 +63,10 @@ pub struct MgtCommandSplit {
     #[options(short = "o", help = "name of branch that will be created with new split history")]
     pub output_branch: Option<String>,
 
-    #[options(no_long, short = "r", help = "after generating a branch with rewritten history, rebase that branch such that it can be fast forwarded back into the comparison branch. for split-in that is the branch you started on. For split-out, that is the remote branch")]
-    pub rebase_flag: bool,
-    #[options(meta = "BRANCH-NAME", help = "like the -r flag, but you can specify the name of the branch you want to use as the comparison branch instead of using the default")]
+    #[options(optional, short = "r", help = "after generating a branch with rewritten history, rebase that branch such that it can be fast forwarded back into the comparison branch. for split-in that is the branch you started on. For split-out, that is the remote branch. Optionally provide a '--rebase BRANCH-NAME' to rebase onto that branch instead of the default.")]
     pub rebase: Option<String>,
 
-    #[options(no_long, short = "t", help = "like rebase, but it finds a fork point by stopping at the first commit that two branches have in common. This is useful as an 'update' mechanism.")]
-    pub topbase_flag: bool,
-    #[options(meta = "BRANCH-NAME", help = "like the -t flag, but you can specify the name of the remote branch that will be used instead of what is defined in your repo file")]
+    #[options(optional, short = "t", help = "like --rebase, but it finds a fork point by stopping at the first commit that two branches have in common. This is useful as an 'update' mechanism. Optionally provide a '--topbase BRANCH-NAME' to topbase onto that branch instead of the default.")]
     pub topbase: Option<String>,
 
     #[options(long = "as", help = "path relative to root of the local repository that will contain the entire repository being split")]
@@ -279,34 +251,6 @@ impl Mgt {
     }
 }
 
-// TODO: use optional args
-// pub fn get_cli_input_with_retries(args: Option<Vec<String>>) -> Result<Mgt, gumdrop::Error> {
-//     let mut args = match args {
-//         Some(v) => v,
-//         None => ::std::env::args().collect::<Vec<_>>(),
-//     };
-
-//     match <Mgt as Options>::parse_args_default(&args[1..]) {
-//         Err(e) => {
-//             // if its a missing argument, see if its something we can recover
-//             // by checking if it can be an optional option
-//             if let gumdrop::ErrorKind::MissingArgument(ref s) = e.kind {
-//                 match s.as_str() {
-//                     "-r" | "--rebase" => {
-//                         let arg_pos = args.iter().position(|a| a == s).unwrap();
-//                         args.insert(arg_pos + 1, "".into());
-//                         get_cli_input_with_retries(Some(args))
-//                     },
-//                     _ => Err(e),
-//                 }
-//             } else {
-//                 Err(e)
-//             }
-//         }
-//         Ok(m) => Ok(m),
-//     }
-// }
-
 pub fn get_cli_input() -> Mgt {
     let args = ::std::env::args().collect::<Vec<_>>();
     let cli = match <Mgt as Options>::parse_args_default(&args[1..]) {
@@ -410,12 +354,6 @@ pub fn validate_input_and_run(mgt_opts: Mgt) {
                 cmd.dry_run = mgt_opts.dry_run || cmd.dry_run;
                 cmd.direction = Some(Direction::In);
 
-                if cmd.topbase_flag && cmd.topbase.is_none() {
-                    cmd.topbase = Some("".into());
-                }
-                if cmd.rebase_flag && cmd.rebase.is_none() {
-                    cmd.rebase = Some("".into())
-                }
                 if cmd.rebase.is_some() && cmd.topbase.is_some() {
                     die!("Cannot use both --topbase and --rebase");
                 }
@@ -427,12 +365,6 @@ pub fn validate_input_and_run(mgt_opts: Mgt) {
                 cmd.dry_run = mgt_opts.dry_run || cmd.dry_run;
                 cmd.direction = Some(Direction::In);
 
-                if cmd.topbase_flag && cmd.topbase.is_none() {
-                    cmd.topbase = Some("".into());
-                }
-                if cmd.rebase_flag && cmd.rebase.is_none() {
-                    cmd.rebase = Some("".into())
-                }
                 if cmd.rebase.is_some() && cmd.topbase.is_some() {
                     die!("Cannot use both --topbase and --rebase");
                 }
@@ -445,12 +377,6 @@ pub fn validate_input_and_run(mgt_opts: Mgt) {
                 cmd.dry_run = mgt_opts.dry_run || cmd.dry_run;
                 cmd.direction = Some(Direction::Out);
 
-                if cmd.topbase_flag && cmd.topbase.is_none() {
-                    cmd.topbase = Some("".into());
-                }
-                if cmd.rebase_flag && cmd.rebase.is_none() {
-                    cmd.rebase = Some("".into())
-                }
                 if cmd.rebase.is_some() && cmd.topbase.is_some() {
                     die!("Cannot use both --topbase and --rebase");
                 }

@@ -831,7 +831,7 @@ function teardown() {
     echo "test" > lib/libfile1.txt && git add lib/libfile1.txt && git commit -m "libfile1mod"
     cd "$curr_dir"
 
-    run $PROGRAM_PATH split-out repo_file.sh --topbase --verbose
+    run $PROGRAM_PATH split-out repo_file.sh -t --verbose
     echo "$output"
     echo "$(git status)"
     [[ $output != *"Success"* ]]
@@ -858,7 +858,7 @@ function teardown() {
     echo "conffflict" > lib/libfile1.txt && git add lib/libfile1.txt && git commit -m "where it conflicts"
     cd "$curr_dir"
 
-    run $PROGRAM_PATH split-out repo_file.sh --topbase --verbose
+    run $PROGRAM_PATH split-out repo_file.sh -t --verbose
     echo "$output"
     echo "$(git status)"
     [[ $output != *"Success"* ]]
@@ -932,7 +932,7 @@ function teardown() {
     echo "conffflict" > lib/libfile1.txt && git add lib/libfile1.txt && git commit -m "where it conflicts"
     cd "$curr_dir"
 
-    run $PROGRAM_PATH split-out repo_file.sh --rebase --verbose
+    run $PROGRAM_PATH split-out repo_file.sh -r --verbose
     echo "$output"
     echo "$(git status)"
     [[ $output != *"Success"* ]]
