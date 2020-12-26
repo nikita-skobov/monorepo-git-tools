@@ -48,7 +48,7 @@ dependencies = [
 [[package]]
 name = "gumdrop"
 version = "0.8.0"
-source = "git+https://github.com/nikita-skobov/gumdrop#5850909bddafc64d2372fffad1a7a5c768c153e9"
+source = "git+https://github.com/nikita-skobov/gumdrop?rev=f29c1f9839329cf5998257e097fc18930255627e#f29c1f9839329cf5998257e097fc18930255627e"
 dependencies = [
  "gumdrop_derive",
 ]
@@ -56,7 +56,7 @@ dependencies = [
 [[package]]
 name = "gumdrop_derive"
 version = "0.8.0"
-source = "git+https://github.com/nikita-skobov/gumdrop#5850909bddafc64d2372fffad1a7a5c768c153e9"
+source = "git+https://github.com/nikita-skobov/gumdrop?rev=f29c1f9839329cf5998257e097fc18930255627e#f29c1f9839329cf5998257e097fc18930255627e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -128,7 +128,7 @@ checksum = "3728d817d99e5ac407411fa471ff9800a778d88a24685968b36824eaf4bee400"
 
 [[package]]
 name = "mgt"
-version = "4.0.0"
+version = "4.1.0"
 dependencies = [
  "die",
  "git-url-parse",
