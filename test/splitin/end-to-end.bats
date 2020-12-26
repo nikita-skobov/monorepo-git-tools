@@ -589,7 +589,7 @@ function teardown() {
     # this is the conflict:
     echo "conflicthere" > lib/abc.txt && git add lib/abc.txt && git commit -m "conflict"
 
-    run $PROGRAM_PATH split-in repo_file.sh --rebase --verbose
+    run $PROGRAM_PATH split-in repo_file.sh -r --verbose
     echo "$output"
     echo "$(git status)"
     [[ $status != "0" ]]
@@ -621,7 +621,7 @@ function teardown() {
     # this is the conflict:
     echo "conflicthere" > lib/abc.txt && git add lib/abc.txt && git commit -m "conflict"
 
-    run $PROGRAM_PATH split-in repo_file.sh --topbase --verbose
+    run $PROGRAM_PATH split-in repo_file.sh -t --verbose
     echo "$output"
     echo "$(git status)"
     [[ $status != "0" ]]
@@ -704,7 +704,7 @@ function teardown() {
     mkdir -p lib
     echo "conflict" > lib/libfile1.txt && git add lib/libfile1.txt && git commit -m "conflict"
 
-    run $PROGRAM_PATH split-in repo_file.sh --topbase --verbose
+    run $PROGRAM_PATH split-in repo_file.sh -t --verbose
     echo "$output"
     echo "$(git status)"
     [[ $status != "0" ]]
