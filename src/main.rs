@@ -5,7 +5,7 @@ mod split_out;
 mod split_in;
 mod topbase;
 mod check;
-mod exec_helpers;
+use exechelper as exec_helpers;
 mod git_helpers3;
 mod cli;
 mod core;
