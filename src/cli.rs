@@ -19,6 +19,7 @@ pub struct MgtCommandCheck {
     pub recursive: bool,
     #[options(help = "check if the remote has commits not present in this local branch. This is the default")]
     pub remote: bool,
+    #[options(short = "h")]
     pub help: bool,
 
     // options
@@ -43,6 +44,7 @@ pub struct MgtCommandTopbase {
     pub dry_run: bool,
     #[options(help = "Prints verbose information")]
     pub verbose: bool,
+    #[options(short = "h")]
     pub help: bool,
 }
 
@@ -54,6 +56,7 @@ pub struct MgtCommandSplit {
     pub verbose: bool,
     #[options(help = "Print out the steps taken, but don't actually run or change anything.")]
     pub dry_run: bool,
+    #[options(short = "h")]
     pub help: bool,
 
     #[options(help = "split in from a local branch in this repository")]

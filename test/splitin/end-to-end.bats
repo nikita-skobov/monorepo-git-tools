@@ -863,3 +863,29 @@ function teardown() {
     [[ ! -d "dum'lib/" ]]
     [[ -f "spaghetti/lib.txt" ]]
 }
+
+
+@test 'works when folder is same name as repo' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    mkdir -p test_remote_repo2/
+    echo "a" > test_remote_repo2/a.txt
+    git add test_remote_repo2 && git commit -m "same name as repo"
+
+    cd "$curr_dir"
+    repo_file_contents="
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+
+    include = [\"test_remote_repo2/\"]
+    "
+
+    echo "$repo_file_contents" > repo_file.sh
+
+    [[ ! -d test_remote_repo2/ ]]
+    run $PROGRAM_PATH split-in repo_file.sh --verbose
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ -d test_remote_repo2/ ]]
+}
