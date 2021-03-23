@@ -355,9 +355,10 @@ pub fn filter_from_arg_str(
 
     if let Some(ref s) = arg_str {
         let arg_str_opt = s.clone();
+        let unambiguous_output_branch = format!("refs/heads/{}", output_branch_name);
         let arg_vec = generate_filter_arg_vec(
             &arg_str_opt,
-            output_branch_name.as_str(),
+            unambiguous_output_branch.as_str(),
         );
 
         run_filter(arg_vec, verbose_log, dry_run, verbose)
