@@ -31,9 +31,11 @@ function teardown() {
         echo "Test done, removing temporary directory"
         cd $BATS_TMPDIR
         cd ..
-        # if [[ -d gfr-compat ]]; then
-        #     rm -rf gfr-compat/
-        # fi
+        # comment this out if you want to run the test just
+        # once and then examine the files produced.
+        if [[ -d gfr-compat ]]; then
+            rm -rf gfr-compat/
+        fi
     fi
 }
 

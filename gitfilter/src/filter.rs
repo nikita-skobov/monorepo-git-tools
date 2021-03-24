@@ -1,5 +1,6 @@
 use super::export_parser;
 use export_parser::{CommitObject, StructuredExportObject, StructuredCommit};
+use export_parser::FileOpsOwned;
 use std::io::Write;
 use std::io;
 
@@ -36,36 +37,129 @@ impl<T: Write> From<T> for FilterOptions<T> {
     }
 }
 
-pub fn perform_filer(
-    obj: &mut StructuredExportObject,
-    commit: &mut StructuredCommit,
+pub fn should_use_file_modify(
+    mode: &mut String,
+    dataref: &mut String,
+    path: &mut String,
     filter_rules: &FilterRules,
 ) -> bool {
-    let mut should_use = true;
+    let mut should_keep = false;
     for filter_rule in filter_rules {
         match filter_rule {
-            FilterRulePathExclude(_) => {}
             FilterRulePathInclude(include) => {
-                // we only include this path
+                if path.starts_with(include) {
+                    should_keep = true;
+                }
+            }
+            FilterRulePathExclude(exclude) => {
+                if path.starts_with(exclude) {
+                    should_keep = false;
+                }
             }
         }
     }
-    should_use
+
+    should_keep
+}
+
+pub fn should_use_file_delete(
+    path: &mut String,
+    filter_rules: &FilterRules,
+) -> bool {
+    let mut should_keep = false;
+    for filter_rule in filter_rules {
+        match filter_rule {
+            FilterRulePathInclude(include) => {
+                if path.starts_with(include) {
+                    should_keep = true;
+                }
+            }
+            FilterRulePathExclude(exclude) => {
+                if path.starts_with(exclude) {
+                    should_keep = false;
+                }
+            }
+        }
+    }
+
+    should_keep
+}
+
+pub fn perform_filter(
+    have_used_a_commit: bool,
+    commit: &mut StructuredCommit,
+    filter_rules: &FilterRules,
+) -> bool {
+    let mut newfileops = vec![];
+    for op in commit.fileops.drain(..) {
+        match op {
+            // TODO: not sure if need to handle these?
+            // by not doing anything here, we are explicitly
+            // removing them, but file copy
+            // is a hard one, not sure what to do for that one
+            // is removing that ok?
+            FileOpsOwned::FileCopy(_, _) => {}
+            FileOpsOwned::FileDeleteAll => {}
+            FileOpsOwned::NoteModify(_, _) => {}
+
+            // renames are tricky too, but I think
+            // we want to drop them unless
+            // we are renaming something WITHIN the
+            // include path. ie: both src and dest
+            // must contain the path we want to include.
+            // otherwise, if we want to include B, and
+            // the rename is from A -> B, then why would we include
+            // something about A here since we are filtering it out?
+            FileOpsOwned::FileRename(src, dest) => {
+                // TODO:
+                // if src.starts_with(include_path) && dest.starts_with(include_path) {
+                //     newfileops.push(FileOpsOwned::FileRename(src, dest));
+                // }
+            }
+
+            // easiest cases. if it exists, keep it
+            FileOpsOwned::FileModify(mut mode, mut dataref, mut path) => {
+                if should_use_file_modify(&mut mode, &mut dataref, &mut path, filter_rules) {
+                    newfileops.push(FileOpsOwned::FileModify(mode, dataref, path));
+                }
+            }
+            FileOpsOwned::FileDelete(mut path) => {
+                if should_use_file_delete(&mut path, filter_rules) {
+                    newfileops.push(FileOpsOwned::FileDelete(path));
+                }
+            }
+        }
+    }
+    if newfileops.is_empty() {
+        return false;
+    }
+    commit.fileops = newfileops;
+    // if we havent used a commit yet, but this is our first,
+    // then we want this to not have a from line:
+    if !have_used_a_commit {
+        commit.from = None;
+    }
+    true
 }
 
 pub fn filter_with_rules<T: Write>(
     filter_options: FilterOptions<T>,
     filter_rules: FilterRules,
 ) -> io::Result<()> {
-    eprintln!("Using branch: {:?}", filter_options.branch);
+    eprintln!("Usingsadsa branch: {:?}", filter_options.branch);
+    let mut have_used_a_commit = false;
     let cb = |obj: &mut StructuredExportObject| -> bool {
-        true
-        // TODO:
-        // match &mut obj.object_type {
-        //     export_parser::StructuredObjectType::Blob(_) => true,
-        //     export_parser::StructuredObjectType::Commit(ref mut c) => perform_filer(
-        //         obj, &mut c, &filter_rules)
-        // }
+        // TODO: filter on blobs as well:
+        match &mut obj.object_type {
+            export_parser::StructuredObjectType::Blob(_) => true,
+            export_parser::StructuredObjectType::Commit(ref mut c) => {
+                let should_use = perform_filter(have_used_a_commit, c, &filter_rules);
+                if !have_used_a_commit && should_use {
+                    have_used_a_commit = true;
+                }
+                should_use
+            },
+        }
     };
     filter_with_cb(filter_options, cb)
 }

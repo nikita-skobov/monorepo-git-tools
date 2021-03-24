@@ -13,3 +13,7 @@ num_cpus = "1.13.0"
 # rayon = "*"
 regex = "1.4.3"
 once_cell = "*"
+
+[profile.release]
+lto = true
+opt-level = 3
