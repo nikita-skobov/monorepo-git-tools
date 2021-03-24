@@ -719,6 +719,15 @@ data 12"#;
         assert_eq!(captures.get(1).unwrap().as_str(), "");
         assert_eq!(captures.get(2).unwrap().as_str(), "bb@email.com");
         assert_eq!(captures.get(3).unwrap().as_str(), "1548162866 -0800");
+
+        // found this in linux git history
+        // note the ß character here is encoded differently in this string
+        // than it is when we get it from git...
+        let sample3 = "author Albrecht Dreß <albrecht.dress@com.rmk.(none)> 1117828346 +0100";
+        let captures = get_regex_authorline(sample3).unwrap();
+        assert_eq!(captures.get(1).unwrap().as_str(), "Albrecht Dreß");
+        assert_eq!(captures.get(2).unwrap().as_str(), "albrecht.dress@com.rmk.(none)");
+        assert_eq!(captures.get(3).unwrap().as_str(), "1117828346 +0100");
     }
 
     #[test]

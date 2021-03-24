@@ -78,12 +78,7 @@ pub fn parse_git_filter_export_with_callback<O, E>(
                 let num_read = bufreader.read_until('\n' as u8, &mut line_vec)?;
                 if num_read == 0 { break; }
                 line_vec.pop(); // remove trailing slash
-                // at this state, we should be guaranteed that this is valid text data
-                // caveat: one of the lines we will parse here would be like:
-                // commiter <username> <<useremail@email.email>> <timestamp>
-                // could it be possible an 'attacker' could put in a non valid string as
-                // the username or email?
-                let line = unsafe { String::from_utf8_unchecked(line_vec) };
+                let line = String::from_utf8_lossy(&line_vec[..]);
                 if line.starts_with("data ") {
                     let data_size_index = 5; // data + space is 5 chars
                     let data_size = line.get(data_size_index..).unwrap();
