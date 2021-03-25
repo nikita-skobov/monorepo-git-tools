@@ -27,4 +27,8 @@ fi
 echo "GITFILTERCLI: $GITFILTERCLI"
 echo "PATHTOREACTROOT: $PATHTOREACTROOT"
 
+if [[ -f Cargo.toml ]]; then
+    cargo build
+fi
+
 bats "$SCRIPTPATH/"
