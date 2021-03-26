@@ -1,6 +1,7 @@
 use super::export_parser;
 use export_parser::{CommitObject, StructuredExportObject, StructuredCommit};
 use export_parser::FileOpsOwned;
+use super::filter_state::FilterState;
 use std::io::Write;
 use std::io;
 
@@ -11,6 +12,43 @@ pub enum FilterRule {
 pub use FilterRule::*;
 
 pub type FilterRules = Vec<FilterRule>;
+
+/// how to use this filtered commit
+pub enum FilterResponse {
+    /// dont use it, dont output anything, skip it entirely
+    DontUse,
+    /// either use it as is, or if it was already modified
+    /// by the user, then use what the user modified 
+    UseAsIs,
+
+    UseAsReset(FilterAsReset),
+}
+
+pub enum FilterAsReset {
+    /// instead of using this as a commit, use it as a reset
+    /// and provide the ref to reset
+    AsReset(String),
+
+    /// like AsReset, but in addition to the ref to reset, provide
+    /// a from mark to reset from
+    AsResetFrom(String, String),
+}
+
+impl FilterResponse {
+    pub fn is_used(&self) -> bool {
+        match self {
+            FilterResponse::DontUse => false,
+            _ => true,
+        }
+    }
+
+    pub fn is_a_reset(self) -> Option<FilterAsReset> {
+        match self {
+            FilterResponse::UseAsReset(r) => Some(r),
+            _ => None,
+        }
+    }
+}
 
 /// Filter options are
 /// just the initial options passed to initiate
@@ -86,10 +124,10 @@ pub fn should_use_file_delete(
 }
 
 pub fn perform_filter(
-    have_used_a_commit: bool,
+    filter_state: &mut FilterState,
     commit: &mut StructuredCommit,
     filter_rules: &FilterRules,
-) -> bool {
+) -> FilterResponse {
     let mut newfileops = vec![];
     for op in commit.fileops.drain(..) {
         match op {
@@ -130,16 +168,19 @@ pub fn perform_filter(
             }
         }
     }
+    // if we have pruned all of the file operations,
+    // then we dont want to use this object as a commit, but rather
+    // as a reset
     if newfileops.is_empty() {
-        return false;
+        return FilterResponse::DontUse;
     }
     commit.fileops = newfileops;
     // if we havent used a commit yet, but this is our first,
     // then we want this to not have a from line:
-    if !have_used_a_commit {
+    if !filter_state.have_used_a_commit {
         commit.from = None;
     }
-    true
+    FilterResponse::UseAsIs
 }
 
 pub fn filter_with_rules<T: Write>(
@@ -147,18 +188,32 @@ pub fn filter_with_rules<T: Write>(
     filter_rules: FilterRules,
 ) -> io::Result<()> {
     eprintln!("Usingsadsa branch: {:?}", filter_options.branch);
-    let mut have_used_a_commit = false;
+    let mut filter_state = FilterState::default();
     let cb = |obj: &mut StructuredExportObject| -> bool {
         // TODO: filter on blobs as well:
         match &mut obj.object_type {
             export_parser::StructuredObjectType::Blob(_) => true,
             export_parser::StructuredObjectType::Commit(ref mut c) => {
-                let should_use = perform_filter(have_used_a_commit, c, &filter_rules);
-                if !have_used_a_commit && should_use {
-                    have_used_a_commit = true;
+                let resp = perform_filter(&mut filter_state, c, &filter_rules);
+                if !filter_state.have_used_a_commit && resp.is_used() {
+                    filter_state.have_used_a_commit = true;
                 }
-                should_use
+                let is_used = resp.is_used();
+                if let Some(reset) = resp.is_a_reset() {
+                    match reset {
+                        FilterAsReset::AsReset(resetref) => {
+                            obj.has_reset = Some(resetref);
+                        }
+                        FilterAsReset::AsResetFrom(resetref, resetfrom) => {
+                            obj.has_reset = Some(resetref);
+                            obj.has_reset_from = Some(resetfrom);
+                        }
+                    }
+                    obj.object_type = export_parser::StructuredObjectType::NoType;
+                }
+                is_used
             },
+            _ => true,
         }
     };
     filter_with_cb(filter_options, cb)
@@ -207,7 +262,8 @@ mod test {
                     } else {
                         true
                     }
-                }
+                },
+                _ => true,
             }
         }).unwrap();
     }
@@ -224,7 +280,8 @@ mod test {
                 StructuredObjectType::Commit(commit_obj) => {
                     commit_obj.commit_ref = commit_obj.commit_ref.replace("master", "NEWBRANCHNAMEAAAAAAA");
                     true
-                }
+                },
+                _ => true,
             }
         }).unwrap();
 

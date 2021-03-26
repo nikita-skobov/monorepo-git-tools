@@ -85,6 +85,7 @@ pub struct StructuredBlob {
 pub enum StructuredObjectType {
     Blob(StructuredBlob),
     Commit(StructuredCommit),
+    NoType,
 }
 
 impl Default for StructuredObjectType {

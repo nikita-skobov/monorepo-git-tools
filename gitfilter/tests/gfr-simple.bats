@@ -77,28 +77,35 @@ function git_add_all_and_commit() {
     [[ "$(num_commits)" == 2 ]]
 
     git checkout -b filterrepo
-    # run it twice because the first time we just want
-    # to generate the files to examine, and
-    # the second time we actually run the filtering
     git filter-repo --force --refs filterrepo --path a.txt --dry-run
-    git filter-repo --force --refs filterrepo --path a.txt
+    cat .git/filter-repo/fast-export.filtered | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
+    git reset --hard
+
     # shouldnt exist anymore because we didnt include it
     [[ "$(num_commits)" == 1 ]]
     [[ ! -f b.txt ]]
     [[ -f a.txt ]]
+    gfr_hash="$(hash_atop)"
+
 
     # now try doing the same thing but using our new tool:
     git checkout master
     [[ "$(num_commits)" == 2 ]]
+    [[ -f b.txt ]]
     git checkout -b gitfilter
+    [[ -f b.txt ]]
+
     "$GITFILTERCLI" --branch gitfilter --path a.txt > filtered.txt
-    cat filtered.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force --quiet
-    git log --oneline
-    git status
+    cat filtered.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
+    git reset --hard
+    gitfilter_hash="$(hash_atop)"
+
     [[ "$(num_commits)" == 1 ]]
-    ls
     [[ ! -f b.txt ]]
     [[ -f a.txt ]]
-    echo "DO WE GET HERE????"
+
+    # test that our rewrite hash matches their rewrite hash
+    [[ "$gfr_hash" == "$gitfilter_hash" ]]
+
     rm filtered.txt
 }
