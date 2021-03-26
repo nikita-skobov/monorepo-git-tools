@@ -18,10 +18,19 @@ function setup() {
 }
 
 function teardown() {
+    # if the filtered.txt is left over after
+    # the test, output it, so its visible in the error log
+    cd $BATS_TMPDIR
+    if [[ -f filtered.txt ]]; then
+        echo "YOURS: =================="
+        cat filtered.txt
+        echo "THEIRS:=================="
+        # ls -la .git/filter-repo
+        cat .git/filter-repo/fast-export.filtered
+    fi
+    cd ..
     if [[ "$BATS_TEST_NUMBER" == "$LAST_TEST_NUMBER" ]]; then
         echo "Test done, removing temporary directory"
-        cd $BATS_TMPDIR
-        cd ..
         # comment this out if you want to run the test just
         # once and then examine the files produced.
         if [[ -d gfr-compat ]]; then
@@ -68,6 +77,10 @@ function git_add_all_and_commit() {
     [[ "$(num_commits)" == 2 ]]
 
     git checkout -b filterrepo
+    # run it twice because the first time we just want
+    # to generate the files to examine, and
+    # the second time we actually run the filtering
+    git filter-repo --force --refs filterrepo --path a.txt --dry-run
     git filter-repo --force --refs filterrepo --path a.txt
     # shouldnt exist anymore because we didnt include it
     [[ "$(num_commits)" == 1 ]]
@@ -80,7 +93,12 @@ function git_add_all_and_commit() {
     git checkout -b gitfilter
     "$GITFILTERCLI" --branch gitfilter --path a.txt > filtered.txt
     cat filtered.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force --quiet
+    git log --oneline
+    git status
     [[ "$(num_commits)" == 1 ]]
+    ls
     [[ ! -f b.txt ]]
     [[ -f a.txt ]]
+    echo "DO WE GET HERE????"
+    rm filtered.txt
 }
