@@ -128,6 +128,22 @@ pub fn perform_filter(
     commit: &mut StructuredCommit,
     filter_rules: &FilterRules,
 ) -> FilterResponse {
+    // we first assume that this commit will be filtered out
+    // and in that case, we say that its mark should map to its parent
+    // and only if we decide that we keep it after the fileops loop
+    // only then will we actually say that it maps to itself.
+    match (&commit.from, &commit.mark) {
+        (Some(from), Some(mark)) => {
+            eprintln!("Saying {} -> {}", mark, from);
+            filter_state.mark_map.insert(mark.clone(), from.clone());
+        },
+        (None, Some(mark)) => {
+            eprintln!("Saying {} -> {}", mark, mark);
+            filter_state.mark_map.insert(mark.clone(), mark.clone());
+        }
+        _ => {},
+    }
+    // filter_state.mark_map.insert(commit., v)
     let mut newfileops = vec![];
     for op in commit.fileops.drain(..) {
         match op {
@@ -174,6 +190,37 @@ pub fn perform_filter(
     if newfileops.is_empty() {
         return FilterResponse::DontUse;
     }
+    // at this point, we know that we will use this commit, so
+    // it should map to itself. ie: for future commits when they say
+    // from :X
+    // if this commit is X, we want it to say from :X, and not
+    // from :Parent_of_X
+    match &commit.mark {
+        Some(mark) => {
+            eprintln!("Saying {} -> {}", mark, mark);
+            filter_state.mark_map.insert(mark.clone(), mark.clone());
+        }
+        _ => {},
+    }
+
+    // replace THIS from :Z to find whatever Z points to.
+    // as mentioned above, if Z was filtered out, we have a
+    // filter_state.mark_map that contains some parent of Z
+    if let Some(ref mut from) = commit.from {
+        match filter_state.mark_map.get(from) {
+            Some(mapto) => {
+                *from = mapto.clone();
+            }
+            None => {
+                let panic_str = format!(
+                    "Found a commit that we dont know in the map!\nWe are {:?} -> from {}. failed to find the from",
+                    commit.mark, from
+                );
+                panic!(panic_str);
+            }
+        }
+    }
+
     commit.fileops = newfileops;
     // if we havent used a commit yet, but this is our first,
     // then we want this to not have a from line:
