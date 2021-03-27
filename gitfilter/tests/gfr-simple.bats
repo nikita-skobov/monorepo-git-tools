@@ -167,3 +167,52 @@ function git_add_all_and_commit() {
     git checkout master
     git branch -D gitfilter filterrepo
 }
+
+@test 'merge included when it contains part of the include path' {
+    mkdir -p folder_a
+    make_file folder_a/a.txt
+    git_add_all_and_commit "a"
+    checkout_from="$(hash_atop)"
+    make_file unwanted.txt
+    git_add_all_and_commit "unwanted"
+    git branch tmp1 "$checkout_from"
+    git checkout tmp1
+    echo "a2" >> folder_a/a.txt
+    git_add_all_and_commit "a2"
+    git checkout master
+    git merge --no-ff --commit tmp1
+
+    git log --oneline
+
+    # 3 commits and 1 merge commit
+    [[ "$(num_commits)" == 4 ]]
+
+    git checkout -b filterrepo
+    git filter-repo --force --refs filterrepo --path folder_a/ --dry-run
+    cat .git/filter-repo/fast-export.filtered | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
+    git reset --hard
+
+    git log --oneline
+
+    # it should include the merge commit
+    # because part of what was merged included folder_a/
+    [[ "$(num_commits)" == 3 ]]
+    [[ -d folder_a/ ]]
+    [[ -f folder_a/a.txt ]]
+    [[ ! -f unwanted.txt ]]
+    gfr_hash="$(hash_atop)"
+
+    # now we test our version
+    git checkout master
+    [[ "$(num_commits)" == 4 ]]
+    git checkout -b gitfilter
+
+    "$GITFILTERCLI" --branch gitfilter --path folder_a/ > filtered.txt
+    cat filtered.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
+    git reset --hard
+    [[ "$(num_commits)" == 3 ]]
+    [[ -d folder_a/ ]]
+    [[ -f folder_a/a.txt ]]
+    [[ ! -f unwanted.txt ]]
+    gfr_hash="$(hash_atop)"
+}
