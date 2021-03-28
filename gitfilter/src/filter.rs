@@ -128,22 +128,6 @@ pub fn perform_filter(
     commit: &mut StructuredCommit,
     filter_rules: &FilterRules,
 ) -> FilterResponse {
-    // we first assume that this commit will be filtered out
-    // and in that case, we say that its mark should map to its parent
-    // and only if we decide that we keep it after the fileops loop
-    // only then will we actually say that it maps to itself.
-    match (&commit.from, &commit.mark) {
-        (Some(from), Some(mark)) => {
-            eprintln!("Saying {} -> {}", mark, from);
-            filter_state.mark_map.insert(mark.clone(), from.clone());
-        },
-        (None, Some(mark)) => {
-            eprintln!("Saying {} -> {}", mark, mark);
-            filter_state.mark_map.insert(mark.clone(), mark.clone());
-        }
-        _ => {},
-    }
-    // filter_state.mark_map.insert(commit., v)
     let mut newfileops = vec![];
     for op in commit.fileops.drain(..) {
         match op {
@@ -186,10 +170,23 @@ pub fn perform_filter(
     }
     // if we have pruned all of the file operations,
     // then we dont want to use this object as a commit, but rather
-    // as a reset
+    // as a reset. Also, make sure to update the mark map with our parent
+    // so that if a future commit tries to do:
+    // from :THIS
+    // then they will instead do:
+    // from :THIS_PARENT
     if newfileops.is_empty() {
+        match (&commit.from, &commit.mark) {
+            (Some(from), Some(mark)) => {
+                eprintln!("Saying {} -> {}", mark, from);
+                filter_state.mark_map.insert(mark.clone(), from.clone());
+            },
+            _ => {},
+        }
         return FilterResponse::DontUse;
     }
+    commit.fileops = newfileops;
+
     // at this point, we know that we will use this commit, so
     // it should map to itself. ie: for future commits when they say
     // from :X
@@ -202,7 +199,11 @@ pub fn perform_filter(
         }
         _ => {},
     }
-
+    // if we havent used a commit yet, but this is our first,
+    // then we want this to not have a from line:
+    if !filter_state.have_used_a_commit {
+        commit.from = None;
+    }
     // replace THIS from :Z to find whatever Z points to.
     // as mentioned above, if Z was filtered out, we have a
     // filter_state.mark_map that contains some parent of Z
@@ -221,12 +222,6 @@ pub fn perform_filter(
         }
     }
 
-    commit.fileops = newfileops;
-    // if we havent used a commit yet, but this is our first,
-    // then we want this to not have a from line:
-    if !filter_state.have_used_a_commit {
-        commit.from = None;
-    }
     FilterResponse::UseAsIs
 }
 
