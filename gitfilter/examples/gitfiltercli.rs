@@ -20,8 +20,11 @@ pub struct Filter {
     #[options(help = "Name of branch to filter from")]
     pub branch: Option<String>,
 
-    #[options(help = "path to filter", required)]
-    pub path: String,
+    #[options(help = "path to filter")]
+    pub path: Option<String>,
+
+    #[options(help = "path to exclude filter")]
+    pub exclude_path: Option<String>,
 }
 
 
@@ -59,8 +62,18 @@ fn main() {
         branch: filter.branch,
         with_blobs: filter.with_data,
     };
-    let pathrule = FilterRulePathInclude(filter.path);
-    let v = vec![pathrule];
+    let mut filter_rules = vec![];
 
-    let _ = filter_with_rules(filter_opts, v);
+    // include has precedence over exclude
+    if let Some(filter_include) = filter.path {
+        filter_rules.push(FilterRulePathInclude(filter_include));
+    }
+    if let Some(filter_exclude) = filter.exclude_path {
+        filter_rules.push(FilterRulePathExclude(filter_exclude));
+    }
+    if filter_rules.len() == 0 {
+        panic!("Must provide either a filter include or an exclude");
+    }
+
+    let _ = filter_with_rules(filter_opts, filter_rules);
 }

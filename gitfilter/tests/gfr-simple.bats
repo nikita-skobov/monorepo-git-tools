@@ -217,6 +217,10 @@ function git_add_all_and_commit() {
     [[ -f folder_a/a.txt ]]
     [[ ! -f unwanted.txt ]]
     gfr_hash="$(hash_atop)"
+
+    rm filtered.txt
+    git checkout master
+    git branch -D gitfilter filterrepo
 }
 
 @test 'merge NOT included when it DOESNT contain part of the include path' {
@@ -272,4 +276,62 @@ function git_add_all_and_commit() {
 
     # test that our rewrite hash matches their rewrite hash
     [[ "$gfr_hash" == "$gitfilter_hash" ]]
+
+    rm filtered.txt
+    git checkout master
+    git branch -D gitfilter filterrepo
+}
+
+@test 'simple exlcude works' {
+    mkdir -p folder_a
+    mkdir -p folder_b
+    make_file folder_a/a.txt
+    git_add_all_and_commit "a"
+    make_file folder_b/b.txt
+    git_add_all_and_commit "b"
+    echo "a2" >> folder_a/a.txt
+    git_add_all_and_commit "a2"
+    echo "a3" >> folder_a/a.txt
+    git_add_all_and_commit "a3"
+    echo "b2" >> folder_b/b.txt
+    git_add_all_and_commit "b2"
+
+    [[ "$(num_commits)" == 5 ]]
+
+    git checkout -b filterrepo
+    git filter-repo --force --refs filterrepo --invert-paths --path folder_a/ --dry-run
+    cat .git/filter-repo/fast-export.filtered | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
+    git reset --hard
+
+    # shouldnt exist anymore because we excluded it
+    [[ "$(num_commits)" == 2 ]]
+    [[ ! -d folder_a/ ]]
+    [[ -d folder_b/ ]]
+    [[ ! -f folder_a/a.txt ]]
+    [[ -f folder_b/b.txt ]]
+    gfr_hash="$(hash_atop)"
+
+    # now try doing the same thing but using our new tool:
+    git checkout master
+    [[ "$(num_commits)" == 5 ]]
+    git checkout -b gitfilter
+
+    "$GITFILTERCLI" --branch gitfilter --exclude-path folder_a/ > filtered.txt
+    cat filtered.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
+    git reset --hard
+    gitfilter_hash="$(hash_atop)"
+
+    git log --oneline
+
+    [[ "$(num_commits)" == 2 ]]
+    [[ ! -d folder_a/ ]]
+    [[ -d folder_b/ ]]
+    [[ ! -f folder_a/a.txt ]]
+    [[ -f folder_b/b.txt ]]
+    # test that our rewrite hash matches their rewrite hash
+    [[ "$gfr_hash" == "$gitfilter_hash" ]]
+
+    rm filtered.txt
+    git checkout master
+    git branch -D gitfilter filterrepo
 }
