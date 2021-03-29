@@ -27,9 +27,11 @@ function teardown() {
     if [[ -f filtered.txt ]]; then
         echo "YOURS: =================="
         cat filtered.txt
-        echo "THEIRS:=================="
         # ls -la .git/filter-repo
-        cat .git/filter-repo/fast-export.filtered
+        if [[ -f .git/filter-repo/fast-export.filtered ]]; then
+            echo "THEIRS:=================="
+            cat .git/filter-repo/fast-export.filtered
+        fi
     fi
     cd ..
     # if [[ "$BATS_TEST_NUMBER" == "$LAST_TEST_NUMBER" ]]; then
@@ -215,4 +217,59 @@ function git_add_all_and_commit() {
     [[ -f folder_a/a.txt ]]
     [[ ! -f unwanted.txt ]]
     gfr_hash="$(hash_atop)"
+}
+
+@test 'merge NOT included when it DOESNT contain part of the include path' {
+    mkdir -p folder_a
+    make_file folder_a/a.txt
+    git_add_all_and_commit "a"
+    make_file unwanted.txt
+    git_add_all_and_commit "unwanted"
+    git checkout -b tmp1
+    echo "unwanted2" >> unwanted.txt
+    git_add_all_and_commit "unwanted2"
+    git checkout master
+    echo "a2" >> folder_a/a.txt
+    git_add_all_and_commit "a2"
+    git merge --no-ff --commit tmp1
+
+    git log --oneline
+
+    # 4 commits and 1 merge commit
+    [[ "$(num_commits)" == 5 ]]
+
+    git checkout -b filterrepo
+    # wed like to do a dry run here so we can examine
+    # the filtered log, but git filter-repo does more than just use the
+    # filtered output piped into git fast-import. This is one of
+    # those cases where it does some extra stuff which is hard to emulate
+    # in a script. so for this test, we just run the command end to end:
+    git filter-repo --force --refs filterrepo --path folder_a/
+
+    git log --oneline
+    git show HEAD
+
+    # should not include the merge commit
+    [[ "$(num_commits)" == 2 ]]
+    [[ -d folder_a/ ]]
+    [[ -f folder_a/a.txt ]]
+    [[ ! -f unwanted.txt ]]
+    gfr_hash="$(hash_atop)"
+
+    # now we test our version
+    git checkout master
+    [[ "$(num_commits)" == 5 ]]
+    git checkout -b gitfilter
+
+    "$GITFILTERCLI" --branch gitfilter --path folder_a/ > filtered.txt
+    cat filtered.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
+    git reset --hard
+    [[ "$(num_commits)" == 2 ]]
+    [[ -d folder_a/ ]]
+    [[ -f folder_a/a.txt ]]
+    [[ ! -f unwanted.txt ]]
+    gitfilter_hash="$(hash_atop)"
+
+    # test that our rewrite hash matches their rewrite hash
+    [[ "$gfr_hash" == "$gitfilter_hash" ]]
 }
