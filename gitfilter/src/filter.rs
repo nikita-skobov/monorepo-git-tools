@@ -178,9 +178,21 @@ pub fn perform_filter(
     if newfileops.is_empty() {
         match (&commit.from, &commit.mark) {
             (Some(from), Some(mark)) => {
-                eprintln!("Saying {} -> {}", mark, from);
-                filter_state.mark_map.insert(mark.clone(), from.clone());
+                match filter_state.mark_map.get(from) {
+                    Some(transitive_parent) => {
+                        // eprintln!("A {} -> {}", mark, transitive_parent);
+                        filter_state.mark_map.insert(mark.clone(), transitive_parent.clone());
+                    }
+                    None => {
+                        // eprintln!("B {} -> {}", mark, from);
+                        filter_state.mark_map.insert(mark.clone(), from.clone());
+                    }
+                }
             },
+            (None, Some(mark)) => {
+                // eprintln!("D {:?} -> {:?}", commit.mark, commit.from);
+                filter_state.mark_map.insert(mark.clone(), "".into());
+            }, // handle this!
             _ => {},
         }
         return FilterResponse::DontUse;
@@ -194,7 +206,7 @@ pub fn perform_filter(
     // from :Parent_of_X
     match &commit.mark {
         Some(mark) => {
-            eprintln!("Saying {} -> {}", mark, mark);
+            // eprintln!("C {} -> {}", mark, mark);
             filter_state.mark_map.insert(mark.clone(), mark.clone());
         }
         _ => {},
@@ -207,10 +219,19 @@ pub fn perform_filter(
     // replace THIS from :Z to find whatever Z points to.
     // as mentioned above, if Z was filtered out, we have a
     // filter_state.mark_map that contains some parent of Z
+    let mut from_pruned = false;
     if let Some(ref mut from) = commit.from {
         match filter_state.mark_map.get(from) {
             Some(mapto) => {
-                *from = mapto.clone();
+                if mapto.is_empty() {
+                    // this indicates we are trying to point to a from
+                    // that doesnt actually exist. in this case,
+                    // instead of using a from, we want to remove the
+                    // from and any merges
+                    from_pruned = true;
+                } else {
+                    *from = mapto.clone();
+                }
             }
             None => {
                 let panic_str = format!(
@@ -219,6 +240,23 @@ pub fn perform_filter(
                 );
                 panic!(panic_str);
             }
+        }
+    }
+    if from_pruned {
+        commit.from = None;
+        commit.merges = vec![];
+    }
+    // we also want to do the same thing we did above for the from lines
+    // for every single merge. ie: map the original
+    // merge :X
+    // to say:
+    // merge :SOME_PARENT_OF_X
+    for merge in &mut commit.merges {
+        match filter_state.mark_map.get_mut(merge) {
+            Some(mapto) => {
+                *merge = mapto.clone();
+            }
+            None => {}
         }
     }
 
