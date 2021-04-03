@@ -197,7 +197,9 @@ pub fn perform_filter(
             (None, Some(mark)) => {
                 // eprintln!("D {:?} -> {:?}", commit.mark, commit.from);
                 filter_state.mark_map.insert(mark.clone(), "".into());
-            }, // handle this!
+            },
+            // im not sure these other cases
+            // are possible?
             _ => {},
         }
         return FilterResponse::DontUse;
@@ -205,9 +207,10 @@ pub fn perform_filter(
     commit.fileops = newfileops;
 
     // at this point, we know that we will use this commit, so
-    // it should map to itself. ie: for future commits when they say
+    // it should map to itself. ie: if we are X, and
+    // future commits say
     // from :X
-    // if this commit is X, we want it to say from :X, and not
+    // then we want it to say from :X, and not
     // from :Parent_of_X
     match &commit.mark {
         Some(mark) => {
@@ -221,7 +224,8 @@ pub fn perform_filter(
     if !filter_state.have_used_a_commit {
         commit.from = None;
     }
-    // replace THIS from :Z to find whatever Z points to.
+    // if we are X, and we depend on Z, we should
+    // check if Z points to something else.
     // as mentioned above, if Z was filtered out, we have a
     // filter_state.mark_map that contains some parent of Z
     let mut from_pruned = false;
@@ -247,6 +251,30 @@ pub fn perform_filter(
             }
         }
     }
+
+    // if we have a merge commit, its possible it will become not amerge
+    // commit (ie: we prune parents from N down to 1)
+    // in that case, we want to keep all of their current parents
+    // and then traverse them later to find the one that we
+    // should map to instead
+    let is_merge_commit = commit.from.is_some() && !commit.merges.is_empty();
+    let old_merge_points_to = if is_merge_commit {
+        let mut pointers = vec![];
+        // if the from was pruned, no point in keeping
+        // track of it as a parent...
+        if !from_pruned {
+            if let Some(from) = &commit.from {
+                pointers.push(from.clone());
+            }
+        }
+        // but we do want to potentially keep track
+        // of the merges... these will be checked below
+        for merge in &commit.merges {
+            pointers.push(merge.clone());
+        }
+        Some(pointers)
+    } else { None };
+
     if from_pruned {
         commit.from = None;
         commit.merges = vec![];
@@ -262,6 +290,37 @@ pub fn perform_filter(
                 *merge = mapto.clone();
             }
             None => {}
+        }
+    }
+
+    // we used to be a merge commit, but because of pruning
+    // we became a regular commit. this basically means that
+    // the contents of this commit are the same as one of the
+    // prior commits we are merging, ie: a duplicate.
+    // the decision here is to drop it, but i think optionally,
+    // if you want to allow empty merge commits, maybe have some setting
+    // that keeps this commit with just the message but no changes
+    if is_merge_commit {
+        if commit.merges.is_empty() && commit.from.is_none() {
+            // try to add a statement to the map that says
+            // we now point to one of our parents. we have to iterate
+            // our parents here to find one that still exists.
+            if let Some(pointers) = old_merge_points_to {
+                if let Some(mark) = &commit.mark {
+                    // try the pointers in order of:
+                    // FROM, MERGE 1, MERGE 2, ...
+                    // and use the first one we find
+                    for pointer_option in pointers {
+                        if filter_state.mark_map.contains_key(&pointer_option) {
+                            filter_state.mark_map.insert(mark.clone(), pointer_option);
+                            return FilterResponse::DontUse;
+                        }
+                    }
+                }
+            }
+            // regardless if we were able to find a parent to map to,
+            // we still dont want to be used
+            return FilterResponse::DontUse;
         }
     }
 

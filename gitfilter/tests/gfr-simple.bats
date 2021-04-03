@@ -335,3 +335,6 @@ function git_add_all_and_commit() {
     git checkout master
     git branch -D gitfilter filterrepo
 }
+
+# TODO: add test checking for empty commits
+# I think git-filter-repo doesnt handle them properly
