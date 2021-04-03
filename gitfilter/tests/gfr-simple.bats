@@ -316,7 +316,7 @@ function git_add_all_and_commit() {
     [[ "$(num_commits)" == 5 ]]
     git checkout -b gitfilter
 
-    "$GITFILTERCLI" --branch gitfilter --exclude-path folder_a/ > filtered.txt
+    "$GITFILTERCLI" --branch gitfilter --default-include --exclude-path folder_a/ > filtered.txt
     cat filtered.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
     git reset --hard
     gitfilter_hash="$(hash_atop)"

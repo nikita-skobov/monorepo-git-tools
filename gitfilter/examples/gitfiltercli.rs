@@ -25,8 +25,10 @@ pub struct Filter {
 
     #[options(help = "path to exclude filter")]
     pub exclude_path: Option<String>,
-}
 
+    #[options(help = "the default is to implicitly exclude everything, by using --default-include you implicitly INCLUDE everything, and can explicitly choose to exclude specific paths")]
+    pub default_include: bool,
+}
 
 pub fn get_cli_input() -> Filter {
     let args = ::std::env::args().collect::<Vec<_>>();
@@ -60,6 +62,7 @@ fn main() {
     let filter_opts = FilterOptions {
         stream: stdout(),
         branch: filter.branch,
+        default_include: filter.default_include,
         with_blobs: filter.with_data,
     };
     let mut filter_rules = vec![];

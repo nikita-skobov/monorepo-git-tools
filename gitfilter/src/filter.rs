@@ -60,6 +60,7 @@ pub struct FilterOptions<T: Write> {
     pub stream: T,
     /// defaults to master
     pub branch: Option<String>,
+    pub default_include: bool,
     pub with_blobs: bool,
     // TODO:
     // pub num_threads: Option<usize>,
@@ -70,6 +71,7 @@ impl<T: Write> From<T> for FilterOptions<T> {
         FilterOptions {
             stream: orig,
             branch: None,
+            default_include: false,
             with_blobs: false,
         }
     }
@@ -80,8 +82,9 @@ pub fn should_use_file_modify(
     dataref: &mut String,
     path: &mut String,
     filter_rules: &FilterRules,
+    default_include: bool,
 ) -> bool {
-    let mut should_keep = false;
+    let mut should_keep = default_include;
     for filter_rule in filter_rules {
         match filter_rule {
             FilterRulePathInclude(include) => {
@@ -103,8 +106,9 @@ pub fn should_use_file_modify(
 pub fn should_use_file_delete(
     path: &mut String,
     filter_rules: &FilterRules,
+    default_include: bool,
 ) -> bool {
-    let mut should_keep = false;
+    let mut should_keep = default_include;
     for filter_rule in filter_rules {
         match filter_rule {
             FilterRulePathInclude(include) => {
@@ -124,6 +128,7 @@ pub fn should_use_file_delete(
 }
 
 pub fn perform_filter(
+    default_include: bool,
     filter_state: &mut FilterState,
     commit: &mut StructuredCommit,
     filter_rules: &FilterRules,
@@ -157,12 +162,12 @@ pub fn perform_filter(
 
             // easiest cases. if it exists, keep it
             FileOpsOwned::FileModify(mut mode, mut dataref, mut path) => {
-                if should_use_file_modify(&mut mode, &mut dataref, &mut path, filter_rules) {
+                if should_use_file_modify(&mut mode, &mut dataref, &mut path, filter_rules, default_include) {
                     newfileops.push(FileOpsOwned::FileModify(mode, dataref, path));
                 }
             }
             FileOpsOwned::FileDelete(mut path) => {
-                if should_use_file_delete(&mut path, filter_rules) {
+                if should_use_file_delete(&mut path, filter_rules, default_include) {
                     newfileops.push(FileOpsOwned::FileDelete(path));
                 }
             }
@@ -267,14 +272,15 @@ pub fn filter_with_rules<T: Write>(
     filter_options: FilterOptions<T>,
     filter_rules: FilterRules,
 ) -> io::Result<()> {
-    eprintln!("Usingsadsa branch: {:?}", filter_options.branch);
+    eprintln!("Using branch: {:?}", filter_options.branch);
     let mut filter_state = FilterState::default();
+    let default_include = filter_options.default_include;
     let cb = |obj: &mut StructuredExportObject| -> bool {
         // TODO: filter on blobs as well:
         match &mut obj.object_type {
             export_parser::StructuredObjectType::Blob(_) => true,
             export_parser::StructuredObjectType::Commit(ref mut c) => {
-                let resp = perform_filter(&mut filter_state, c, &filter_rules);
+                let resp = perform_filter(default_include, &mut filter_state, c, &filter_rules);
                 if !filter_state.have_used_a_commit && resp.is_used() {
                     filter_state.have_used_a_commit = true;
                 }
