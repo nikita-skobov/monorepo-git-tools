@@ -202,9 +202,7 @@ pub fn perform_filter(
             // are possible?
             _ => {},
         }
-        if commit.merges.is_empty() {
-            return FilterResponse::DontUse;
-        }
+        return FilterResponse::DontUse;
     }
     commit.fileops = newfileops;
 
@@ -328,14 +326,14 @@ pub fn perform_filter(
             // try to add a statement to the map that says
             // we now point to one of our parents. we have to iterate
             // our parents here to find one that still exists.
-            if let Some(pointers) = old_merge_points_to {
+            if let Some(pointers) = &old_merge_points_to {
                 if let Some(mark) = &commit.mark {
                     // try the pointers in order of:
                     // FROM, MERGE 1, MERGE 2, ...
                     // and use the first one we find
                     for pointer_option in pointers {
                         // eprintln!("We used to point to: {}", &pointer_option);
-                        match filter_state.mark_map.get(&pointer_option) {
+                        match filter_state.mark_map.get(pointer_option) {
                             Some(pointing_to) => {
                                 if !pointing_to.is_empty() {
                                     filter_state.mark_map.insert(mark.clone(), pointing_to.clone());
@@ -351,6 +349,72 @@ pub fn perform_filter(
             // we still dont want to be used
             return FilterResponse::DontUse;
         }
+    }
+
+    // if its a merge commit, make sure that we dont have
+    // a scenario where:
+    //   A _
+    //   |  \
+    //   X  |
+    //   Y /
+    // basically if A is a merge of X, and Y,
+    // we make sure that X isnt a direct ancestor of Y
+    // and if so, we prune A, because thats an unnecessary merge commit
+    // it would just be empty.
+    if is_merge_commit {
+        // TODO: handle octopus merges...
+        // right now this will only handle the case where theres a merge
+        // with 2 parents:
+        if let Some(pointers) = &old_merge_points_to {
+            if pointers.len() > 1 {
+                let parent_x = &pointers[0];
+                let parent_y = &pointers[1];
+
+                let x_is_ancestor_of_y = match filter_state.graph.get(parent_x) {
+                    Some(x_parents) => x_parents.contains(parent_y),
+                    None => false,
+                };
+                let y_is_ancestor_of_x = match filter_state.graph.get(parent_y) {
+                    Some(y_parents) => y_parents.contains(parent_x),
+                    None => false,
+                };
+                if x_is_ancestor_of_y || y_is_ancestor_of_x {
+                    if let Some(mark) = &commit.mark {
+                        // eprintln!("NOT USING {} Because its a merge commit whose ancestors ({:?}) are direct parents of each other. Its mark map is: {:?}", mark, pointers, filter_state.mark_map.get(mark));
+                        // remember to update map. we want to then point to the
+                        // most recent child, so we check specifically which case we got:
+                        if x_is_ancestor_of_y {
+                            // in this case we have: THIS_COMMIT -> X -> Y
+                            // so we want to say our mark points to X
+                            filter_state.mark_map.insert(mark.clone(), parent_x.clone());
+                        } else {
+                            // otherwise y is ancestor of x
+                            // in this case we have: THIS_COMMIT -> Y -> X
+                            // so we want to say our mark points to Y
+                            filter_state.mark_map.insert(mark.clone(), parent_y.clone());
+                        }
+                    }
+
+                    return FilterResponse::DontUse;
+                }
+            }
+        }
+    }
+
+    // update the current graph to say that
+    // we are X, and we have parent(s) Y/Z:
+    match &commit.mark {
+        Some(mark) => {
+            let mut parents = match &commit.from {
+                Some(parent1) => vec![parent1.clone()],
+                None => vec![]
+            };
+            for merge in &commit.merges {
+                parents.push(merge.clone());
+            }
+            filter_state.graph.insert(mark.clone(), parents.clone());
+        }
+        _ => {},
     }
 
     FilterResponse::UseAsIs

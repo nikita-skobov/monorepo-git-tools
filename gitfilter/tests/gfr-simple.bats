@@ -91,8 +91,7 @@ function git_add_all_and_commit() {
     [[ "$(num_commits)" == 1 ]]
     [[ ! -f b.txt ]]
     [[ -f a.txt ]]
-    gfr_hash="$(hash_atop)"
-
+    gfr_ls_tree="$(git ls-tree HEAD)"
 
     # now try doing the same thing but using our new tool:
     git checkout master
@@ -104,14 +103,14 @@ function git_add_all_and_commit() {
     "$GITFILTERCLI" --branch gitfilter --path a.txt > filtered.txt
     cat filtered.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
     git reset --hard
-    gitfilter_hash="$(hash_atop)"
+    gitfilter_ls_tree="$(git ls-tree HEAD)"
 
     [[ "$(num_commits)" == 1 ]]
     [[ ! -f b.txt ]]
     [[ -f a.txt ]]
 
-    # test that our rewrite hash matches their rewrite hash
-    [[ "$gfr_hash" == "$gitfilter_hash" ]]
+    # if our tree matches, we have the exact same point in time
+    [[ "$gfr_ls_tree" == "$gitfilter_ls_tree" ]]
 
     rm filtered.txt
     git checkout master
@@ -144,7 +143,7 @@ function git_add_all_and_commit() {
     [[ -d folder_b/ ]]
     [[ ! -f folder_a/a.txt ]]
     [[ -f folder_b/b.txt ]]
-    gfr_hash="$(hash_atop)"
+    gfr_ls_tree="$(git ls-tree HEAD)"
 
 
     # now try doing the same thing but using our new tool:
@@ -155,22 +154,21 @@ function git_add_all_and_commit() {
     "$GITFILTERCLI" --branch gitfilter --path folder_b/ > filtered.txt
     cat filtered.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
     git reset --hard
-    gitfilter_hash="$(hash_atop)"
+    gitfilter_ls_tree="$(git ls-tree HEAD)"
 
     [[ "$(num_commits)" == 1 ]]
     [[ ! -d folder_a/ ]]
     [[ -d folder_b/ ]]
     [[ ! -f folder_a/a.txt ]]
     [[ -f folder_b/b.txt ]]
-    # test that our rewrite hash matches their rewrite hash
-    [[ "$gfr_hash" == "$gitfilter_hash" ]]
+    [[ "$gfr_ls_tree" == "$gitfilter_ls_tree" ]]
 
     rm filtered.txt
     git checkout master
     git branch -D gitfilter filterrepo
 }
 
-@test 'merge included when it contains part of the include path' {
+@test 'empty merge commits should be removed' {
     mkdir -p folder_a
     make_file folder_a/a.txt
     git_add_all_and_commit "a"
@@ -190,19 +188,18 @@ function git_add_all_and_commit() {
     [[ "$(num_commits)" == 4 ]]
 
     git checkout -b filterrepo
-    git filter-repo --force --refs filterrepo --path folder_a/ --dry-run
-    cat .git/filter-repo/fast-export.filtered | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
-    git reset --hard
+    git filter-repo --force --refs filterrepo --path folder_a/
+    git log --oneline --decorate --graph
 
-    git log --oneline
-
-    # it should include the merge commit
-    # because part of what was merged included folder_a/
-    [[ "$(num_commits)" == 3 ]]
+    # there should only be a, and a2, because
+    # the merge commit is unecessary and should be pruned
+    [[ "$(num_commits)" == 2 ]]
     [[ -d folder_a/ ]]
     [[ -f folder_a/a.txt ]]
     [[ ! -f unwanted.txt ]]
-    gfr_hash="$(hash_atop)"
+    gfr_ls_tree="$(git ls-tree HEAD)"
+    echo "gitfilterrepo ls-tree:"
+    echo "$gfr_ls_tree"
 
     # now we test our version
     git checkout master
@@ -212,70 +209,17 @@ function git_add_all_and_commit() {
     "$GITFILTERCLI" --branch gitfilter --path folder_a/ > filtered.txt
     cat filtered.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
     git reset --hard
-    [[ "$(num_commits)" == 3 ]]
-    [[ -d folder_a/ ]]
-    [[ -f folder_a/a.txt ]]
-    [[ ! -f unwanted.txt ]]
-    gfr_hash="$(hash_atop)"
+    git log --oneline --decorate --graph
+    gitfilter_ls_tree="$(git ls-tree HEAD)"
+    echo "gitfilter ls-tree:"
+    echo "$gitfilter_ls_tree"
 
-    rm filtered.txt
-    git checkout master
-    git branch -D gitfilter filterrepo
-}
-
-@test 'merge NOT included when it DOESNT contain part of the include path' {
-    mkdir -p folder_a
-    make_file folder_a/a.txt
-    git_add_all_and_commit "a"
-    make_file unwanted.txt
-    git_add_all_and_commit "unwanted"
-    git checkout -b tmp1
-    echo "unwanted2" >> unwanted.txt
-    git_add_all_and_commit "unwanted2"
-    git checkout master
-    echo "a2" >> folder_a/a.txt
-    git_add_all_and_commit "a2"
-    git merge --no-ff --commit tmp1
-
-    git log --oneline
-
-    # 4 commits and 1 merge commit
-    [[ "$(num_commits)" == 5 ]]
-
-    git checkout -b filterrepo
-    # wed like to do a dry run here so we can examine
-    # the filtered log, but git filter-repo does more than just use the
-    # filtered output piped into git fast-import. This is one of
-    # those cases where it does some extra stuff which is hard to emulate
-    # in a script. so for this test, we just run the command end to end:
-    git filter-repo --force --refs filterrepo --path folder_a/
-
-    git log --oneline
-    git show HEAD
-
-    # should not include the merge commit
     [[ "$(num_commits)" == 2 ]]
     [[ -d folder_a/ ]]
     [[ -f folder_a/a.txt ]]
     [[ ! -f unwanted.txt ]]
-    gfr_hash="$(hash_atop)"
+    [[ "$gfr_ls_tree" == "$gitfilter_ls_tree" ]]
 
-    # now we test our version
-    git checkout master
-    [[ "$(num_commits)" == 5 ]]
-    git checkout -b gitfilter
-
-    "$GITFILTERCLI" --branch gitfilter --path folder_a/ > filtered.txt
-    cat filtered.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
-    git reset --hard
-    [[ "$(num_commits)" == 2 ]]
-    [[ -d folder_a/ ]]
-    [[ -f folder_a/a.txt ]]
-    [[ ! -f unwanted.txt ]]
-    gitfilter_hash="$(hash_atop)"
-
-    # test that our rewrite hash matches their rewrite hash
-    [[ "$gfr_hash" == "$gitfilter_hash" ]]
 
     rm filtered.txt
     git checkout master
@@ -309,7 +253,7 @@ function git_add_all_and_commit() {
     [[ -d folder_b/ ]]
     [[ ! -f folder_a/a.txt ]]
     [[ -f folder_b/b.txt ]]
-    gfr_hash="$(hash_atop)"
+    gfr_ls_tree="$(git ls-tree HEAD)"
 
     # now try doing the same thing but using our new tool:
     git checkout master
@@ -319,8 +263,7 @@ function git_add_all_and_commit() {
     "$GITFILTERCLI" --branch gitfilter --default-include --exclude-path folder_a/ > filtered.txt
     cat filtered.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
     git reset --hard
-    gitfilter_hash="$(hash_atop)"
-
+    gitfilter_ls_tree="$(git ls-tree HEAD)"
     git log --oneline
 
     [[ "$(num_commits)" == 2 ]]
@@ -328,8 +271,7 @@ function git_add_all_and_commit() {
     [[ -d folder_b/ ]]
     [[ ! -f folder_a/a.txt ]]
     [[ -f folder_b/b.txt ]]
-    # test that our rewrite hash matches their rewrite hash
-    [[ "$gfr_hash" == "$gitfilter_hash" ]]
+    [[ "$gfr_ls_tree" == "$gitfilter_ls_tree" ]]
 
     rm filtered.txt
     git checkout master
