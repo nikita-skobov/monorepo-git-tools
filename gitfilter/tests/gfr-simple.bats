@@ -243,9 +243,7 @@ function git_add_all_and_commit() {
     [[ "$(num_commits)" == 5 ]]
 
     git checkout -b filterrepo
-    git filter-repo --force --refs filterrepo --invert-paths --path folder_a/ --dry-run
-    cat .git/filter-repo/fast-export.filtered | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
-    git reset --hard
+    git filter-repo --force --refs filterrepo --invert-paths --path folder_a/
 
     # shouldnt exist anymore because we excluded it
     [[ "$(num_commits)" == 2 ]]
@@ -278,5 +276,57 @@ function git_add_all_and_commit() {
     git branch -D gitfilter filterrepo
 }
 
-# TODO: add test checking for empty commits
-# I think git-filter-repo doesnt handle them properly
+# here we have a history like:
+# C  a.txt
+# B  b.txt -> a.txt
+# A  b.txt
+# we make sure that our history starts at B, and doesnt consider
+# that a.txt is renamed, but rather as the initial commit
+@test 'rename file doesnt get detected as the initial commit' {
+    make_file b.txt
+    git_add_all_and_commit "b"
+    git mv b.txt a.txt
+    git commit -m "rename to a"
+    # just in case, lets look at what that looks like:
+    echo "-----"
+    git show HEAD
+    echo "-----"
+    echo "aa" >> a.txt
+    git_add_all_and_commit "a2"
+
+    git checkout -b filterrepo
+    git filter-repo --force --refs filterrepo --path a.txt --dry-run
+    echo "ORIGINAL"
+    cat .git/filter-repo/fast-export.original
+    echo "FILTERED"
+    cat .git/filter-repo/fast-export.filtered
+    git filter-repo --force --refs filterrepo --path a.txt
+    echo "gitfilterrepo:"
+    git log --oneline
+
+    [[ "$(num_commits)" == 2 ]]
+    [[ ! -f b.txt ]]
+    [[ -f a.txt ]]
+    gfr_ls_tree="$(git ls-tree HEAD)"
+
+    git checkout master
+    [[ "$(num_commits)" == 3 ]]
+    git checkout -b gitfilter
+    "$GITFILTERCLI" --branch gitfilter --path a.txt > filtered.txt
+    cat filtered.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
+    git reset --hard
+    echo "gitfilter:"
+    git log --oneline
+    
+    gitfilter_ls_tree="$(git ls-tree HEAD)"
+    [[ "$(num_commits)" == 2 ]]
+    [[ ! -f b.txt ]]
+    [[ -f a.txt ]]
+    [[ "$gfr_ls_tree" == "$gitfilter_ls_tree" ]]
+
+    cat filtered.txt
+
+    rm filtered.txt
+    git checkout master
+    git branch -D gitfilter filterrepo
+}
