@@ -180,7 +180,6 @@ pub fn perform_filter(
     // from :THIS
     // then they will instead do:
     // from :THIS_PARENT
-    // TODO: dont exit early if merge commit happens to be empty?
     if newfileops.is_empty() {
         match (&commit.from, &commit.mark) {
             (Some(from), Some(mark)) => {
@@ -190,8 +189,8 @@ pub fn perform_filter(
                         filter_state.mark_map.insert(mark.clone(), transitive_parent.clone());
                     }
                     None => {
-                        // eprintln!("B {} -> {}", mark, from);
-                        filter_state.mark_map.insert(mark.clone(), from.clone());
+                        // eprintln!("B {} -> {}", mark, "");
+                        filter_state.mark_map.insert(mark.clone(), "".into());
                     }
                 }
             },
@@ -203,9 +202,32 @@ pub fn perform_filter(
             // are possible?
             _ => {},
         }
-        return FilterResponse::DontUse;
+        if commit.merges.is_empty() {
+            return FilterResponse::DontUse;
+        }
     }
     commit.fileops = newfileops;
+
+    // if this merge doesnt pertain to anything we know about
+    // just skip it, dont bother entering it in
+    if !commit.merges.is_empty() {
+        let has_from = match &commit.from {
+            Some(from) => match filter_state.mark_map.get(from) {
+                Some(from_points_to) => !from_points_to.is_empty(),
+                None => false,
+            }
+            None => false,
+        };
+        let has_all_merges = commit.merges.iter().all(|m| {
+            match filter_state.mark_map.get(m) {
+                Some(pointsto) => !pointsto.is_empty(),
+                None => false,
+            }
+        });
+        if !has_from || !has_all_merges {
+            return FilterResponse::DontUse;
+        }
+    }
 
     // at this point, we know that we will use this commit, so
     // it should map to itself. ie: if we are X, and
