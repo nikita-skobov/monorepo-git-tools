@@ -330,3 +330,35 @@ function git_add_all_and_commit() {
     git checkout master
     git branch -D gitfilter filterrepo
 }
+
+@test 'can rename folders to root' {
+    mkdir -p folder_a/
+    make_file folder_a/a.txt
+    git_add_all_and_commit "a"
+
+    git checkout -b filterrepo
+    git filter-repo --path-rename folder_a/: --refs filterrepo --force
+    [[ ! -d folder_a/ ]]
+    [[ -f a.txt ]]
+    [[ "$(num_commits)" == 1 ]]
+    gfr_ls_tree="$(git ls-tree HEAD)"
+
+
+    git checkout master
+    git checkout -b gitfilter
+    "$GITFILTERCLI" --branch gitfilter --path-rename folder_a/: > filtered.txt
+    cat filtered.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
+    git reset --hard
+    gitfilter_ls_tree="$(git ls-tree HEAD)"
+
+    [[ ! -d folder_a/ ]]
+    [[ -f a.txt ]]
+    [[ "$(num_commits)" == 1 ]]
+    [[ "$gfr_ls_tree" == "$gitfilter_ls_tree" ]]
+
+    cat filtered.txt
+
+    rm filtered.txt
+    git checkout master
+    git branch -D gitfilter filterrepo
+}
