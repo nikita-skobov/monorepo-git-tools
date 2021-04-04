@@ -180,6 +180,7 @@ pub fn perform_filter(
     // from :THIS
     // then they will instead do:
     // from :THIS_PARENT
+    // TODO: dont exit early if merge commit happens to be empty?
     if newfileops.is_empty() {
         match (&commit.from, &commit.mark) {
             (Some(from), Some(mark)) => {
@@ -311,9 +312,15 @@ pub fn perform_filter(
                     // FROM, MERGE 1, MERGE 2, ...
                     // and use the first one we find
                     for pointer_option in pointers {
-                        if filter_state.mark_map.contains_key(&pointer_option) {
-                            filter_state.mark_map.insert(mark.clone(), pointer_option);
-                            return FilterResponse::DontUse;
+                        // eprintln!("We used to point to: {}", &pointer_option);
+                        match filter_state.mark_map.get(&pointer_option) {
+                            Some(pointing_to) => {
+                                if !pointing_to.is_empty() {
+                                    filter_state.mark_map.insert(mark.clone(), pointing_to.clone());
+                                    return FilterResponse::DontUse;
+                                }
+                            }
+                            None => {}
                         }
                     }
                 }
