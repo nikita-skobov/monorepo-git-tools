@@ -23,6 +23,9 @@ pub struct Filter {
     #[options(help = "path to filter")]
     pub path: Option<String>,
 
+    #[options(help = "path to filter rename, syntax: --path-rename src:dest")]
+    pub path_rename: Option<String>,
+
     #[options(help = "path to exclude filter")]
     pub exclude_path: Option<String>,
 
@@ -73,6 +76,17 @@ fn main() {
     }
     if let Some(filter_exclude) = filter.exclude_path {
         filter_rules.push(FilterRulePathExclude(filter_exclude));
+    }
+    if let Some(filter_rename) = filter.path_rename {
+        let mut split = filter_rename.split(':');
+        let src = split.next();
+        let dest = split.next();
+        match (src, dest) {
+            (Some(src), Some(dest)) => {
+                filter_rules.push(FilterRulePathRename(src.into(), dest.into()));
+            },
+            _ => panic!("Must provide a src:dest when using --path-rename"),
+        }
     }
     if filter_rules.len() == 0 {
         panic!("Must provide either a filter include or an exclude");
