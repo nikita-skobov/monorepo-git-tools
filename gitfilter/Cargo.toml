@@ -6,13 +6,13 @@ edition = "2018"
 
 
 [dependencies]
-gumdrop = { path = "../gumdrop" }
-die = { path = "../die" }
 exechelper = { path = "../exechelper" }
 num_cpus = "1.13.0"
-# rayon = "*"
 regex = "1.4.3"
 once_cell = "*"
+
+[dev-dependencies]
+gumdrop = { path = "../gumdrop" }
 
 [profile.release]
 lto = true

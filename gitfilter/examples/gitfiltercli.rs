@@ -1,5 +1,4 @@
 use gumdrop::Options;
-// use die::die;
 use gitfilter::filter::*;
 
 #[derive(Debug, Options, Default)]
