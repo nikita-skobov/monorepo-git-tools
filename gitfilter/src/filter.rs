@@ -5,9 +5,11 @@ use super::filter_state::FilterState;
 use std::io::Write;
 use std::io;
 
+#[derive(Clone)]
 pub enum FilterRule {
     FilterRulePathInclude(String),
     FilterRulePathExclude(String),
+    FilterRulePathRename(String, String),
 }
 pub use FilterRule::*;
 
@@ -97,6 +99,12 @@ pub fn should_use_file_modify(
                     should_keep = false;
                 }
             }
+            FilterRulePathRename(src, dest) => {
+                if path.starts_with(src) {
+                    *path = path.replacen(src, dest, 1);
+                    should_keep = true;
+                }
+            }
         }
     }
 
@@ -121,18 +129,24 @@ pub fn should_use_file_delete(
                     should_keep = false;
                 }
             }
+            FilterRulePathRename(src, dest) => {
+                if path.starts_with(src) {
+                    *path = path.replacen(src, dest, 1);
+                    should_keep = true;
+                }
+            }
         }
     }
 
     should_keep
 }
 
-pub fn perform_filter(
+pub fn apply_filter_rules_to_fileops(
     default_include: bool,
     filter_state: &mut FilterState,
     commit: &mut StructuredCommit,
     filter_rules: &FilterRules,
-) -> FilterResponse {
+) -> Vec<FileOpsOwned> {
     let mut newfileops = vec![];
     for op in commit.fileops.drain(..) {
         match op {
@@ -173,6 +187,16 @@ pub fn perform_filter(
             }
         }
     }
+    newfileops
+}
+
+pub fn perform_filter(
+    default_include: bool,
+    filter_state: &mut FilterState,
+    commit: &mut StructuredCommit,
+    filter_rules: &FilterRules,
+) -> FilterResponse {
+    let newfileops = apply_filter_rules_to_fileops(default_include, filter_state, commit, filter_rules);
     // if we have pruned all of the file operations,
     // then we dont want to use this object as a commit, but rather
     // as a reset. Also, make sure to update the mark map with our parent
@@ -528,5 +552,135 @@ mod test {
         writer.read_to_string(&mut s).unwrap();
         assert!(s.contains("refs/heads/NEWBRANCHNAMEAAAAAAA"));
         assert!(!s.contains("refs/heads/master"));
+    }
+
+    // used for tests to easily say:
+    // construct a commit from these arbitrary file paths
+    fn current_commit_state(files: &[&str]) -> StructuredCommit {
+        let mut commit = StructuredCommit::default();
+        let mut fileops = vec![];
+        for file in files {
+            let mut fileop = FileOpsOwned::FileModify(
+                "".into(), "".into(), file.to_string(),
+            );
+            fileops.push(fileop);
+        }
+        commit.fileops = fileops;
+        commit
+    }
+
+    #[test]
+    fn filter_rules_handle_renames_properly() {
+        let mut commit = current_commit_state(&[
+            "a.txt"
+        ]);
+        let mut filter_state = FilterState::default();
+        let filter_rule = FilterRule::FilterRulePathRename("a.txt".into(), "b.txt".into());
+        let filter_rules = vec![filter_rule];
+
+        let new_fileops = apply_filter_rules_to_fileops(
+            false,
+            &mut filter_state,
+            &mut commit,
+            &filter_rules
+        );
+
+        let expected = FileOpsOwned::FileModify(
+            "".into(), "".into(), "b.txt".into(),
+        );
+        let expected = vec![expected];
+        eprintln!("Actual: {:#?}", new_fileops);
+        eprintln!("Expected: {:#?}", expected);
+        assert_eq!(new_fileops, expected);
+    }
+
+    #[test]
+    fn filter_rules_handle_rename_to_root_properly() {
+        let mut commit = current_commit_state(&[
+            "src/a.txt", "src/b.txt"
+        ]);
+        let mut filter_state = FilterState::default();
+        let filter_rule = FilterRule::FilterRulePathRename("src/".into(), "".into());
+        let filter_rules = vec![filter_rule];
+
+        let new_fileops = apply_filter_rules_to_fileops(
+            false,
+            &mut filter_state,
+            &mut commit,
+            &filter_rules
+        );
+
+        let expected1 = FileOpsOwned::FileModify(
+            "".into(), "".into(), "a.txt".into(),
+        );
+        let expected2 = FileOpsOwned::FileModify(
+            "".into(), "".into(), "b.txt".into(),
+        );
+        let expected = vec![expected1, expected2];
+        eprintln!("Actual: {:#?}", new_fileops);
+        eprintln!("Expected: {:#?}", expected);
+        assert_eq!(new_fileops, expected);
+    }
+
+    #[test]
+    fn filter_rules_handle_include_exclude() {
+        // we have
+        // src/a.txt
+        // src/b.txt
+        // and we want to do:
+        // include src/ but exclude src/b.txt
+        // so if we specify filterrules of:
+        // FilterRulePathInclude src/
+        // FilterRulePathExclude src/b.txt
+        // it should work, but not if we specify it in the other order
+        // because the order of the filter rules matters
+        let mut filter_state = FilterState::default();
+        let mut commit = current_commit_state(&[
+            "src/a.txt", "src/b.txt"
+        ]);
+        let filter_rule1 = FilterRule::FilterRulePathInclude("src/".into());
+        let filter_rule2 = FilterRule::FilterRulePathExclude("src/b.txt".into());
+        let filter_rules = vec![filter_rule1.clone(), filter_rule2.clone()];
+        let new_fileops = apply_filter_rules_to_fileops(
+            false,
+            &mut filter_state,
+            &mut commit,
+            &filter_rules
+        );
+
+        let expected = FileOpsOwned::FileModify(
+            "".into(), "".into(), "src/a.txt".into(),
+        );
+        let expected = vec![expected];
+        eprintln!("Actual: {:#?}", new_fileops);
+        eprintln!("Expected: {:#?}", expected);
+        assert_eq!(new_fileops, expected);
+
+        // now do the same thing but reverse the order of
+        // the filter rules. it should NOT work:
+        let mut filter_state = FilterState::default();
+        let mut commit = current_commit_state(&[
+            "src/a.txt", "src/b.txt"
+        ]);
+        let filter_rule1 = FilterRule::FilterRulePathInclude("src/".into());
+        let filter_rule2 = FilterRule::FilterRulePathExclude("src/b.txt".into());
+        let filter_rules = vec![filter_rule2, filter_rule1];
+        let new_fileops = apply_filter_rules_to_fileops(
+            false,
+            &mut filter_state,
+            &mut commit,
+            &filter_rules
+        );
+
+        let expected1 = FileOpsOwned::FileModify(
+            "".into(), "".into(), "src/a.txt".into(),
+        );
+        let expected2 = FileOpsOwned::FileModify(
+            "".into(), "".into(), "src/b.txt".into(),
+        );
+        let expected = vec![expected1, expected2];
+        eprintln!("Actual: {:#?}", new_fileops);
+        eprintln!("Expected: {:#?}", expected);
+        assert_eq!(new_fileops, expected);
     }
 }
