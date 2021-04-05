@@ -448,7 +448,7 @@ pub fn filter_with_rules<T: Write>(
     filter_options: FilterOptions<T>,
     filter_rules: FilterRules,
 ) -> io::Result<()> {
-    eprintln!("Using branch: {:?}", filter_options.branch);
+    // eprintln!("Using branch: {:?}", filter_options.branch);
     let mut filter_state = FilterState::default();
     let default_include = filter_options.default_include;
     let cb = |obj: &mut StructuredExportObject| -> bool {

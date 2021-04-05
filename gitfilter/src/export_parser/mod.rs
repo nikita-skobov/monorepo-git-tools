@@ -96,7 +96,7 @@ pub fn parse_git_filter_export_via_channel_and_n_parsing_threads<O, E>(
         });
     });
 
-    eprintln!("Using threads {}", n_parsing_threads);
+    // eprintln!("Using threads {}", n_parsing_threads);
 
 
     // we want our vec of parsed objects
@@ -137,12 +137,12 @@ pub fn parse_git_filter_export_via_channel_and_n_parsing_threads<O, E>(
 
         if !first_received {
             first_received = true;
-            eprintln!("Received first PARSED thing at {:?}", std::time::Instant::now());
+            // eprintln!("Received first PARSED thing at {:?}", std::time::Instant::now());
         }
     }
 
     let _ = thread_handle.join().unwrap();
-    eprintln!("Last received at {:?}", std::time::Instant::now());
+    // eprintln!("Last received at {:?}", std::time::Instant::now());
 
     Ok(())
 }
