@@ -88,3 +88,25 @@ function num_commits() {
     [[ "$gfr_ls_tree" == "$gitfilter_ls_tree" ]]
     [[ "$gfr_num_non_empty" == "$gitfilter_num_non_empty" ]]
 }
+
+@test 'path rename works' {
+    git checkout -b "$TESTBRANCH"
+    git branch -v
+    git filter-repo --path-rename packages/react-dom/src/: --force --refs "$TESTBRANCH"
+    git branch "$CMPBRANCH" master
+
+    gfr_ls_tree="$(git ls-tree HEAD)"
+    gfr_num_non_empty="$(num_non_empty_commits)"
+
+    "$GITFILTERCLI" --branch "$CMPBRANCH" --path-rename packages/react-dom/src/: > filter1.txt
+    cat filter1.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force --quiet
+    git reset --hard
+
+    gitfilter_ls_tree="$(git ls-tree HEAD)"
+    gitfilter_num_non_empty="$(num_non_empty_commits)"
+
+    git branch -v
+
+    [[ "$gfr_ls_tree" == "$gitfilter_ls_tree" ]]
+    [[ "$gfr_num_non_empty" == "$gitfilter_num_non_empty" ]]
+}
