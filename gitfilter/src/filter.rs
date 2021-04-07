@@ -103,6 +103,11 @@ pub fn should_use_file(
             }
             FilterRulePathExclude(exclude) => {
                 if path.starts_with(exclude) {
+                    if path == exclude {
+                        // if it matches exactly, we should not iterate anymore
+                        // this is a definitive exclude
+                        return false;
+                    }
                     should_keep = false;
                 }
             }
@@ -614,21 +619,28 @@ mod test {
     #[test]
     fn filter_rules_handle_include_exclude() {
         // we have
-        // src/a.txt
-        // src/b.txt
+        // src/a/
+        // src/b/
         // and we want to do:
-        // include src/ but exclude src/b.txt
+        // include src/ but exclude src/b/
         // so if we specify filterrules of:
         // FilterRulePathInclude src/
-        // FilterRulePathExclude src/b.txt
+        // FilterRulePathExclude src/b/
         // it should work, but not if we specify it in the other order
         // because the order of the filter rules matters
+        // NOTE: if we do FilterRulePathExclude "src/b/"
+        // then the second part will work the same as the first, which is only
+        // possible because of our exact path exclude matching. in most cases that
+        // is what you want, but by default we just check .starts_with()
+        // so if we want to match anything that starts with "src/b" (without trailing slash)
+        // then this test case is useful because we want to prove that
+        // it handles the order correctly
         let mut filter_state = FilterState::default();
         let mut commit = current_commit_state(&[
-            "src/a.txt", "src/b.txt"
+            "src/a/", "src/b/"
         ]);
         let filter_rule1 = FilterRule::FilterRulePathInclude("src/".into());
-        let filter_rule2 = FilterRule::FilterRulePathExclude("src/b.txt".into());
+        let filter_rule2 = FilterRule::FilterRulePathExclude("src/b".into());
         let filter_rules = vec![filter_rule1.clone(), filter_rule2.clone()];
         let new_fileops = apply_filter_rules_to_fileops(
             false,
@@ -638,7 +650,7 @@ mod test {
         );
 
         let expected = FileOpsOwned::FileModify(
-            "".into(), "".into(), "src/a.txt".into(),
+            "".into(), "".into(), "src/a/".into(),
         );
         let expected = vec![expected];
         eprintln!("Actual: {:#?}", new_fileops);
@@ -649,10 +661,10 @@ mod test {
         // the filter rules. it should NOT work:
         let mut filter_state = FilterState::default();
         let mut commit = current_commit_state(&[
-            "src/a.txt", "src/b.txt"
+            "src/a/", "src/b/"
         ]);
         let filter_rule1 = FilterRule::FilterRulePathInclude("src/".into());
-        let filter_rule2 = FilterRule::FilterRulePathExclude("src/b.txt".into());
+        let filter_rule2 = FilterRule::FilterRulePathExclude("src/b".into());
         let filter_rules = vec![filter_rule2, filter_rule1];
         let new_fileops = apply_filter_rules_to_fileops(
             false,
@@ -662,12 +674,37 @@ mod test {
         );
 
         let expected1 = FileOpsOwned::FileModify(
-            "".into(), "".into(), "src/a.txt".into(),
+            "".into(), "".into(), "src/a/".into(),
         );
         let expected2 = FileOpsOwned::FileModify(
-            "".into(), "".into(), "src/b.txt".into(),
+            "".into(), "".into(), "src/b/".into(),
         );
         let expected = vec![expected1, expected2];
+        eprintln!("Actual: {:#?}", new_fileops);
+        eprintln!("Expected: {:#?}", expected);
+        assert_eq!(new_fileops, expected);
+
+        // just for fun: lets also test that our exact match works:
+        // the difference is we say explicitly to exclude src/b/
+        // which means it doesnt matter where that rule appears, as
+        // soon as we match that rule exactly, we return
+        let mut filter_state = FilterState::default();
+        let mut commit = current_commit_state(&[
+            "src/a/", "src/b/"
+        ]);
+        let filter_rule1 = FilterRule::FilterRulePathInclude("src/".into());
+        let filter_rule2 = FilterRule::FilterRulePathExclude("src/b/".into());
+        let filter_rules = vec![filter_rule2, filter_rule1];
+        let new_fileops = apply_filter_rules_to_fileops(
+            false,
+            &mut filter_state,
+            &mut commit,
+            &filter_rules
+        );
+
+        let expected = vec![FileOpsOwned::FileModify(
+            "".into(), "".into(), "src/a/".into(),
+        )];
         eprintln!("Actual: {:#?}", new_fileops);
         eprintln!("Expected: {:#?}", expected);
         assert_eq!(new_fileops, expected);
