@@ -131,7 +131,10 @@ pub enum MgtSubcommands {
     SplitOutAs(MgtCommandSplit),
 
     #[options(help = "verify your repo file before running a split operation")]
-    Verify(MgtCommandVerify),
+    VerifyRepoFile(MgtCommandVerify),
+
+    #[options(help = "alias for verify-repo-file")]
+    VerifyRf(MgtCommandVerify),
 }
 
 pub fn get_version_str() -> String {
@@ -332,7 +335,8 @@ pub fn get_cli_input() -> Mgt {
                     true
                 } else { false }
             }
-            MgtSubcommands::Verify(v) => {
+            MgtSubcommands::VerifyRepoFile(v) |
+            MgtSubcommands::VerifyRf(v) => {
                 if cli.help || v.help {
                     print_usage(&v, Some("mgt verify"), None);
                     true
@@ -419,7 +423,8 @@ pub fn validate_input_and_run(mgt_opts: Mgt) {
                 cmd.direction = Some(Direction::Out);
                 run_split_out_as(cmd);
             },
-            MgtSubcommands::Verify(ref mut cmd) => {
+            MgtSubcommands::VerifyRepoFile(ref mut cmd) |
+            MgtSubcommands::VerifyRf(ref mut cmd) => {
                 run_verify(cmd);
             }
         },
