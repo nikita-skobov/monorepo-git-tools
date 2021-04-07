@@ -8,6 +8,7 @@ mod check;
 use exechelper as exec_helpers;
 mod git_helpers3;
 mod cli;
+mod verify;
 mod core;
 
 fn main() {
