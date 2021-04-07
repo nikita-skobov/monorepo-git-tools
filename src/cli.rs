@@ -103,6 +103,9 @@ pub struct MgtCommandVerify {
 
     #[options(help = "show full rename from src -> dest")]
     pub verbose: bool,
+
+    #[options(help = "format the mapping nicely. implies verbose. wont work well on small terminals though")]
+    pub pretty: bool,
 }
 
 #[derive(Debug, Options)]

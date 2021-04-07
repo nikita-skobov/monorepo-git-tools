@@ -158,6 +158,55 @@ pub fn run_verify(
 
     // eprintln!("ALL FILES: {:?}", all_files);
     let remaining_files = apply_expected_gitfilter(&all_files, &filter_rules);
+
+    // if pretty, we imply verbose, but we print verbosely in a pretty way
+    // by calculating the column size:
+    let label_src = "Source";
+    let label_dest = "Dest";
+    if cmd.pretty {
+        let col_margin_left = 1;
+        let col_margin_right = col_margin_left;
+        let col_char = '|';
+        let mut max_left_column = 0;
+        for (original_index, file) in &remaining_files {
+            let original_file_len = all_files[*original_index].len();
+            if original_file_len > max_left_column {
+                max_left_column = original_file_len;
+            }
+        }
+        print!("\n{}", label_src);
+        for _ in label_src.len()..max_left_column+col_margin_left {
+            print!(" ");
+        }
+        print!("{}", col_char);
+        for _ in 0..col_margin_right {
+            print!(" ");
+        }
+        println!("{}", label_dest);
+        // + 10 because i dont want to calculate the width of the right
+        // column so i figure 10 is good enough, whatever
+        for _ in 0..max_left_column+col_margin_left+col_margin_right+10 {
+            print!("=");
+        }
+        println!();
+
+        for (original_index, file) in remaining_files {
+            let original_file_len = all_files[original_index].len();
+            print!("{}", all_files[original_index]);
+            for _ in original_file_len..max_left_column+col_margin_left {
+                print!(" ");
+            }
+            print!("{}", col_char);
+            for _ in 0..col_margin_right {
+                print!(" ");
+            }
+            println!("{}", file);
+        }
+
+        return;
+    }
+
+    println!("\n{} -> {}", label_src, label_dest);
     for (original_index, file) in remaining_files {
         if cmd.verbose {
             println!("{} -> {}", all_files[original_index], file);
