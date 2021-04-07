@@ -13,6 +13,22 @@ pub enum FileOpType<'a> {
     Exclude(&'a str),
 }
 
+/// previously the requirement for include_as for renaming something to root/
+/// was the second component needed to be an empty space
+/// this is unnecessary for gitfilter, so we look for that, and clean it up here
+pub fn remove_whitespace_from_include_as(repo_file: &mut repo_file::RepoFile) {
+    if let Some(ref mut include_as) = repo_file.include_as {
+        for i in 0..include_as.len() {
+            if i % 2 != 0 {
+                let src = &mut include_as[i - 1];
+                *src = src.trim_left().into();
+                let dest = &mut include_as[i];
+                *dest = dest.trim_left().into();
+            }
+        }
+    }
+}
+
 /// iterate over the repo file include, include_as, and
 /// exclude. create a vec of file ops from that without sorting
 pub fn get_vec_of_file_ops<'a>(repo_file: &'a repo_file::RepoFile) -> Vec<FileOpType<'a>> {
@@ -143,7 +159,8 @@ pub fn run_verify(
     } else {
         cmd.repo_file[0].clone()
     };
-    let repo_file = repo_file::parse_repo_file_from_toml_path(&repo_file_path);
+    let mut repo_file = repo_file::parse_repo_file_from_toml_path(&repo_file_path);
+    remove_whitespace_from_include_as(&mut repo_file);
     // eprintln!("{:#?}", repo_file);
     let mut file_ops = get_vec_of_file_ops(&repo_file);
     let filter_rules = make_filter_rules(&mut file_ops);
