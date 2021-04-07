@@ -106,6 +106,9 @@ pub struct MgtCommandVerify {
 
     #[options(help = "format the mapping nicely. implies verbose. wont work well on small terminals though")]
     pub pretty: bool,
+
+    #[options(help = "provide a list of files to verify from stdin, one file per line. By default we get this list of files for you via:\ngit ls-tree -r HEAD --name-only --full-tree\n You can achieve the default behavior by doing:\n git ls-tree -r HEAD --name-only --full-tree | mgt verify-rf --stdin <PATH/TO/REPOFILE>")]
+    pub stdin: bool,
 }
 
 #[derive(Debug, Options)]

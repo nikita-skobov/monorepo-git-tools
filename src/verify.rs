@@ -3,6 +3,7 @@ use super::die;
 use super::repo_file;
 use super::git_helpers3;
 use std::collections::HashMap;
+use std::io::{self, BufRead};
 use gitfilter::filter::FilterRules;
 use gitfilter::{export_parser::{FileOpsOwned, StructuredCommit}, filter::FilterRule, filter_state::FilterState};
 
@@ -164,12 +165,25 @@ pub fn run_verify(
     // eprintln!("{:#?}", repo_file);
     let mut file_ops = get_vec_of_file_ops(&repo_file);
     let filter_rules = make_filter_rules(&mut file_ops);
-    let all_files: Vec<String> = match git_helpers3::get_all_files_in_repo() {
-        Ok(text) => {
-            text.split('\n').map(|line| line.to_string()).collect()
+    let all_files: Vec<String> = if cmd.stdin {
+        let stdin = io::stdin();
+        let mut out = vec![];
+        for line in stdin.lock().lines() {
+            let line = match line {
+                Ok(o) => o,
+                Err(e) => die!("Failed to read stdin: {}", e)
+            };
+            out.push(line);
         }
-        Err(e) => {
-            die!("Failed to get all files in git repo:\n{}", e);
+        out
+    } else {
+        match git_helpers3::get_all_files_in_repo() {
+            Ok(text) => {
+                text.split('\n').map(|line| line.to_string()).collect()
+            }
+            Err(e) => {
+                die!("Failed to get all files in git repo:\n{}", e);
+            }
         }
     };
 
