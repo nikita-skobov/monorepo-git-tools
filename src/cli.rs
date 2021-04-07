@@ -100,6 +100,9 @@ pub struct MgtCommandVerify {
 
     #[options(free, help = "path to your repo file")]
     pub repo_file: Vec<String>,
+
+    #[options(help = "show full rename from src -> dest")]
+    pub verbose: bool,
 }
 
 #[derive(Debug, Options)]

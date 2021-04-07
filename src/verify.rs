@@ -123,32 +123,16 @@ pub fn make_filter_rules<'a>(
 pub fn apply_expected_gitfilter<'a>(
     all_local_files: &'a Vec<String>,
     filter_rules: &FilterRules,
-) -> Vec<String> {
-    let mut filter_state = FilterState::default();
-    let mut commit = StructuredCommit::default();
-    let mut fileops = vec![];
-    // create a fake commit that contains a file operation on every single
-    // file in this repo.
-    for file in all_local_files {
-        let mut fileop = FileOpsOwned::FileModify(
-            "".into(), "".into(), file.to_string(),
-        );
-        fileops.push(fileop);
-    }
-    commit.fileops = fileops;
-    
-    // then pass that commit to gitfilter with our filter rules
-    // and it will filter out/rename some or all of these files
-    // then we clean their input back to a vec of strings
-    let filtered = gitfilter::filter::apply_filter_rules_to_fileops(false, &mut filter_state, &mut commit, filter_rules);
-    let mut out = vec![];
-    for fileop in filtered {
-        match fileop {
-            FileOpsOwned::FileModify(_, _, path) => out.push(path),
-            _ => {},
+) -> Vec<(usize, String)> {
+    let mut filtered = vec![];
+    for (i, path) in all_local_files.iter().enumerate() {
+        let mut new_path = path.clone();
+        if gitfilter::filter::should_use_file(&mut new_path, filter_rules, false) {
+            filtered.push((i, new_path));
         }
     }
-    out
+
+    filtered
 }
 
 pub fn run_verify(
@@ -174,7 +158,11 @@ pub fn run_verify(
 
     // eprintln!("ALL FILES: {:?}", all_files);
     let remaining_files = apply_expected_gitfilter(&all_files, &filter_rules);
-    for file in remaining_files {
-        println!("{}", file);
+    for (original_index, file) in remaining_files {
+        if cmd.verbose {
+            println!("{} -> {}", all_files[original_index], file);
+        } else {
+            println!("{}", file);
+        }
     }
 }
