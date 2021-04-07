@@ -79,14 +79,21 @@ impl<T: Write> From<T> for FilterOptions<T> {
     }
 }
 
-pub fn should_use_file_modify(
-    mode: &mut String,
-    dataref: &mut String,
+// TODO: originally i had seperate functions for
+// each type of opeartion git fast-export could give us
+// (ie: modify, rename, delete, etc)
+// but since we only care about modify/delete right now
+// and the functionality for those is the same, im combining
+// them into one method. so in the future if we need
+// seperate handling depending on the operation, then split
+// this method out
+pub fn should_use_file(
     path: &mut String,
     filter_rules: &FilterRules,
     default_include: bool,
 ) -> bool {
     let mut should_keep = default_include;
+    let mut replace = None;
     for filter_rule in filter_rules {
         match filter_rule {
             FilterRulePathInclude(include) => {
@@ -101,40 +108,22 @@ pub fn should_use_file_modify(
             }
             FilterRulePathRename(src, dest) => {
                 if path.starts_with(src) {
-                    *path = path.replacen(src, dest, 1);
+                    replace = Some(path.replacen(src, dest, 1));
                     should_keep = true;
                 }
             }
         }
     }
 
-    should_keep
-}
-
-pub fn should_use_file_delete(
-    path: &mut String,
-    filter_rules: &FilterRules,
-    default_include: bool,
-) -> bool {
-    let mut should_keep = default_include;
-    for filter_rule in filter_rules {
-        match filter_rule {
-            FilterRulePathInclude(include) => {
-                if path.starts_with(include) {
-                    should_keep = true;
-                }
-            }
-            FilterRulePathExclude(exclude) => {
-                if path.starts_with(exclude) {
-                    should_keep = false;
-                }
-            }
-            FilterRulePathRename(src, dest) => {
-                if path.starts_with(src) {
-                    *path = path.replacen(src, dest, 1);
-                    should_keep = true;
-                }
-            }
+    // we want to handle path replace after everything else.
+    // consider the case:
+    // FilterExclude (src/a.txt)
+    // FilterPathRename (src/ -> lib/)
+    // then say, we are deciding if we want to include src/a.txt
+    // since the path rename comes 
+    if let Some(replace_with) = replace {        
+        if should_keep {
+            *path = replace_with;
         }
     }
 
@@ -175,13 +164,13 @@ pub fn apply_filter_rules_to_fileops(
             }
 
             // easiest cases. if it exists, keep it
-            FileOpsOwned::FileModify(mut mode, mut dataref, mut path) => {
-                if should_use_file_modify(&mut mode, &mut dataref, &mut path, filter_rules, default_include) {
+            FileOpsOwned::FileModify(mode, dataref, mut path) => {
+                if should_use_file(&mut path, filter_rules, default_include) {
                     newfileops.push(FileOpsOwned::FileModify(mode, dataref, path));
                 }
             }
             FileOpsOwned::FileDelete(mut path) => {
-                if should_use_file_delete(&mut path, filter_rules, default_include) {
+                if should_use_file(&mut path, filter_rules, default_include) {
                     newfileops.push(FileOpsOwned::FileDelete(path));
                 }
             }
@@ -682,5 +671,76 @@ mod test {
         eprintln!("Actual: {:#?}", new_fileops);
         eprintln!("Expected: {:#?}", expected);
         assert_eq!(new_fileops, expected);
+    }
+
+    #[test]
+    fn filter_rules_correct_order() {
+        let mut filter_state = FilterState::default();
+        let mut commit = current_commit_state(&[
+            "lib/src/a.txt",
+            "lib/src/a.b",
+            "lib/src/a.b.c",
+            "lib/src/xyz/hello.txt",
+            "lib/src/xyz/something.txt",
+        ]);
+        let filter_rule1 = FilterRule::FilterRulePathRename("lib/src/".into(), "".into());
+        let filter_rule2 = FilterRule::FilterRulePathExclude("lib/src/a.b".into());
+        let filter_rule3 = FilterRule::FilterRulePathRename("lib/src/a.b.c".into(), "a.q".into());
+        let filter_rule4 = FilterRule::FilterRulePathExclude("lib/src/xyz/something.txt".into());
+        let filter_rules = vec![filter_rule1, filter_rule2, filter_rule3, filter_rule4];
+        let new_fileops = apply_filter_rules_to_fileops(
+            false,
+            &mut filter_state,
+            &mut commit,
+            &filter_rules
+        );
+
+        let expected = vec![
+            "a.txt", "a.q", "xyz/hello.txt"
+        ];
+        let mut expected_fileops = vec![];
+        for path in expected {
+            expected_fileops.push(
+                FileOpsOwned::FileModify("".into(), "".into(), path.to_string())
+            );
+        }
+        assert_eq!(new_fileops, expected_fileops);
+    }
+
+    #[test]
+    fn filter_rules_correct_order2() {
+        // same as the last one but with a different path rename case
+        // where we rename a.b into a.q
+        // but want to exclude a.b.c
+        let mut filter_state = FilterState::default();
+        let mut commit = current_commit_state(&[
+            "lib/src/a.txt",
+            "lib/src/a.b",
+            "lib/src/a.b.c",
+            "lib/src/xyz/hello.txt",
+            "lib/src/xyz/something.txt",
+        ]);
+        let filter_rule1 = FilterRule::FilterRulePathRename("lib/src/".into(), "".into());
+        let filter_rule2 = FilterRule::FilterRulePathExclude("lib/src/a.b.c".into());
+        let filter_rule3 = FilterRule::FilterRulePathRename("lib/src/a.b".into(), "a.q".into());
+        let filter_rule4 = FilterRule::FilterRulePathExclude("lib/src/xyz/something.txt".into());
+        let filter_rules = vec![filter_rule1, filter_rule2, filter_rule3, filter_rule4];
+        let new_fileops = apply_filter_rules_to_fileops(
+            false,
+            &mut filter_state,
+            &mut commit,
+            &filter_rules
+        );
+
+        let expected = vec![
+            "a.txt", "a.q", "xyz/hello.txt"
+        ];
+        let mut expected_fileops = vec![];
+        for path in expected {
+            expected_fileops.push(
+                FileOpsOwned::FileModify("".into(), "".into(), path.to_string())
+            );
+        }
+        assert_eq!(new_fileops, expected_fileops);
     }
 }
