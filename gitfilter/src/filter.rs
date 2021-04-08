@@ -443,7 +443,6 @@ pub fn filter_with_rules<T: Write>(
     filter_options: FilterOptions<T>,
     filter_rules: FilterRules,
 ) -> io::Result<()> {
-    // eprintln!("Using branch: {:?}", filter_options.branch);
     let mut filter_state = FilterState::default();
     let default_include = filter_options.default_include;
     let cb = |obj: &mut StructuredExportObject| -> bool {
@@ -527,7 +526,17 @@ pub fn filter_with_rules_direct<T: Write>(
         with_blobs: filter_options.with_blobs,
     };
 
-    filter_with_rules(overwritten_options, filter_rules)
+    let res = filter_with_rules(overwritten_options, filter_rules);
+    let res2 = gitimport_handle.wait();
+    if res.is_ok() && res2.is_ok() {
+        return Ok(());
+    }
+
+    if let Err(e) = res2 {
+        Err(e)
+    } else {
+        res
+    }
 }
 
 #[cfg(test)]
