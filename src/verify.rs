@@ -16,12 +16,19 @@ pub enum FileOpType<'a> {
 
 /// iterate over the repo file include, include_as, and
 /// exclude. create a vec of file ops from that without sorting
-pub fn get_vec_of_file_ops<'a>(repo_file: &'a repo_file::RepoFile) -> Vec<FileOpType<'a>> {
+pub fn get_vec_of_file_ops_with_order<'a>(
+    repo_file: &'a repo_file::RepoFile,
+    src_to_dest: bool,
+) -> Vec<FileOpType<'a>> {
     let mut out_vec = vec![];
     if let Some(ref include_as) = repo_file.include_as {
         for (i, path) in include_as.iter().enumerate() {
             if i % 2 != 0 {
-                out_vec.push(FileOpType::IncludeAs(&include_as[i - 1], &include_as[i]));
+                if src_to_dest {
+                    out_vec.push(FileOpType::IncludeAs(&include_as[i - 1], &include_as[i]));
+                } else {
+                    out_vec.push(FileOpType::IncludeAs(&include_as[i], &include_as[i - 1]));
+                }
             }
         }
     }
@@ -37,6 +44,10 @@ pub fn get_vec_of_file_ops<'a>(repo_file: &'a repo_file::RepoFile) -> Vec<FileOp
     }
     
     out_vec
+}
+
+pub fn get_vec_of_file_ops<'a>(repo_file: &'a repo_file::RepoFile) -> Vec<FileOpType<'a>> {
+    get_vec_of_file_ops_with_order(repo_file, true)
 }
 
 /// given a vec of fileops, sort it by the src/ path.
