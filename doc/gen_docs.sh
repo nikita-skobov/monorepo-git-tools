@@ -9,3 +9,4 @@
 ./doc/gen_split_in_as.sh > doc/split-in-as.md
 ./doc/gen_topbase.sh > doc/topbase.md
 ./doc/gen_check.sh > doc/check.md
+./doc/gen_verify_rf.sh > doc/verify-rf.md
