@@ -2,8 +2,11 @@ use std::env;
 use die::die;
 use std::path::PathBuf;
 use std::path::MAIN_SEPARATOR;
+use std::io::sink;
 
 use git_url_parse::GitUrl;
+use gitfilter::filter::FilterOptions;
+use gitfilter::filter::FilterRules;
 
 use super::exec_helpers;
 use super::git_helpers3;
@@ -82,6 +85,37 @@ pub fn go_to_repo_root() {
     let repo_root = get_repo_root();
     if let Err(e) = env::set_current_dir(repo_root) {
         die!("Failed to change to repo root: {}", e);
+    }
+}
+
+pub fn perform_gitfilter(
+    filter_rules: FilterRules,
+    output_branch: String,
+    dry_run: bool,
+    verbose: bool,
+) {
+    let filter_options = FilterOptions {
+        stream: sink(),
+        branch: Some(output_branch),
+        default_include: false,
+        with_blobs: false,
+    };
+
+    if dry_run || verbose {
+        println!("Running with filter rules:\n{:#?}", filter_rules);
+    }
+    if dry_run { return; }
+
+    let res = gitfilter::filter::filter_with_rules_direct(
+        filter_options, filter_rules);
+    if let Err(e) = res {
+        die!("Failed to perform gitfilter: {}", e);
+    }
+
+    // remember, at the end of gitfilter, we have to revert the files that
+    // are currently staged:
+    if let Err(e) = git_helpers3::reset_stage() {
+        die!("Failed to reset git stage after filer: {}", e);
     }
 }
 
