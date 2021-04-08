@@ -1,5 +1,5 @@
 use super::export_parser;
-use export_parser::{CommitObject, StructuredExportObject, StructuredCommit};
+use export_parser::{StructuredExportObject, StructuredCommit};
 use export_parser::FileOpsOwned;
 use super::filter_state::FilterState;
 use std::io::Write;
@@ -151,7 +151,7 @@ pub fn should_use_file(
 
 pub fn apply_filter_rules_to_fileops(
     default_include: bool,
-    filter_state: &mut FilterState,
+    _filter_state: &mut FilterState,
     commit: &mut StructuredCommit,
     filter_rules: &FilterRules,
 ) -> Vec<FileOpsOwned> {
@@ -175,7 +175,7 @@ pub fn apply_filter_rules_to_fileops(
             // otherwise, if we want to include B, and
             // the rename is from A -> B, then why would we include
             // something about A here since we are filtering it out?
-            FileOpsOwned::FileRename(src, dest) => {
+            FileOpsOwned::FileRename(_, _) => {
                 // TODO:
                 // if src.starts_with(include_path) && dest.starts_with(include_path) {
                 //     newfileops.push(FileOpsOwned::FileRename(src, dest));
@@ -531,7 +531,7 @@ pub fn filter_with_rules_direct<T: Write>(
         Some(Stdio::null())
     )?;
 
-    let mut gitimport_stdin = gitimport_handle.stdin.as_mut().ok_or_else(|| std::io::ErrorKind::InvalidInput)?;
+    let gitimport_stdin = gitimport_handle.stdin.as_mut().ok_or_else(|| std::io::ErrorKind::InvalidInput)?;
     let overwritten_options = FilterOptions {
         stream: gitimport_stdin,
         branch: filter_options.branch,
