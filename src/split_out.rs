@@ -2,7 +2,11 @@ use super::core;
 use super::repo_file::RepoFile;
 use super::repo_file;
 use super::die;
+use super::verify;
+use super::git_helpers3;
 use super::cli::MgtCommandSplit;
+use gitfilter::filter::FilterOptions;
+use std::io::sink;
 
 // iterate over both the include, and include_as
 // repofile variables, and generate an overall
@@ -95,6 +99,37 @@ pub fn generate_split_out_arg_exclude(repofile: &RepoFile) -> Vec<String> {
     }
 }
 
+pub fn perform_gitfilter(
+    filter_rules: gitfilter::filter::FilterRules,
+    output_branch: String,
+    dry_run: bool,
+    verbose: bool,
+) {
+    let filter_options = FilterOptions {
+        stream: sink(),
+        branch: Some(output_branch),
+        default_include: false,
+        with_blobs: false,
+    };
+
+    if dry_run || verbose {
+        println!("Running with filter rules:\n{:#?}", filter_rules);
+    }
+    if dry_run { return; }
+
+    let res = gitfilter::filter::filter_with_rules_direct(
+        filter_options, filter_rules);
+    if let Err(e) = res {
+        die!("Failed to perform gitfilter: {}", e);
+    }
+
+    // remember, at the end of gitfilter, we have to revert the files that
+    // are currently staged:
+    if let Err(e) = git_helpers3::reset_stage() {
+        die!("Failed to reset git stage after filer: {}", e);
+    }
+}
+
 pub fn run_split_out(
     cmd: &mut MgtCommandSplit,
 ) {
@@ -137,6 +172,7 @@ pub fn run_split_out_from_repo_file(
     core::go_to_repo_root();
     core::safe_to_proceed();
     let arg_strings = generate_arg_strings(&repo_file, cmd.verbose);
+    let filter_rules = generate_gitfilter_filterrules(&repo_file, cmd.verbose);
     core::make_and_checkout_output_branch(
         &cmd.output_branch,
         cmd.dry_run,
@@ -148,11 +184,11 @@ pub fn run_split_out_from_repo_file(
         println!("{}Running filter commands on temporary branch: {}", log_p, b);
     }
 
-    arg_strings.filter_out(
-        &cmd.output_branch,
-        cmd.dry_run,
-        cmd.verbose
-    );
+    let output_branch = match &cmd.output_branch {
+        Some(o) => o.clone(),
+        None => die!("Failed to find output branch"),
+    };
+    perform_gitfilter(filter_rules, output_branch, cmd.dry_run, cmd.verbose);
 
     // for split out, rebase is a bit different because
     // we actually need to fetch the remote repo|branch that
@@ -259,6 +295,14 @@ pub fn validate_repo_file(
     core::panic_if_array_invalid(&repo_file.include_as, false, "include_as");
 }
 
+fn generate_gitfilter_filterrules(
+    repo_file: &RepoFile,
+    verbose: bool,
+) -> gitfilter::filter::FilterRules {
+    let mut file_ops = verify::get_vec_of_file_ops(&repo_file);
+    let filter_rules = verify::make_filter_rules(&mut file_ops);
+    filter_rules
+}
 
 fn generate_arg_strings(
     repo_file: &RepoFile,

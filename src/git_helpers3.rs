@@ -240,6 +240,23 @@ pub fn get_all_files_in_repo() -> Result<String, String> {
     }
 }
 
+pub fn reset_stage() -> Result<String, String> {
+    // git reset --hard
+    let exec_args = [
+        "git", "reset", "--hard"
+    ];
+    match exec_helpers::execute(&exec_args) {
+        Ok(out) => {
+            if out.status == 0 {
+                Ok(out.stdout.trim_end().into())
+            } else {
+                Err(out.stderr)
+            }
+        }
+        Err(e) => Err(e.to_string())
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
