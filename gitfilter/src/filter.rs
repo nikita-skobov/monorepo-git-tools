@@ -93,18 +93,24 @@ pub fn should_use_file(
     filter_rules: &FilterRules,
     default_include: bool,
 ) -> bool {
+    let pathlen = path.len();
+    let (check_path, re_add_quotes) = if path.starts_with('"') && path.ends_with('"') {
+        (&path[1..(pathlen - 1)], true)
+    } else {
+        (&path[..], false)
+    };
     let mut should_keep = default_include;
     let mut replace = None;
     for filter_rule in filter_rules {
         match filter_rule {
             FilterRulePathInclude(include) => {
-                if path.starts_with(include) {
+                if check_path.starts_with(include) {
                     should_keep = true;
                 }
             }
             FilterRulePathExclude(exclude) => {
-                if path.starts_with(exclude) {
-                    if path == exclude {
+                if check_path.starts_with(exclude) {
+                    if check_path == exclude {
                         // if it matches exactly, we should not iterate anymore
                         // this is a definitive exclude
                         return false;
@@ -113,8 +119,8 @@ pub fn should_use_file(
                 }
             }
             FilterRulePathRename(src, dest) => {
-                if path.starts_with(src) {
-                    replace = Some(path.replacen(src, dest, 1));
+                if check_path.starts_with(src) {
+                    replace = Some(check_path.replacen(src, dest, 1));
                     should_keep = true;
                 }
             }
@@ -131,6 +137,13 @@ pub fn should_use_file(
         if should_keep {
             *path = replace_with;
         }
+    }
+    // if git fast-export sees a path that has a space, it wraps it in quotes
+    // but for our pattern matching above, it would be easier if it didnt have spaces
+    // so after we filter, if we still want to keep this, and it still has
+    // spaces, then we have to readd quotes to the ends of the path
+    if should_keep && re_add_quotes && path.contains(' ') {
+        *path = format!("\"{}\"", path);
     }
 
     should_keep
@@ -650,6 +663,62 @@ mod test {
         );
         let expected2 = FileOpsOwned::FileModify(
             "".into(), "".into(), "b.txt".into(),
+        );
+        let expected = vec![expected1, expected2];
+        eprintln!("Actual: {:#?}", new_fileops);
+        eprintln!("Expected: {:#?}", expected);
+        assert_eq!(new_fileops, expected);
+    }
+
+    #[test]
+    fn filter_rules_handle_spaces() {
+        let mut commit = current_commit_state(&[
+            "\"my folder/a.txt\"", "\"my folder/b.txt\""
+        ]);
+        let mut filter_state = FilterState::default();
+        let filter_rule = FilterRule::FilterRulePathRename("my folder/".into(), "nospace/".into());
+        let filter_rules = vec![filter_rule];
+
+        let new_fileops = apply_filter_rules_to_fileops(
+            false,
+            &mut filter_state,
+            &mut commit,
+            &filter_rules
+        );
+
+        let expected1 = FileOpsOwned::FileModify(
+            "".into(), "".into(), "nospace/a.txt".into(),
+        );
+        let expected2 = FileOpsOwned::FileModify(
+            "".into(), "".into(), "nospace/b.txt".into(),
+        );
+        let expected = vec![expected1, expected2];
+        eprintln!("Actual: {:#?}", new_fileops);
+        eprintln!("Expected: {:#?}", expected);
+        assert_eq!(new_fileops, expected);
+    }
+
+    #[test]
+    fn filter_rules_handle_spaces2() {
+        let mut commit = current_commit_state(&[
+            "\"my folder/a.txt\"", "\"my folder/b.txt\""
+        ]);
+        let mut filter_state = FilterState::default();
+        let filter_rule = FilterRule::FilterRulePathRename("my folder/".into(), "with space/".into());
+        let filter_rules = vec![filter_rule];
+
+        let new_fileops = apply_filter_rules_to_fileops(
+            false,
+            &mut filter_state,
+            &mut commit,
+            &filter_rules
+        );
+
+        let expected1 = FileOpsOwned::FileModify(
+            "".into(), "".into(), "\"with space/a.txt\"".into(),
+        );
+        let expected2 = FileOpsOwned::FileModify(
+            "".into(), "".into(), "\"with space/b.txt\"".into(),
         );
         let expected = vec![expected1, expected2];
         eprintln!("Actual: {:#?}", new_fileops);

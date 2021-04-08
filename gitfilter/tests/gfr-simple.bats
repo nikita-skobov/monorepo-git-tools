@@ -362,3 +362,35 @@ function git_add_all_and_commit() {
     git checkout master
     git branch -D gitfilter filterrepo
 }
+
+@test 'can handle spaces' {
+    mkdir -p "folder one/"
+    make_file "folder one/a.txt"
+    git_add_all_and_commit "a"
+
+    git checkout -b filterrepo
+    git filter-repo --path-rename "folder one/:nospace/" --refs filterrepo --force
+    [[ ! -d "folder one/" ]]
+    [[ -f nospace/a.txt ]]
+    [[ "$(num_commits)" == 1 ]]
+    gfr_ls_tree="$(git ls-tree HEAD)"
+
+
+    git checkout master
+    git checkout -b gitfilter
+    "$GITFILTERCLI" --branch gitfilter --path-rename "folder one/:nospace/" > filtered.txt
+    cat filtered.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
+    git reset --hard
+    gitfilter_ls_tree="$(git ls-tree HEAD)"
+
+    [[ ! -d "folder one/" ]]
+    [[ -f nospace/a.txt ]]
+    [[ "$(num_commits)" == 1 ]]
+    [[ "$gfr_ls_tree" == "$gitfilter_ls_tree" ]]
+
+    cat filtered.txt
+
+    rm filtered.txt
+    git checkout master
+    git branch -D gitfilter filterrepo
+}
