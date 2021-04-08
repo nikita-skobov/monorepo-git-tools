@@ -5,7 +5,7 @@ use super::filter_state::FilterState;
 use std::io::Write;
 use std::io;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum FilterRule {
     FilterRulePathInclude(String),
     FilterRulePathExclude(String),
