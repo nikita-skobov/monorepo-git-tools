@@ -3,6 +3,7 @@ use export_parser::{CommitObject, StructuredExportObject, StructuredCommit};
 use export_parser::FileOpsOwned;
 use super::filter_state::FilterState;
 use std::io::Write;
+use std::process::Stdio;
 use std::io;
 
 #[derive(Clone, Debug)]
@@ -497,6 +498,37 @@ pub fn filter_with_cb<T: Write, F: Into<FilterOptions<T>>>(
     Ok(())
 }
 
+/// filter from your given rules and options, and pipe directly
+/// into git fast-import with a sensible default
+/// this WILL rewrite your repository history
+/// for the branch you provide, and is not reversible.
+/// note this uses its own stream, and ignores whatever stream you have
+/// in filter_options
+pub fn filter_with_rules_direct<T: Write>(
+    filter_options: FilterOptions<T>,
+    filter_rules: FilterRules,
+) -> io::Result<()> {
+    let exe_and_args = [
+        "git", "-c", "core.ignorecase=false", "fast-import", "--date-format=raw-permissive", "--force", "--quiet"
+    ];
+    let mut gitimport_handle = exechelper::spawn_with_env_ex(
+        &exe_and_args,
+        &[], &[],
+        Some(Stdio::piped()),
+        Some(Stdio::null()),
+        Some(Stdio::null())
+    )?;
+
+    let mut gitimport_stdin = gitimport_handle.stdin.as_mut().ok_or_else(|| std::io::ErrorKind::InvalidInput)?;
+    let overwritten_options = FilterOptions {
+        stream: gitimport_stdin,
+        branch: filter_options.branch,
+        default_include: filter_options.default_include,
+        with_blobs: filter_options.with_blobs,
+    };
+
+    filter_with_rules(overwritten_options, filter_rules)
+}
 
 #[cfg(test)]
 mod test {
