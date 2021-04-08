@@ -3,7 +3,6 @@ use super::repo_file::RepoFile;
 use super::repo_file;
 use super::die;
 use super::verify;
-use super::git_helpers3;
 use super::cli::MgtCommandSplit;
 
 pub fn run_split_out(
@@ -172,7 +171,7 @@ pub fn validate_repo_file(
 
 fn generate_gitfilter_filterrules(
     repo_file: &RepoFile,
-    verbose: bool,
+    _verbose: bool,
 ) -> gitfilter::filter::FilterRules {
     let mut file_ops = verify::get_vec_of_file_ops(&repo_file);
     let filter_rules = verify::make_filter_rules(&mut file_ops);

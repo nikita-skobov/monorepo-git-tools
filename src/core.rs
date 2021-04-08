@@ -11,7 +11,6 @@ use gitfilter::filter::FilterRules;
 use super::exec_helpers;
 use super::git_helpers3;
 use super::repo_file::RepoFile;
-use super::cli::Direction;
 
 pub fn get_current_ref() -> Option<String> {
     match git_helpers3::get_current_ref() {

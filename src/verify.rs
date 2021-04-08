@@ -2,10 +2,9 @@ use super::cli::MgtCommandVerify;
 use super::die;
 use super::repo_file;
 use super::git_helpers3;
-use std::collections::HashMap;
 use std::io::{self, BufRead};
 use gitfilter::filter::FilterRules;
-use gitfilter::{export_parser::{FileOpsOwned, StructuredCommit}, filter::FilterRule, filter_state::FilterState};
+use gitfilter::filter::FilterRule;
 
 #[derive(Debug)]
 pub enum FileOpType<'a> {
@@ -22,7 +21,7 @@ pub fn get_vec_of_file_ops_with_order<'a>(
 ) -> Vec<FileOpType<'a>> {
     let mut out_vec = vec![];
     if let Some(ref include_as) = repo_file.include_as {
-        for (i, path) in include_as.iter().enumerate() {
+        for (i, _path) in include_as.iter().enumerate() {
             if i % 2 != 0 {
                 if src_to_dest {
                     out_vec.push(FileOpType::IncludeAs(&include_as[i - 1], &include_as[i]));
@@ -119,7 +118,7 @@ pub fn make_filter_rules<'a>(
                 // previously the requirement for include_as for renaming something to root/
                 // was the second component needed to be an empty space
                 // this is unnecessary for gitfilter, so we look for that, and clean it up here
-                FilterRule::FilterRulePathRename(src.trim_left().into(), dest.trim_left().into())
+                FilterRule::FilterRulePathRename(src.trim_start().into(), dest.trim_start().into())
             }
             FileOpType::Include(src) => {
                 FilterRule::FilterRulePathInclude(src.into())
@@ -158,7 +157,7 @@ pub fn run_verify(
     } else {
         cmd.repo_file[0].clone()
     };
-    let mut repo_file = repo_file::parse_repo_file_from_toml_path(&repo_file_path);
+    let repo_file = repo_file::parse_repo_file_from_toml_path(&repo_file_path);
     let mut file_ops = get_vec_of_file_ops(&repo_file);
     let filter_rules = make_filter_rules(&mut file_ops);
     let all_files: Vec<String> = if cmd.stdin {
@@ -195,7 +194,7 @@ pub fn run_verify(
         let col_margin_right = col_margin_left;
         let col_char = '|';
         let mut max_left_column = 0;
-        for (original_index, file) in &remaining_files {
+        for (original_index, _file) in &remaining_files {
             let original_file_len = all_files[*original_index].len();
             if original_file_len > max_left_column {
                 max_left_column = original_file_len;

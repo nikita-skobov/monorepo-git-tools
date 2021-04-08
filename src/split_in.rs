@@ -1,12 +1,7 @@
 use std::convert::From;
-use std::fs;
-use std::path::Path;
-use std::fmt::Display;
-use std::{collections::HashSet, path::PathBuf};
 
 use super::split_out;
 use super::git_helpers3;
-use super::exec_helpers;
 use super::repo_file::RepoFile;
 use super::repo_file::generate_repo_file_toml;
 use super::die;
@@ -138,7 +133,7 @@ pub fn run_split_in_from_repo_file(
 
 fn generate_gitfilter_filterrules(
     repo_file: &RepoFile,
-    verbose: bool,
+    _verbose: bool,
 ) -> gitfilter::filter::FilterRules {
     let mut file_ops = verify::get_vec_of_file_ops_with_order(&repo_file, false);
     let filter_rules = verify::make_filter_rules(&mut file_ops);
