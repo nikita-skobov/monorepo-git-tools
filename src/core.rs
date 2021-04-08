@@ -160,9 +160,6 @@ pub fn verify_dependencies() {
     if ! exec_helpers::executed_successfully(&["git", "--version"]) {
         die!("Failed to run. Missing dependency 'git'");
     }
-    if ! exec_helpers::executed_successfully(&["git", "filter-repo", "--version"]) {
-        die!("Failed to run. Missing dependency 'git-filter-repo'");
-    }
 }
 
 /// check the state of the git repository. exit if
