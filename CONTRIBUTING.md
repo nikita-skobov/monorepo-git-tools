@@ -7,6 +7,5 @@
   cd monorepo-git-tools
   ./test/run_tests.sh
   ```
-  That will probably fail at first because this project has some dependencies. Mainly [`git-filter-repo`](https://github.com/newren/git-filter-repo),
-  and [`bats` (note, I use `bats-core`)](https://github.com/bats-core/bats-core), so make sure both of those are properly installed. Then try running `./test/run_tests.sh` again.
+  That will probably fail at first because this project has some dependencies. mainly [`bats` (note, I use `bats-core`)](https://github.com/bats-core/bats-core), so make sure it is properly installed. Then try running `./test/run_tests.sh` again.
   If it still doesn't work, something is wrong so please file an issue.
