@@ -23,7 +23,7 @@ The above would create the following mapping between your local code, and code t
 ```
 Local repo               Github repo
 ================================================
-src/                     die/         
+lib/                     die/         
    gitfilter/            exechelper/
       README.md          gumdrop/
       src/               src/
@@ -35,7 +35,7 @@ src/                     die/
 doc/
 ```
 
-Note that there are other folders in the local repo that do not get mapped to the Github repo because they were not defined in the `[include_as]` section. **`mgt` allows you to pick and choose what part of your git history you want to share publically**
+Note that there are other folders in the local repo that do not get mapped to the Github repo because they were not defined in the `[include_as]` section. **`mgt` allows you to pick and choose what part of your git history you want to share publicly**
 
 ## Jump to
 
