@@ -13,6 +13,7 @@ automatically generated output of `mgt --help`
 * [topbase](./topbase.md)
 * [check](./check.md)
 * [repo_file](./repo_file.md)
+* [verify](./verify-rf.md)
 
 ## `mgt --help` or
 ## `mgt -h` or
