@@ -14,7 +14,7 @@ FLAGS:
     --recursive    if the <repo-file> is a directory, get all files in this directory recursively 
     --remote       check if the remote has commits not present in this local branch. This is the 
                    default 
-    --help         
+    -h, --help     
 
 OPTIONS:
     --local-branch BRANCH-NAME         check updates to/from a specific local branch instead of 

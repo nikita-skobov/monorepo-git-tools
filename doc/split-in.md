@@ -9,7 +9,7 @@ USAGE:
 FLAGS:
     --verbose              Prints verbose information 
     --dry-run              Print out the steps taken, but don't actually run or change anything. 
-    --help                 
+    -h, --help             
 
 OPTIONS:
     --input-branch INPUT-BRANCH          split in from a local branch in this repository 

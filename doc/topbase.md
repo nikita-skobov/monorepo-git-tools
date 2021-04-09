@@ -7,9 +7,9 @@ USAGE:
     mgt topbase [FLAGS] <base> [top]
 
 FLAGS:
-    --dry-run    Print out the steps taken, but don't actually run or change anything. 
-    --verbose    Prints verbose information 
-    --help       
+    --dry-run     Print out the steps taken, but don't actually run or change anything. 
+    --verbose     Prints verbose information 
+    -h, --help    
 
 POSITIONAL:
     <base>    the branch to rebase onto.

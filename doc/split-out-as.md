@@ -9,7 +9,7 @@ USAGE:
 FLAGS:
     --verbose              Prints verbose information 
     --dry-run              Print out the steps taken, but don't actually run or change anything. 
-    --help                 
+    -h, --help             
 
 OPTIONS:
     -o, --output-branch OUTPUT-BRANCH    name of branch that will be created with new split 

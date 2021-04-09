@@ -11,7 +11,7 @@ FLAGS:
                            argument gets mapped to [include_as] 
     --verbose              Prints verbose information 
     --dry-run              Print out the steps taken, but don't actually run or change anything. 
-    --help                 
+    -h, --help             
 
 OPTIONS:
     --num-commits N                      when pulling from remote, limit to N commits from the 
