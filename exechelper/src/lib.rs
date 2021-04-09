@@ -7,6 +7,9 @@ pub struct CommandOutput {
     pub status: i32,
 }
 
+// pub enun
+
+
 pub fn executed_successfully(exe_and_args: &[&str]) -> bool {
     match execute(exe_and_args) {
         Err(_) => false,
@@ -68,10 +71,16 @@ pub fn execute(exe_and_args: &[&str]) -> Result<CommandOutput, Error> {
     execute_with_env(exe_and_args, &[], &[])
 }
 
-pub fn spawn_with_env(
+/// optionally pass in what kind of stdio config
+/// you want to use for each stream. passing None
+/// will use whatever the default is.
+pub fn spawn_with_env_ex(
     exe_and_args: &[&str],
     keys: &[&str],
     vals: &[&str],
+    read_stdin: Option<Stdio>,
+    read_stderr: Option<Stdio>,
+    read_stdout: Option<Stdio>,
 ) -> Result<std::process::Child, Error> {
     // at the very least must provide the executable name
     assert!(exe_and_args.len() >= 1);
@@ -87,11 +96,31 @@ pub fn spawn_with_env(
         proc.env(k, v);
     }
 
-    proc.stdin(Stdio::null());
-    proc.stderr(Stdio::null());
+    let mut read_stdin = read_stdin;
+    let mut read_stderr = read_stderr;
+    let mut read_stdout = read_stdout;
+    if let Some(cfg) = read_stdin.take() {
+        proc.stdin(cfg);
+    }
+    if let Some(cfg) = read_stderr.take() {
+        proc.stderr(cfg);
+    }
+    if let Some(cfg) = read_stdout.take() {
+        proc.stdout(cfg);
+    }
+
     proc.spawn()
 }
 
 pub fn spawn(exe_and_args: &[&str]) -> Result<std::process::Child, Error> {
     spawn_with_env(exe_and_args, &[], &[])
+}
+
+pub fn spawn_with_env(
+    exe_and_args: &[&str],
+    keys: &[&str],
+    vals: &[&str],
+) -> Result<std::process::Child, Error> {
+    spawn_with_env_ex(exe_and_args, keys, vals,
+        Some(Stdio::null()), Some(Stdio::null()), None)
 }

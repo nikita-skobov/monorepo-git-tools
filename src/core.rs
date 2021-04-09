@@ -2,52 +2,15 @@ use std::env;
 use die::die;
 use std::path::PathBuf;
 use std::path::MAIN_SEPARATOR;
+use std::io::sink;
 
 use git_url_parse::GitUrl;
+use gitfilter::filter::FilterOptions;
+use gitfilter::filter::FilterRules;
 
 use super::exec_helpers;
 use super::git_helpers3;
 use super::repo_file::RepoFile;
-use super::cli::Direction;
-
-/// argument strings to be executed when
-/// running git-filter-repo
-pub struct ArgStrings {
-    pub include: Option<Vec<String>>,
-    pub include_as: Option<Vec<String>>,
-    pub exclude: Option<Vec<String>>,
-}
-
-impl ArgStrings {
-    pub fn filter_out(
-        &self,
-        output_branch: &Option<String>,
-        dry_run: bool,
-        verbose: bool,
-    ) {
-        filter_all_arg_strs(
-            self,
-            Direction::Out,
-            output_branch,
-            dry_run,
-            verbose,
-        )
-    }
-    pub fn filter_in(
-        &self,
-        output_branch: &Option<String>,
-        dry_run: bool,
-        verbose: bool,
-    ) {
-        filter_all_arg_strs(
-            self,
-            Direction::In,
-            output_branch,
-            dry_run,
-            verbose,
-        )
-    }
-}
 
 pub fn get_current_ref() -> Option<String> {
     match git_helpers3::get_current_ref() {
@@ -82,6 +45,37 @@ pub fn go_to_repo_root() {
     let repo_root = get_repo_root();
     if let Err(e) = env::set_current_dir(repo_root) {
         die!("Failed to change to repo root: {}", e);
+    }
+}
+
+pub fn perform_gitfilter(
+    filter_rules: FilterRules,
+    output_branch: String,
+    dry_run: bool,
+    verbose: bool,
+) {
+    let filter_options = FilterOptions {
+        stream: sink(),
+        branch: Some(output_branch),
+        default_include: false,
+        with_blobs: false,
+    };
+
+    if dry_run || verbose {
+        println!("Running with filter rules:\n{:#?}", filter_rules);
+    }
+    if dry_run { return; }
+
+    let res = gitfilter::filter::filter_with_rules_direct(
+        filter_options, filter_rules);
+    if let Err(e) = res {
+        die!("Failed to perform gitfilter: {}", e);
+    }
+
+    // remember, at the end of gitfilter, we have to revert the files that
+    // are currently staged:
+    if let Err(e) = git_helpers3::reset_stage() {
+        die!("Failed to reset git stage after filer: {}", e);
     }
 }
 
@@ -164,9 +158,6 @@ pub fn rebase(
 pub fn verify_dependencies() {
     if ! exec_helpers::executed_successfully(&["git", "--version"]) {
         die!("Failed to run. Missing dependency 'git'");
-    }
-    if ! exec_helpers::executed_successfully(&["git", "filter-repo", "--version"]) {
-        die!("Failed to run. Missing dependency 'git-filter-repo'");
     }
 }
 
@@ -280,129 +271,6 @@ pub fn populate_empty_branch_with_remote_commits(
             }
         },
     };
-}
-
-pub fn filter_all_arg_strs(
-    arg_strs: &ArgStrings,
-    direction: Direction,
-    output_branch: &Option<String>,
-    dry_run: bool,
-    verbose: bool,
-) {
-    if let Direction::Out = direction {
-        filter_from_arg_str(
-            &arg_strs.include,
-            output_branch,
-            dry_run,
-            verbose,
-            "Filtering include",
-        );
-        filter_from_arg_str(
-            &arg_strs.exclude,
-            output_branch,
-            dry_run,
-            verbose,
-            "Filtering exclude",
-        );
-        filter_from_arg_str(
-            &arg_strs.include_as,
-            output_branch,
-            dry_run,
-            verbose,
-            "Filtering include_as",
-        );
-    } else if let Direction::In = direction {
-        filter_from_arg_str(
-            &arg_strs.exclude,
-            output_branch,
-            dry_run,
-            verbose,
-            "Filtering exclude",
-        );
-        filter_from_arg_str(
-            &arg_strs.include_as,
-            output_branch,
-            dry_run,
-            verbose,
-            "Filtering include_as",
-        );
-        filter_from_arg_str(
-            &arg_strs.include,
-            output_branch,
-            dry_run,
-            verbose,
-            "Filtering include",
-        );
-    }
-}
-
-pub fn filter_from_arg_str(
-    arg_str: &Option<Vec<String>>,
-    output_branch: &Option<String>,
-    dry_run: bool,
-    verbose: bool,
-    verbose_log: &str,
-) {
-    if arg_str.is_none() {
-        // dont run filter if this arg was not provided
-        return;
-    }
-
-    let output_branch_name = match output_branch {
-        Some(s) => s,
-        None => die!("Failed to get output branch"),
-    };
-
-    if let Some(ref s) = arg_str {
-        let arg_str_opt = s.clone();
-        let unambiguous_output_branch = format!("refs/heads/{}", output_branch_name);
-        let arg_vec = generate_filter_arg_vec(
-            &arg_str_opt,
-            unambiguous_output_branch.as_str(),
-        );
-
-        run_filter(arg_vec, verbose_log, dry_run, verbose)
-    }
-}
-
-pub fn run_filter(
-    arg_vec: Vec<&str>,
-    verbose_log: &str,
-    dry_run: bool,
-    verbose: bool,
-) {
-    if dry_run {
-        println!("{}", arg_vec.join(" "));
-        return;
-    }
-    if verbose {
-        println!("{}", verbose_log);
-    }
-    let err_msg = match exec_helpers::execute(&arg_vec) {
-        Ok(o) => match o.status {
-            0 => None,
-            _ => Some(o.stderr),
-        },
-        Err(e) => Some(format!("{}", e)),
-    };
-    if let Some(err) = err_msg {
-        die!("Failed to execute: \"{}\"\n{}", arg_vec.join(" "), err);
-    }
-}
-
-pub fn generate_filter_arg_vec<'a>(
-    args: &'a Vec<String>,
-    output_branch: &'a str,
-) -> Vec<&'a str> {
-    let mut arg_vec = vec!["git", "filter-repo"];
-    for arg in args {
-        arg_vec.push(arg);
-    }
-    arg_vec.push("--refs");
-    arg_vec.push(&output_branch);
-    arg_vec.push("--force");
-
-    arg_vec
 }
 
 pub fn panic_if_array_invalid(var: &Option<Vec<String>>, can_be_single: bool, varname: &str) {

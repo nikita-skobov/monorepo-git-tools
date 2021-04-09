@@ -1,0 +1,19 @@
+[package]
+name = "gitfilter"
+version = "0.1.0"
+authors = ["nikita-skobov"]
+edition = "2018"
+
+
+[dependencies]
+exechelper = { path = "../exechelper" }
+num_cpus = "1.13.0"
+regex = "1.4.3"
+once_cell = "*"
+
+[dev-dependencies]
+gumdrop = { path = "../gumdrop" }
+
+[profile.release]
+lto = true
+opt-level = 3

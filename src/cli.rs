@@ -6,6 +6,7 @@ use super::split_out::run_split_out;
 use super::split_out::run_split_out_as;
 use super::split_in::run_split_in;
 use super::split_in::run_split_in_as;
+use super::verify::run_verify;
 use super::topbase::run_topbase;
 
 #[derive(Debug, Options)]
@@ -93,6 +94,24 @@ pub enum Direction { Out, In }
 pub struct MgtCommandHelp {}
 
 #[derive(Debug, Options)]
+pub struct MgtCommandVerify {
+    #[options(short = "h")]
+    pub help: bool,
+
+    #[options(free, help = "path to your repo file")]
+    pub repo_file: Vec<String>,
+
+    #[options(help = "show full rename from src -> dest")]
+    pub verbose: bool,
+
+    #[options(help = "format the mapping nicely. implies verbose. wont work well on small terminals though")]
+    pub pretty: bool,
+
+    #[options(help = "provide a list of files to verify from stdin, one file per line. By default we get this list of files for you via:\ngit ls-tree -r HEAD --name-only --full-tree\n You can achieve the default behavior by doing:\n git ls-tree -r HEAD --name-only --full-tree | mgt verify-rf --stdin <PATH/TO/REPOFILE>")]
+    pub stdin: bool,
+}
+
+#[derive(Debug, Options)]
 pub enum MgtSubcommands {
     Help(MgtCommandHelp),
 
@@ -113,6 +132,12 @@ pub enum MgtSubcommands {
 
     #[options(help = "create a new branch with this repository's history rewritten according to the --as <subdirectory>")]
     SplitOutAs(MgtCommandSplit),
+
+    #[options(help = "verify your repo file before running a split operation")]
+    VerifyRepoFile(MgtCommandVerify),
+
+    #[options(help = "alias for verify-repo-file")]
+    VerifyRf(MgtCommandVerify),
 }
 
 pub fn get_version_str() -> String {
@@ -241,6 +266,9 @@ impl AsRef<MgtCommandTopbase> for MgtCommandTopbase {
 impl AsRef<MgtCommandSplit> for MgtCommandSplit {
     fn as_ref(&self) -> &MgtCommandSplit { self }
 }
+impl AsRef<MgtCommandVerify> for MgtCommandVerify {
+    fn as_ref(&self) -> &MgtCommandVerify { self }
+}
 
 impl Mgt {
     pub fn new() -> Mgt {
@@ -307,6 +335,13 @@ pub fn get_cli_input() -> Mgt {
                 let subcommand_name = format!("mgt {}", subcommand_name);
                 if cli.help || s.help {
                     print_usage(&s, Some(&subcommand_name), usage_line);
+                    true
+                } else { false }
+            }
+            MgtSubcommands::VerifyRepoFile(v) |
+            MgtSubcommands::VerifyRf(v) => {
+                if cli.help || v.help {
+                    print_usage(&v, Some("mgt verify"), None);
                     true
                 } else { false }
             }
@@ -390,6 +425,10 @@ pub fn validate_input_and_run(mgt_opts: Mgt) {
                 cmd.dry_run = mgt_opts.dry_run || cmd.dry_run;
                 cmd.direction = Some(Direction::Out);
                 run_split_out_as(cmd);
+            },
+            MgtSubcommands::VerifyRepoFile(ref mut cmd) |
+            MgtSubcommands::VerifyRf(ref mut cmd) => {
+                run_verify(cmd);
             }
         },
     }
