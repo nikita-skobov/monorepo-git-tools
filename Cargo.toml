@@ -2,7 +2,7 @@
 name = "mgt"
 description = "Git tools that enable easy bidirectional sync between multiple repositories"
 # please make sure version is always on line 5, otherwise CI will break ¯\_(ツ)_/¯
-version = "4.1.1"
+version = "4.5.0"
 authors = ["Nikita Skobov"]
 edition = "2018"
 
