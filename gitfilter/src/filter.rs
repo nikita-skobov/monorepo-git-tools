@@ -4,7 +4,7 @@ use export_parser::FileOpsOwned;
 use super::filter_state::FilterState;
 use std::io::Write;
 use std::process::Stdio;
-use std::io;
+use std::{path::{PathBuf, Path}, io};
 
 #[derive(Clone, Debug)]
 pub enum FilterRule {
@@ -452,9 +452,10 @@ pub fn perform_filter(
     FilterResponse::UseAsIs
 }
 
-pub fn filter_with_rules<T: Write>(
+pub fn filter_with_rules<P: AsRef<Path>, T: Write>(
     filter_options: FilterOptions<T>,
     filter_rules: FilterRules,
+    location: Option<P>,
 ) -> io::Result<()> {
     let mut filter_state = FilterState::default();
     let default_include = filter_options.default_include;
@@ -485,18 +486,20 @@ pub fn filter_with_rules<T: Write>(
             _ => true,
         }
     };
-    filter_with_cb(filter_options, cb)
+    filter_with_cb(filter_options, location, cb)
 }
 
 // temporary function to test out filtering
-pub fn filter_with_cb<T: Write, F: Into<FilterOptions<T>>>(
+pub fn filter_with_cb<P: AsRef<Path>, T: Write, F: Into<FilterOptions<T>>>(
     options: F,
+    location: Option<P>,
     cb: impl FnMut(&mut StructuredExportObject) -> bool
 ) -> io::Result<()> {
     let options: FilterOptions<T> = options.into();
     let mut stream = options.stream;
     let mut cb = cb;
-    export_parser::parse_git_filter_export_via_channel(options.branch, options.with_blobs,
+    export_parser::parse_git_filter_export_via_channel(
+        options.branch, options.with_blobs, location,
         |mut obj| {
             if cb(&mut obj) {
                 return export_parser::write_to_stream(&mut stream, obj);
@@ -510,22 +513,22 @@ pub fn filter_with_cb<T: Write, F: Into<FilterOptions<T>>>(
     Ok(())
 }
 
-/// filter from your given rules and options, and pipe directly
-/// into git fast-import with a sensible default
-/// this WILL rewrite your repository history
-/// for the branch you provide, and is not reversible.
-/// note this uses its own stream, and ignores whatever stream you have
-/// in filter_options
-pub fn filter_with_rules_direct<T: Write>(
+pub fn filter_with_rules_direct_ex<P: AsRef<Path>, T: Write>(
     filter_options: FilterOptions<T>,
     filter_rules: FilterRules,
+    location: Option<P>,
 ) -> io::Result<()> {
     let exe_and_args = [
         "git", "-c", "core.ignorecase=false", "fast-import", "--date-format=raw-permissive", "--force", "--quiet"
     ];
-    let mut gitimport_handle = exechelper::spawn_with_env_ex(
+    let location_clone = match location {
+        Some(ref l) => Some(l.as_ref().to_owned()),
+        None => None,
+    };
+    let mut gitimport_handle = exechelper::spawn_with_env_ex2(
         &exe_and_args,
         &[], &[],
+        location_clone,
         Some(Stdio::piped()),
         Some(Stdio::null()),
         Some(Stdio::null())
@@ -539,7 +542,7 @@ pub fn filter_with_rules_direct<T: Write>(
         with_blobs: filter_options.with_blobs,
     };
 
-    let res = filter_with_rules(overwritten_options, filter_rules);
+    let res = filter_with_rules(overwritten_options, filter_rules, location);
     let res2 = gitimport_handle.wait();
     if res.is_ok() && res2.is_ok() {
         return Ok(());
@@ -552,18 +555,33 @@ pub fn filter_with_rules_direct<T: Write>(
     }
 }
 
+/// filter from your given rules and options, and pipe directly
+/// into git fast-import with a sensible default
+/// this WILL rewrite your repository history
+/// for the branch you provide, and is not reversible.
+/// note this uses its own stream, and ignores whatever stream you have
+/// in filter_options
+pub fn filter_with_rules_direct<T: Write>(
+    filter_options: FilterOptions<T>,
+    filter_rules: FilterRules,
+) -> io::Result<()> {
+    let no_location: Option<PathBuf> = None;
+    filter_with_rules_direct_ex(filter_options, filter_rules, no_location)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use std::io::sink;
     use std::io::Cursor;
-    use std::io::Read;
+    use std::{path::PathBuf, io::Read};
     use export_parser::StructuredObjectType;
+    pub const NO_LOCATION: Option<PathBuf> = None;
 
     #[test]
     fn filter_path_works() {
         let writer = sink();
-        filter_with_cb(writer, |obj| {
+        filter_with_cb(writer, NO_LOCATION, |obj| {
             match &obj.object_type {
                 StructuredObjectType::Blob(_) => true,
                 StructuredObjectType::Commit(commit_obj) => {
@@ -581,7 +599,7 @@ mod test {
     #[test]
     fn can_modify_filter_objects() {
         let mut writer = Cursor::new(vec![]);
-        filter_with_cb(&mut writer, |obj| {
+        filter_with_cb(&mut writer, NO_LOCATION, |obj| {
             if let Some(reset) = &mut obj.has_reset {
                 *reset = "refs/heads/NEWBRANCHNAMEAAAAAAA".into();
             }

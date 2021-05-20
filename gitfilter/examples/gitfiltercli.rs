@@ -1,5 +1,6 @@
 use gumdrop::Options;
 use gitfilter::filter::*;
+use std::path::PathBuf;
 
 #[derive(Debug, Options, Default)]
 pub struct Filter {
@@ -91,5 +92,6 @@ fn main() {
         panic!("Must provide either a filter include or an exclude");
     }
 
-    let _ = filter_with_rules(filter_opts, filter_rules);
+    let no_location: Option<PathBuf> = None;
+    let _ = filter_with_rules(filter_opts, filter_rules, no_location);
 }
