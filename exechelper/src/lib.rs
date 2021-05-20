@@ -1,5 +1,5 @@
 use std::process::Command;
-use std::{io::Error, process::Stdio, ffi::OsStr};
+use std::{io::Error, process::Stdio, ffi::OsStr, path::Path};
 
 pub struct CommandOutput {
     pub stdout: String,
@@ -74,10 +74,11 @@ pub fn execute(exe_and_args: &[&str]) -> Result<CommandOutput, Error> {
 /// optionally pass in what kind of stdio config
 /// you want to use for each stream. passing None
 /// will use whatever the default is.
-pub fn spawn_with_env_ex(
+pub fn spawn_with_env_ex_actual<P: AsRef<Path>>(
     exe_and_args: &[&str],
     keys: &[&str],
     vals: &[&str],
+    location: Option<P>,
     read_stdin: Option<Stdio>,
     read_stderr: Option<Stdio>,
     read_stdout: Option<Stdio>,
@@ -87,6 +88,9 @@ pub fn spawn_with_env_ex(
     assert!(keys.len() == vals.len());
 
     let mut proc = Command::new(exe_and_args[0]);
+    if let Some(location) = location {
+        proc.current_dir(location);
+    }
     for arg in exe_and_args.iter().skip(1) {
         proc.arg(arg);
     }
@@ -111,6 +115,34 @@ pub fn spawn_with_env_ex(
 
     proc.spawn()
 }
+
+/// optionally pass in what kind of stdio config
+/// you want to use for each stream. passing None
+/// will use whatever the default is.
+pub fn spawn_with_env_ex(
+    exe_and_args: &[&str],
+    keys: &[&str],
+    vals: &[&str],
+    read_stdin: Option<Stdio>,
+    read_stderr: Option<Stdio>,
+    read_stdout: Option<Stdio>,
+) -> Result<std::process::Child, Error> {
+    let no_path: Option<&Path> = None;
+    spawn_with_env_ex_actual(exe_and_args, keys, vals, no_path, read_stdin, read_stderr, read_stdout)
+}
+
+pub fn spawn_with_env_ex2<P: AsRef<Path>>(
+    exe_and_args: &[&str],
+    keys: &[&str],
+    vals: &[&str],
+    location: Option<P>,
+    read_stdin: Option<Stdio>,
+    read_stderr: Option<Stdio>,
+    read_stdout: Option<Stdio>,
+) -> Result<std::process::Child, Error> {
+    spawn_with_env_ex_actual(exe_and_args, keys, vals, location, read_stdin, read_stderr, read_stdout)
+}
+
 
 pub fn spawn(exe_and_args: &[&str]) -> Result<std::process::Child, Error> {
     spawn_with_env(exe_and_args, &[], &[])
