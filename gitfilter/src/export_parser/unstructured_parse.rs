@@ -28,6 +28,13 @@ pub fn make_expected_progress_string(progress_num: u32) -> String {
     s
 }
 
+// TODO:
+// add a way to allow parsing from a read stream, and not necessarily
+// opening a new git fast-export command.
+// this would be useful to read from a file that contains
+// the fast-export text without running the command
+// repeatedly for every time you want to split.
+
 /// This 'parser' will only parse the data section
 /// and put the rest of the info into a 'metadata' string
 /// for future parsing. the rationale is that we need to parse the data section

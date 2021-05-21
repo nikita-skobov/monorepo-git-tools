@@ -248,6 +248,9 @@ pub fn perform_filter(
             }
             None => false,
         };
+        // TODO: add a impl fn for the filter state to
+        // test if a mark exists and is non emtpy. basically
+        // dont repeat this code over and over:
         let has_all_merges = commit.merges.iter().all(|m| {
             match filter_state.mark_map.get(m) {
                 Some(pointsto) => !pointsto.is_empty(),
@@ -306,6 +309,7 @@ pub fn perform_filter(
                 }
             }
             None => {
+                // TODO: remove panic, and return a result instead
                 let panic_str = format!(
                     "Found a commit that we dont know in the map!\nWe are {:?} -> from {}. failed to find the from",
                     commit.mark, from
