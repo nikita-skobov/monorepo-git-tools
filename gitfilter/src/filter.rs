@@ -229,11 +229,11 @@ pub fn perform_filter(
                 };
                 match insert_with {
                     Some(transitive_parent) => {
-                        eprintln!("A {} -> {}", mark, transitive_parent);
+                        // eprintln!("A {} -> {}", mark, transitive_parent);
                         filter_state.mark_map.insert(mark.clone(), transitive_parent.clone());
                     }
                     None => {
-                        eprintln!("B {} -> {}", mark, "");
+                        // eprintln!("B {} -> {}", mark, "");
                         filter_state.mark_map.insert(mark.clone(), "".into());
                     }
                 }
