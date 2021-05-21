@@ -67,6 +67,39 @@ function num_commits() {
     git log --oneline "$refname" | wc -l
 }
 
+# this test is specifically to filter react's packages/ directory
+# which I guess has an odd history because I realized a while after making gitfilter
+# that it fails on this folder. So its some special case that needs to be properly handled
+@test 'can handle complicated/weird merges' {
+    git checkout -b "$TESTBRANCH"
+    git branch -v
+    git filter-repo --force --refs "$TESTBRANCH" --path packages/
+    git branch "$CMPBRANCH" master
+
+    gfr_ls_tree="$(git ls-tree HEAD)"
+    gfr_num_non_empty="$(num_non_empty_commits)"
+
+    "$GITFILTERCLI" --branch "$CMPBRANCH" --path packages/ > filter1.txt
+    cat filter1.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force --quiet
+    git reset --hard
+
+    gitfilter_ls_tree="$(git ls-tree HEAD)"
+    gitfilter_num_non_empty="$(num_non_empty_commits)"
+
+    git branch -v
+
+    [[ "$gfr_ls_tree" == "$gitfilter_ls_tree" ]]
+    [[ "$gfr_num_non_empty" == "$gitfilter_num_non_empty" ]]
+}
+
+# ok so the error:
+# thread 'main' panicked at 'Found a commit that we dont know in the map!
+# We are Some(":5712") -> from :5711. failed to find the from', src/filter.rs:303:17
+# 1. probably should not panic in a library...
+# 2. this happens because 5711 got filtered out when it should not have,
+#    or at least it needs to point to something that didnt get filtered out...
+
+
 @test 'tree and non empty commits are the same for a real repo' {
     git checkout -b "$TESTBRANCH"
     git branch -v
