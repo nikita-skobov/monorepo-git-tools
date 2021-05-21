@@ -254,8 +254,18 @@ pub fn perform_filter(
                 None => false,
             }
         });
-        if !has_from || !has_all_merges {
+        if !has_from && !has_all_merges {
+            // eprintln!("Dont use because it doesnt has from and it doesnt have merges");
             return FilterResponse::DontUse;
+        } else if has_from && !has_all_merges {
+            // if the from exists, but the merges dont, then
+            // remove all merges that dont exist:
+            commit.merges.retain(|merge| {
+                match filter_state.mark_map.get(merge) {
+                    Some(m) => !m.is_empty(),
+                    None => false,
+                }
+            });
         }
     }
 
