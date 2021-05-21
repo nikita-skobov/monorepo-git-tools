@@ -5,6 +5,7 @@ use super::filter_state::FilterState;
 use std::io::Write;
 use std::process::Stdio;
 use std::{path::{PathBuf, Path}, io};
+use io::Error;
 
 #[derive(Clone, Debug)]
 pub enum FilterRule {
@@ -15,6 +16,13 @@ pub enum FilterRule {
 pub use FilterRule::*;
 
 pub type FilterRules = Vec<FilterRule>;
+pub struct FilterError(String);
+
+impl From<FilterError> for io::Error {
+    fn from(orig: FilterError) -> Self {
+        io::Error::new(io::ErrorKind::Other, orig.0)
+    }
+}
 
 /// how to use this filtered commit
 pub enum FilterResponse {
@@ -203,7 +211,7 @@ pub fn perform_filter(
     filter_state: &mut FilterState,
     commit: &mut StructuredCommit,
     filter_rules: &FilterRules,
-) -> FilterResponse {
+) -> Result<FilterResponse, FilterError> {
     let newfileops = apply_filter_rules_to_fileops(default_include, filter_state, commit, filter_rules);
     // if we have pruned all of the file operations,
     // then we dont want to use this object as a commit, but rather
@@ -238,7 +246,7 @@ pub fn perform_filter(
             // are possible?
             _ => {},
         }
-        return FilterResponse::DontUse;
+        return Ok(FilterResponse::DontUse);
     }
     commit.fileops = newfileops;
 
@@ -257,7 +265,7 @@ pub fn perform_filter(
 
         if !has_from && !has_all_merges {
             // eprintln!("Dont use because it doesnt has from and it doesnt have merges");
-            return FilterResponse::DontUse;
+            return Ok(FilterResponse::DontUse);
         } else if has_from && !has_all_merges {
             // if the from exists, but the merges dont, then
             // remove all merges that dont exist:
@@ -301,11 +309,11 @@ pub fn perform_filter(
             }
             None => {
                 // TODO: remove panic, and return a result instead
-                let panic_str = format!(
+                let err_str = format!(
                     "Found a commit that we dont know in the map!\nWe are {:?} -> from {}. failed to find the from",
                     commit.mark, from
                 );
-                panic!("{}", panic_str);
+                return Err(FilterError(err_str));
             }
         }
     }
@@ -380,14 +388,14 @@ pub fn perform_filter(
                         };
                         if let Some(pointing_to) = pointed_to {
                             filter_state.mark_map.insert(mark.clone(), pointing_to);
-                            return FilterResponse::DontUse;
+                            return Ok(FilterResponse::DontUse);
                         }
                     }
                 }
             }
             // regardless if we were able to find a parent to map to,
             // we still dont want to be used
-            return FilterResponse::DontUse;
+            return Ok(FilterResponse::DontUse);
         }
     }
 
@@ -435,7 +443,7 @@ pub fn perform_filter(
                         }
                     }
 
-                    return FilterResponse::DontUse;
+                    return Ok(FilterResponse::DontUse);
                 }
             }
         }
@@ -457,7 +465,7 @@ pub fn perform_filter(
         _ => {},
     }
 
-    FilterResponse::UseAsIs
+    Ok(FilterResponse::UseAsIs)
 }
 
 pub fn filter_with_rules<P: AsRef<Path>, T: Write>(
@@ -467,12 +475,12 @@ pub fn filter_with_rules<P: AsRef<Path>, T: Write>(
 ) -> io::Result<()> {
     let mut filter_state = FilterState::default();
     let default_include = filter_options.default_include;
-    let cb = |obj: &mut StructuredExportObject| -> bool {
+    let cb = |obj: &mut StructuredExportObject| -> io::Result<bool> {
         // TODO: filter on blobs as well:
         match &mut obj.object_type {
-            export_parser::StructuredObjectType::Blob(_) => true,
+            export_parser::StructuredObjectType::Blob(_) => Ok(true),
             export_parser::StructuredObjectType::Commit(ref mut c) => {
-                let resp = perform_filter(default_include, &mut filter_state, c, &filter_rules);
+                let resp = perform_filter(default_include, &mut filter_state, c, &filter_rules)?;
                 if !filter_state.have_used_a_commit && resp.is_used() {
                     filter_state.have_used_a_commit = true;
                 }
@@ -489,9 +497,9 @@ pub fn filter_with_rules<P: AsRef<Path>, T: Write>(
                     }
                     obj.object_type = export_parser::StructuredObjectType::NoType;
                 }
-                is_used
+                Ok(is_used)
             },
-            _ => true,
+            _ => Ok(true),
         }
     };
     filter_with_cb(filter_options, location, cb)
@@ -501,7 +509,7 @@ pub fn filter_with_rules<P: AsRef<Path>, T: Write>(
 pub fn filter_with_cb<P: AsRef<Path>, T: Write, F: Into<FilterOptions<T>>>(
     options: F,
     location: Option<P>,
-    cb: impl FnMut(&mut StructuredExportObject) -> bool
+    cb: impl FnMut(&mut StructuredExportObject) -> io::Result<bool>,
 ) -> io::Result<()> {
     let options: FilterOptions<T> = options.into();
     let mut stream = options.stream;
@@ -509,7 +517,8 @@ pub fn filter_with_cb<P: AsRef<Path>, T: Write, F: Into<FilterOptions<T>>>(
     export_parser::parse_git_filter_export_via_channel(
         options.branch, options.with_blobs, location,
         |mut obj| {
-            if cb(&mut obj) {
+            let succeeded = cb(&mut obj)?;
+            if succeeded {
                 return export_parser::write_to_stream(&mut stream, obj);
             }
             Ok(())
@@ -591,15 +600,15 @@ mod test {
         let writer = sink();
         filter_with_cb(writer, NO_LOCATION, |obj| {
             match &obj.object_type {
-                StructuredObjectType::Blob(_) => true,
+                StructuredObjectType::Blob(_) => Ok(true),
                 StructuredObjectType::Commit(commit_obj) => {
                     if commit_obj.committer.email.contains("jerry") {
-                        false
+                        Ok(false)
                     } else {
-                        true
+                        Ok(true)
                     }
                 },
-                _ => true,
+                _ => Ok(true),
             }
         }).unwrap();
     }
@@ -612,12 +621,12 @@ mod test {
                 *reset = "refs/heads/NEWBRANCHNAMEAAAAAAA".into();
             }
             match &mut obj.object_type {
-                StructuredObjectType::Blob(_) => true,
+                StructuredObjectType::Blob(_) => Ok(true),
                 StructuredObjectType::Commit(commit_obj) => {
                     commit_obj.commit_ref = commit_obj.commit_ref.replace("master", "NEWBRANCHNAMEAAAAAAA");
-                    true
+                    Ok(true)
                 },
-                _ => true,
+                _ => Ok(true),
             }
         }).unwrap();
 
