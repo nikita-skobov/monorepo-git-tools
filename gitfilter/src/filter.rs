@@ -215,13 +215,17 @@ pub fn perform_filter(
     if newfileops.is_empty() {
         match (&commit.from, &commit.mark) {
             (Some(from), Some(mark)) => {
-                match filter_state.mark_map.get(from) {
+                let insert_with = match filter_state.mark_map.get(from) {
+                    Some(transitive_parent) => Some(transitive_parent.clone()),
+                    None => None,
+                };
+                match insert_with {
                     Some(transitive_parent) => {
-                        // eprintln!("A {} -> {}", mark, transitive_parent);
+                        eprintln!("A {} -> {}", mark, transitive_parent);
                         filter_state.mark_map.insert(mark.clone(), transitive_parent.clone());
                     }
                     None => {
-                        // eprintln!("B {} -> {}", mark, "");
+                        eprintln!("B {} -> {}", mark, "");
                         filter_state.mark_map.insert(mark.clone(), "".into());
                     }
                 }
@@ -242,33 +246,22 @@ pub fn perform_filter(
     // just skip it, dont bother entering it in
     if !commit.merges.is_empty() {
         let has_from = match &commit.from {
-            Some(from) => match filter_state.mark_map.get(from) {
-                Some(from_points_to) => !from_points_to.is_empty(),
-                None => false,
-            }
+            Some(from) => filter_state.has_nonempty_mark(from),
             None => false,
         };
         // TODO: add a impl fn for the filter state to
         // test if a mark exists and is non emtpy. basically
         // dont repeat this code over and over:
-        let has_all_merges = commit.merges.iter().all(|m| {
-            match filter_state.mark_map.get(m) {
-                Some(pointsto) => !pointsto.is_empty(),
-                None => false,
-            }
-        });
+        let has_all_merges = commit.merges.iter()
+            .all(|m| filter_state.has_nonempty_mark(m));
+
         if !has_from && !has_all_merges {
             // eprintln!("Dont use because it doesnt has from and it doesnt have merges");
             return FilterResponse::DontUse;
         } else if has_from && !has_all_merges {
             // if the from exists, but the merges dont, then
             // remove all merges that dont exist:
-            commit.merges.retain(|merge| {
-                match filter_state.mark_map.get(merge) {
-                    Some(m) => !m.is_empty(),
-                    None => false,
-                }
-            });
+            commit.merges.retain(|merge| filter_state.has_nonempty_mark(merge));
         }
     }
 
@@ -278,13 +271,11 @@ pub fn perform_filter(
     // from :X
     // then we want it to say from :X, and not
     // from :Parent_of_X
-    match &commit.mark {
-        Some(mark) => {
-            // eprintln!("C {} -> {}", mark, mark);
-            filter_state.mark_map.insert(mark.clone(), mark.clone());
-        }
-        _ => {},
+    if let Some(mark) = &commit.mark {
+        // eprintln!("C {} -> {}", mark, mark);
+        filter_state.mark_map.insert(mark.clone(), mark.clone());
     }
+
     // if we havent used a commit yet, but this is our first,
     // then we want this to not have a from line:
     if !filter_state.have_used_a_commit {
@@ -314,7 +305,7 @@ pub fn perform_filter(
                     "Found a commit that we dont know in the map!\nWe are {:?} -> from {}. failed to find the from",
                     commit.mark, from
                 );
-                panic!(panic_str);
+                panic!("{}", panic_str);
             }
         }
     }
@@ -379,14 +370,17 @@ pub fn perform_filter(
                     // and use the first one we find
                     for pointer_option in pointers {
                         // eprintln!("We used to point to: {}", &pointer_option);
-                        match filter_state.mark_map.get(pointer_option) {
+                        let pointed_to = match filter_state.mark_map.get(pointer_option) {
                             Some(pointing_to) => {
                                 if !pointing_to.is_empty() {
-                                    filter_state.mark_map.insert(mark.clone(), pointing_to.clone());
-                                    return FilterResponse::DontUse;
-                                }
+                                    Some(pointing_to.clone())
+                                } else { None }
                             }
-                            None => {}
+                            None => None,
+                        };
+                        if let Some(pointing_to) = pointed_to {
+                            filter_state.mark_map.insert(mark.clone(), pointing_to);
+                            return FilterResponse::DontUse;
                         }
                     }
                 }
@@ -640,7 +634,7 @@ mod test {
         let mut commit = StructuredCommit::default();
         let mut fileops = vec![];
         for file in files {
-            let mut fileop = FileOpsOwned::FileModify(
+            let fileop = FileOpsOwned::FileModify(
                 "".into(), "".into(), file.to_string(),
             );
             fileops.push(fileop);
