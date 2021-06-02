@@ -14,7 +14,7 @@ use super::topbase::BlobCheck;
 use super::topbase::blob_check_callback_default;
 use super::repo_file;
 use super::cli::MgtCommandCheck;
-use super::core::VALID_REPO_FILE_EXTENSION;
+use super::core::get_all_repo_files;
 
 pub struct Checker<'a> {
     upstream_branch: String,
@@ -279,38 +279,6 @@ pub fn _clean_fetch(path_to_repo_root: &PathBuf) -> std::io::Result<bool> {
     }
 
     Ok(true)
-}
-
-// get all repo files that end in .rf
-// optionally pass a recursive flag to recurse into subdirs
-// optionally pass a any flag to get files that end in any extension
-pub fn get_all_repo_files(
-    dir: &str, recursive: bool, any: bool
-) -> std::io::Result<Vec<String>> {
-    let mut out_vec = vec![];
-    for entry in std::fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_dir() && recursive {
-            let mut repo_files = get_all_repo_files(
-                path.to_str().unwrap(), recursive, any
-            )?;
-            out_vec.append(&mut repo_files);
-        } else if path.is_file() && any {
-            out_vec.push(path.to_str().unwrap().to_string());
-        } else if path.is_file() {
-            match path.extension() {
-                None => (),
-                Some(ext) => {
-                    if ext == VALID_REPO_FILE_EXTENSION {
-                        out_vec.push(path.to_str().unwrap().to_string());
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(out_vec)
 }
 
 pub fn run_check(cmd: &mut MgtCommandCheck) {
