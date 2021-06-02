@@ -34,7 +34,12 @@ pub fn read_file_into_lines(filename: &str) -> io::Result<Vec<String>> {
     })?;
 
     let reader = BufReader::new(file_contents);
-    Ok(reader.lines().map(|x| x.unwrap()).collect())
+    let mut out = vec![];
+    for line in reader.lines() {
+        let line = line?;
+        out.push(line);
+    }
+    Ok(out)
 }
 
 pub fn line_is_break(line: &String) -> bool {
