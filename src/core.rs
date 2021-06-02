@@ -1,8 +1,8 @@
 use std::env;
 use die::die;
 use std::path::PathBuf;
-use std::path::MAIN_SEPARATOR;
-use std::io::sink;
+use std::path::{Path, MAIN_SEPARATOR};
+use std::io::{self, sink};
 
 use git_url_parse::GitUrl;
 use gitfilter::filter::FilterOptions;
@@ -11,6 +11,7 @@ use gitfilter::filter::FilterRules;
 use super::exec_helpers;
 use super::git_helpers3;
 use super::repo_file::RepoFile;
+use super::ioerre;
 
 pub const VALID_REPO_FILE_EXTENSION: &str = "rf";
 
@@ -183,30 +184,41 @@ pub fn safe_to_proceed() {
     }
 }
 
-pub fn make_and_checkout_output_branch(
+pub fn make_and_checkout_output_branch_res(
     output_branch: &Option<String>,
     dry_run: bool,
     verbose: bool,
-) {
+) -> io::Result<()> {
     let output_branch_name = match output_branch {
         Some(s) => s,
-        None => die!("Must provide an output branch"),
+        None => return ioerre!("Must provide an output branch"),
     };
 
     if dry_run {
         println!("git checkout -b {}", output_branch_name);
-        return;
+        return Ok(());
     }
 
     if git_helpers3::checkout_branch(
         output_branch_name.as_str(),
         true,
     ).is_err() {
-        die!("Failed to checkout new branch");
+        return ioerre!("Failed to checkout new branch");
     }
 
     if verbose {
         println!("created and checked out new branch {}", output_branch_name);
+    }
+    Ok(())
+}
+
+pub fn make_and_checkout_output_branch(
+    output_branch: &Option<String>,
+    dry_run: bool,
+    verbose: bool,
+) {
+    if let Err(e) = make_and_checkout_output_branch_res(output_branch, dry_run, verbose) {
+        die!("{}", e);        
     }
 }
 
@@ -275,15 +287,26 @@ pub fn populate_empty_branch_with_remote_commits(
     };
 }
 
-pub fn panic_if_array_invalid(var: &Option<Vec<String>>, can_be_single: bool, varname: &str) {
+pub fn error_if_array_invalid(
+    var: &Option<Vec<String>>, can_be_single: bool, varname: &str
+) -> io::Result<()> {
     match var {
         Some(v) => {
             if ! include_var_valid(&v, can_be_single) {
-                die!("{} is invalid. Must be either a single string, or an even length array of strings", varname);
+                return ioerre!("{} is invalid. Must be either a single string, or an even length array of strings", varname);
             }
         },
         _ => (),
     };
+    Ok(())
+}
+
+pub fn panic_if_array_invalid(
+    var: &Option<Vec<String>>, can_be_single: bool, varname: &str
+) {
+    if let Err(e) = error_if_array_invalid(var, can_be_single, varname) {
+        die!("{}", e)
+    }
 }
 
 // works for include, or include_as
@@ -359,8 +382,8 @@ fn get_string_before_first_dot(s: String) -> String {
 // get all repo files that end in .rf
 // optionally pass a recursive flag to recurse into subdirs
 // optionally pass a any flag to get files that end in any extension
-pub fn get_all_repo_files(
-    dir: &str, recursive: bool, any: bool
+pub fn get_all_repo_files<P: AsRef<Path>>(
+    dir: P, recursive: bool, any: bool
 ) -> std::io::Result<Vec<String>> {
     let mut out_vec = vec![];
     for entry in std::fs::read_dir(dir)? {
@@ -386,4 +409,22 @@ pub fn get_all_repo_files(
     }
 
     Ok(out_vec)
+}
+
+/// used to make a simple io error with a string formatted message
+/// use this when you want to do `some_call().map_err(ioerr!("message"))?;`
+#[macro_export]
+macro_rules! ioerr {
+    ($($arg:tt)*) => ({
+        ::std::io::Error::new(::std::io::ErrorKind::Other, format!($($arg)*))
+    })
+}
+
+/// same as `ioerr` except this actually wraps it in an `Err()`
+/// use this when you want to do: `return ioerre!("message")`
+#[macro_export]
+macro_rules! ioerre {
+    ($($arg:tt)*) => ({
+        Err($crate::ioerr!($($arg)*))
+    })
 }
