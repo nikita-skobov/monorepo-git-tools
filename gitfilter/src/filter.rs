@@ -4,7 +4,8 @@ use export_parser::FileOpsOwned;
 use super::filter_state::FilterState;
 use std::io::Write;
 use std::process::Stdio;
-use std::io;
+use std::{path::{PathBuf, Path}, io};
+use io::Error;
 
 #[derive(Clone, Debug)]
 pub enum FilterRule {
@@ -15,6 +16,13 @@ pub enum FilterRule {
 pub use FilterRule::*;
 
 pub type FilterRules = Vec<FilterRule>;
+pub struct FilterError(String);
+
+impl From<FilterError> for io::Error {
+    fn from(orig: FilterError) -> Self {
+        io::Error::new(io::ErrorKind::Other, orig.0)
+    }
+}
 
 /// how to use this filtered commit
 pub enum FilterResponse {
@@ -203,7 +211,7 @@ pub fn perform_filter(
     filter_state: &mut FilterState,
     commit: &mut StructuredCommit,
     filter_rules: &FilterRules,
-) -> FilterResponse {
+) -> Result<FilterResponse, FilterError> {
     let newfileops = apply_filter_rules_to_fileops(default_include, filter_state, commit, filter_rules);
     // if we have pruned all of the file operations,
     // then we dont want to use this object as a commit, but rather
@@ -215,7 +223,11 @@ pub fn perform_filter(
     if newfileops.is_empty() {
         match (&commit.from, &commit.mark) {
             (Some(from), Some(mark)) => {
-                match filter_state.mark_map.get(from) {
+                let insert_with = match filter_state.mark_map.get(from) {
+                    Some(transitive_parent) => Some(transitive_parent.clone()),
+                    None => None,
+                };
+                match insert_with {
                     Some(transitive_parent) => {
                         // eprintln!("A {} -> {}", mark, transitive_parent);
                         filter_state.mark_map.insert(mark.clone(), transitive_parent.clone());
@@ -234,7 +246,7 @@ pub fn perform_filter(
             // are possible?
             _ => {},
         }
-        return FilterResponse::DontUse;
+        return Ok(FilterResponse::DontUse);
     }
     commit.fileops = newfileops;
 
@@ -242,20 +254,22 @@ pub fn perform_filter(
     // just skip it, dont bother entering it in
     if !commit.merges.is_empty() {
         let has_from = match &commit.from {
-            Some(from) => match filter_state.mark_map.get(from) {
-                Some(from_points_to) => !from_points_to.is_empty(),
-                None => false,
-            }
+            Some(from) => filter_state.has_nonempty_mark(from),
             None => false,
         };
-        let has_all_merges = commit.merges.iter().all(|m| {
-            match filter_state.mark_map.get(m) {
-                Some(pointsto) => !pointsto.is_empty(),
-                None => false,
-            }
-        });
-        if !has_from || !has_all_merges {
-            return FilterResponse::DontUse;
+        // TODO: add a impl fn for the filter state to
+        // test if a mark exists and is non emtpy. basically
+        // dont repeat this code over and over:
+        let has_all_merges = commit.merges.iter()
+            .all(|m| filter_state.has_nonempty_mark(m));
+
+        if !has_from && !has_all_merges {
+            // eprintln!("Dont use because it doesnt has from and it doesnt have merges");
+            return Ok(FilterResponse::DontUse);
+        } else if has_from && !has_all_merges {
+            // if the from exists, but the merges dont, then
+            // remove all merges that dont exist:
+            commit.merges.retain(|merge| filter_state.has_nonempty_mark(merge));
         }
     }
 
@@ -265,13 +279,11 @@ pub fn perform_filter(
     // from :X
     // then we want it to say from :X, and not
     // from :Parent_of_X
-    match &commit.mark {
-        Some(mark) => {
-            // eprintln!("C {} -> {}", mark, mark);
-            filter_state.mark_map.insert(mark.clone(), mark.clone());
-        }
-        _ => {},
+    if let Some(mark) = &commit.mark {
+        // eprintln!("C {} -> {}", mark, mark);
+        filter_state.mark_map.insert(mark.clone(), mark.clone());
     }
+
     // if we havent used a commit yet, but this is our first,
     // then we want this to not have a from line:
     if !filter_state.have_used_a_commit {
@@ -296,11 +308,12 @@ pub fn perform_filter(
                 }
             }
             None => {
-                let panic_str = format!(
+                // TODO: remove panic, and return a result instead
+                let err_str = format!(
                     "Found a commit that we dont know in the map!\nWe are {:?} -> from {}. failed to find the from",
                     commit.mark, from
                 );
-                panic!(panic_str);
+                return Err(FilterError(err_str));
             }
         }
     }
@@ -365,21 +378,24 @@ pub fn perform_filter(
                     // and use the first one we find
                     for pointer_option in pointers {
                         // eprintln!("We used to point to: {}", &pointer_option);
-                        match filter_state.mark_map.get(pointer_option) {
+                        let pointed_to = match filter_state.mark_map.get(pointer_option) {
                             Some(pointing_to) => {
                                 if !pointing_to.is_empty() {
-                                    filter_state.mark_map.insert(mark.clone(), pointing_to.clone());
-                                    return FilterResponse::DontUse;
-                                }
+                                    Some(pointing_to.clone())
+                                } else { None }
                             }
-                            None => {}
+                            None => None,
+                        };
+                        if let Some(pointing_to) = pointed_to {
+                            filter_state.mark_map.insert(mark.clone(), pointing_to);
+                            return Ok(FilterResponse::DontUse);
                         }
                     }
                 }
             }
             // regardless if we were able to find a parent to map to,
             // we still dont want to be used
-            return FilterResponse::DontUse;
+            return Ok(FilterResponse::DontUse);
         }
     }
 
@@ -427,7 +443,7 @@ pub fn perform_filter(
                         }
                     }
 
-                    return FilterResponse::DontUse;
+                    return Ok(FilterResponse::DontUse);
                 }
             }
         }
@@ -449,21 +465,22 @@ pub fn perform_filter(
         _ => {},
     }
 
-    FilterResponse::UseAsIs
+    Ok(FilterResponse::UseAsIs)
 }
 
-pub fn filter_with_rules<T: Write>(
+pub fn filter_with_rules<P: AsRef<Path>, T: Write>(
     filter_options: FilterOptions<T>,
     filter_rules: FilterRules,
+    location: Option<P>,
 ) -> io::Result<()> {
     let mut filter_state = FilterState::default();
     let default_include = filter_options.default_include;
-    let cb = |obj: &mut StructuredExportObject| -> bool {
+    let cb = |obj: &mut StructuredExportObject| -> io::Result<bool> {
         // TODO: filter on blobs as well:
         match &mut obj.object_type {
-            export_parser::StructuredObjectType::Blob(_) => true,
+            export_parser::StructuredObjectType::Blob(_) => Ok(true),
             export_parser::StructuredObjectType::Commit(ref mut c) => {
-                let resp = perform_filter(default_include, &mut filter_state, c, &filter_rules);
+                let resp = perform_filter(default_include, &mut filter_state, c, &filter_rules)?;
                 if !filter_state.have_used_a_commit && resp.is_used() {
                     filter_state.have_used_a_commit = true;
                 }
@@ -480,25 +497,28 @@ pub fn filter_with_rules<T: Write>(
                     }
                     obj.object_type = export_parser::StructuredObjectType::NoType;
                 }
-                is_used
+                Ok(is_used)
             },
-            _ => true,
+            _ => Ok(true),
         }
     };
-    filter_with_cb(filter_options, cb)
+    filter_with_cb(filter_options, location, cb)
 }
 
 // temporary function to test out filtering
-pub fn filter_with_cb<T: Write, F: Into<FilterOptions<T>>>(
+pub fn filter_with_cb<P: AsRef<Path>, T: Write, F: Into<FilterOptions<T>>>(
     options: F,
-    cb: impl FnMut(&mut StructuredExportObject) -> bool
+    location: Option<P>,
+    cb: impl FnMut(&mut StructuredExportObject) -> io::Result<bool>,
 ) -> io::Result<()> {
     let options: FilterOptions<T> = options.into();
     let mut stream = options.stream;
     let mut cb = cb;
-    export_parser::parse_git_filter_export_via_channel(options.branch, options.with_blobs,
+    export_parser::parse_git_filter_export_via_channel(
+        options.branch, options.with_blobs, location,
         |mut obj| {
-            if cb(&mut obj) {
+            let succeeded = cb(&mut obj)?;
+            if succeeded {
                 return export_parser::write_to_stream(&mut stream, obj);
             }
             Ok(())
@@ -510,22 +530,22 @@ pub fn filter_with_cb<T: Write, F: Into<FilterOptions<T>>>(
     Ok(())
 }
 
-/// filter from your given rules and options, and pipe directly
-/// into git fast-import with a sensible default
-/// this WILL rewrite your repository history
-/// for the branch you provide, and is not reversible.
-/// note this uses its own stream, and ignores whatever stream you have
-/// in filter_options
-pub fn filter_with_rules_direct<T: Write>(
+pub fn filter_with_rules_direct_ex<P: AsRef<Path>, T: Write>(
     filter_options: FilterOptions<T>,
     filter_rules: FilterRules,
+    location: Option<P>,
 ) -> io::Result<()> {
     let exe_and_args = [
         "git", "-c", "core.ignorecase=false", "fast-import", "--date-format=raw-permissive", "--force", "--quiet"
     ];
-    let mut gitimport_handle = exechelper::spawn_with_env_ex(
+    let location_clone = match location {
+        Some(ref l) => Some(l.as_ref().to_owned()),
+        None => None,
+    };
+    let mut gitimport_handle = exechelper::spawn_with_env_ex2(
         &exe_and_args,
         &[], &[],
+        location_clone,
         Some(Stdio::piped()),
         Some(Stdio::null()),
         Some(Stdio::null())
@@ -539,7 +559,7 @@ pub fn filter_with_rules_direct<T: Write>(
         with_blobs: filter_options.with_blobs,
     };
 
-    let res = filter_with_rules(overwritten_options, filter_rules);
+    let res = filter_with_rules(overwritten_options, filter_rules, location);
     let res2 = gitimport_handle.wait();
     if res.is_ok() && res2.is_ok() {
         return Ok(());
@@ -552,28 +572,43 @@ pub fn filter_with_rules_direct<T: Write>(
     }
 }
 
+/// filter from your given rules and options, and pipe directly
+/// into git fast-import with a sensible default
+/// this WILL rewrite your repository history
+/// for the branch you provide, and is not reversible.
+/// note this uses its own stream, and ignores whatever stream you have
+/// in filter_options
+pub fn filter_with_rules_direct<T: Write>(
+    filter_options: FilterOptions<T>,
+    filter_rules: FilterRules,
+) -> io::Result<()> {
+    let no_location: Option<PathBuf> = None;
+    filter_with_rules_direct_ex(filter_options, filter_rules, no_location)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use std::io::sink;
     use std::io::Cursor;
-    use std::io::Read;
+    use std::{path::PathBuf, io::Read};
     use export_parser::StructuredObjectType;
+    pub const NO_LOCATION: Option<PathBuf> = None;
 
     #[test]
     fn filter_path_works() {
         let writer = sink();
-        filter_with_cb(writer, |obj| {
+        filter_with_cb(writer, NO_LOCATION, |obj| {
             match &obj.object_type {
-                StructuredObjectType::Blob(_) => true,
+                StructuredObjectType::Blob(_) => Ok(true),
                 StructuredObjectType::Commit(commit_obj) => {
                     if commit_obj.committer.email.contains("jerry") {
-                        false
+                        Ok(false)
                     } else {
-                        true
+                        Ok(true)
                     }
                 },
-                _ => true,
+                _ => Ok(true),
             }
         }).unwrap();
     }
@@ -581,17 +616,17 @@ mod test {
     #[test]
     fn can_modify_filter_objects() {
         let mut writer = Cursor::new(vec![]);
-        filter_with_cb(&mut writer, |obj| {
+        filter_with_cb(&mut writer, NO_LOCATION, |obj| {
             if let Some(reset) = &mut obj.has_reset {
                 *reset = "refs/heads/NEWBRANCHNAMEAAAAAAA".into();
             }
             match &mut obj.object_type {
-                StructuredObjectType::Blob(_) => true,
+                StructuredObjectType::Blob(_) => Ok(true),
                 StructuredObjectType::Commit(commit_obj) => {
                     commit_obj.commit_ref = commit_obj.commit_ref.replace("master", "NEWBRANCHNAMEAAAAAAA");
-                    true
+                    Ok(true)
                 },
-                _ => true,
+                _ => Ok(true),
             }
         }).unwrap();
 
@@ -608,7 +643,7 @@ mod test {
         let mut commit = StructuredCommit::default();
         let mut fileops = vec![];
         for file in files {
-            let mut fileop = FileOpsOwned::FileModify(
+            let fileop = FileOpsOwned::FileModify(
                 "".into(), "".into(), file.to_string(),
             );
             fileops.push(fileop);

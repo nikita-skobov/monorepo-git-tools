@@ -1,5 +1,5 @@
 use std::io::{BufReader, Error, ErrorKind, BufRead, Read};
-use std::process::Stdio;
+use std::{path::Path, process::Stdio};
 
 pub enum ParseState {
     BeforeData,
@@ -28,14 +28,24 @@ pub fn make_expected_progress_string(progress_num: u32) -> String {
     s
 }
 
+// TODO:
+// add a way to allow parsing from a read stream, and not necessarily
+// opening a new git fast-export command.
+// this would be useful to read from a file that contains
+// the fast-export text without running the command
+// repeatedly for every time you want to split.
+
 /// This 'parser' will only parse the data section
 /// and put the rest of the info into a 'metadata' string
 /// for future parsing. the rationale is that we need to parse the data section
 /// seperately anyway since we need to know when to resume parsing the other
 /// sections.
-pub fn parse_git_filter_export_with_callback<O, E>(
+/// optionally specify a path to the
+/// git repo if you are not currently in it.
+pub fn parse_git_filter_export_with_callback<O, E, P: AsRef<Path>>(
     export_branch: Option<String>,
     with_blobs: bool,
+    repo_location: Option<P>,
     cb: impl FnMut(UnparsedFastExportObject) -> Result<O, E>,
 ) -> Result<(), Error>{
     // let now = Instant::now();
@@ -50,8 +60,8 @@ pub fn parse_git_filter_export_with_callback<O, E>(
         fast_export_command.push("--no-data");
     }
 
-    let mut child = exechelper::spawn_with_env_ex(
-        &fast_export_command, &[], &[],
+    let mut child = exechelper::spawn_with_env_ex2(
+        &fast_export_command, &[], &[], repo_location,
         Some(Stdio::null()), Some(Stdio::null()), Some(Stdio::piped()),
     )?;
 

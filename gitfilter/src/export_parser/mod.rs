@@ -13,7 +13,7 @@ use num_cpus;
 use std::collections::BinaryHeap;
 use std::cmp::Reverse;
 use std::io::Write;
-use std::io;
+use std::{path::{PathBuf, Path}, io};
 // use std::time::Instant;
 // use std::time::Duration;
 
@@ -42,23 +42,25 @@ impl PartialOrd for WaitObj {
     }
 }
 
-pub fn parse_git_filter_export<O, E>(
+pub fn parse_git_filter_export<O, E, P: AsRef<Path>>(
     export_branch: Option<String>,
     with_blobs: bool,
+    location: Option<P>,
     cb: impl FnMut(StructuredExportObject) -> Result<O, E>,
 ) -> Result<(), Error> {
     let mut cb = cb;
-    parse_git_filter_export_with_callback(export_branch, with_blobs, |unparsed| {
+    parse_git_filter_export_with_callback(export_branch, with_blobs, location, |unparsed| {
         let parsed = parse_into_structured_object(unparsed);
         cb(parsed)
     })?;
     Ok(())
 }
 
-pub fn parse_git_filter_export_via_channel_and_n_parsing_threads<O, E>(
+pub fn parse_git_filter_export_via_channel_and_n_parsing_threads<O, E, P: AsRef<Path>>(
     export_branch: Option<String>,
     with_blobs: bool,
     n_parsing_threads: usize,
+    location: Option<P>,
     cb: impl FnMut(StructuredExportObject) -> Result<O, E>,
 ) -> Result<(), E> {
     let mut cb = cb;
@@ -81,13 +83,18 @@ pub fn parse_git_filter_export_via_channel_and_n_parsing_threads<O, E>(
     // otherwise our program will hang.
     drop(tx);
 
+    let location: Option<PathBuf> = match location {
+        Some(p) => Some(p.as_ref().to_path_buf()),
+        None => None,
+    };
+
     // on the thread that is running the git fast-export,
     // it will alternate passing these UNPARSED messages to one of our
     // parsing threads. the parsing threads (created above)
     // will then pass the PARSED message back to our main thread
     let thread_handle = thread::spawn(move || {
         let mut counter = 0;
-        let _ = parse_git_filter_export_with_callback(export_branch, with_blobs, |x| {
+        let _ = parse_git_filter_export_with_callback(export_branch, with_blobs, location, |x| {
             let thread_index = counter % n_parsing_threads as usize;
             let (parse_tx, _) = &spawned_threads[thread_index];
             let res = parse_tx.send((counter, x));
@@ -155,9 +162,10 @@ pub fn parse_git_filter_export_via_channel_and_n_parsing_threads<O, E>(
 /// 2. parse the data section
 /// then it can pass that parsed data to the main thread
 /// which can finish the more intensive parsing/transformations
-pub fn parse_git_filter_export_via_channel<O, E>(
+pub fn parse_git_filter_export_via_channel<O, E, P: AsRef<Path>>(
     export_branch: Option<String>,
     with_blobs: bool,
+    location: Option<P>,
     cb: impl FnMut(StructuredExportObject) -> Result<O, E>,
 ) -> Result<(), E> {
     let mut cb = cb;
@@ -165,9 +173,14 @@ pub fn parse_git_filter_export_via_channel<O, E>(
     // minus 2 because we are already using 2 threads.
     let spawn_parser_threads = cpu_count - 2;
 
+    let location: Option<PathBuf> = match location {
+        Some(p) => Some(p.as_ref().to_path_buf()),
+        None => None,
+    };
+
     if spawn_parser_threads > 1 {
         return parse_git_filter_export_via_channel_and_n_parsing_threads(
-            export_branch, with_blobs, spawn_parser_threads as usize, cb);
+            export_branch, with_blobs, spawn_parser_threads as usize, location, cb);
     }
 
     // otherwise here we will use only 2 threads: on the main
@@ -175,7 +188,7 @@ pub fn parse_git_filter_export_via_channel<O, E>(
     // thread we will be collecting and splitting the git fast-export output
     let (tx, rx) = mpsc::channel();
     let thread_handle = thread::spawn(move || {
-        parse_git_filter_export_with_callback(export_branch, with_blobs, |x| {
+        parse_git_filter_export_with_callback(export_branch, with_blobs, location, |x| {
             tx.send(x)
         })
     });
@@ -333,12 +346,13 @@ mod tests {
     // use std::io::prelude::*;
 
     // TODO: whats a unit test? ;)
+    pub const NO_LOCATION: Option<PathBuf> = None;
 
     #[test]
     fn using_multiple_parsing_threads_keeps_order_the_same() {
         let mut expected_count = 1;
         parse_git_filter_export_via_channel_and_n_parsing_threads(
-            None, false, 4, |obj| {
+            None, false, 4, NO_LOCATION, |obj| {
                 if let StructuredObjectType::Commit(commit_obj) = obj.object_type {
                     let mark_str = commit_obj.mark.unwrap();
                     let expected_mark_str = format!(":{}", expected_count);
@@ -358,7 +372,7 @@ mod tests {
     fn using_blobs_and_multiple_parsing_threads_keeps_order_the_same() {
         let mut expected_count = 1;
         parse_git_filter_export_via_channel_and_n_parsing_threads(
-            None, true, 4, |obj| {
+            None, true, 4, NO_LOCATION, |obj| {
                 if let StructuredObjectType::Commit(commit_obj) = obj.object_type {
                     let mark_str = commit_obj.mark.unwrap();
                     let expected_mark_str = format!(":{}", expected_count);
@@ -379,14 +393,16 @@ mod tests {
     #[test]
     fn test1() {
         let now = std::time::Instant::now();
-        parse_git_filter_export_via_channel(None, false, |_| { if 1 == 1 { Ok(()) } else { Err(()) } }).unwrap();
+        parse_git_filter_export_via_channel(None, false, NO_LOCATION,
+            |_| { if 1 == 1 { Ok(()) } else { Err(()) } }).unwrap();
         eprintln!("total time {:?}", now.elapsed());
     }
 
     #[test]
     fn works_with_blobs() {
         let now = std::time::Instant::now();
-        parse_git_filter_export_via_channel(None, true, |_| { if 1 == 1 { Ok(()) } else { Err(()) } }).unwrap();
+        parse_git_filter_export_via_channel(None, true, NO_LOCATION,
+            |_| { if 1 == 1 { Ok(()) } else { Err(()) } }).unwrap();
         eprintln!("total time {:?}", now.elapsed());
     }
 }
