@@ -14,6 +14,7 @@ use super::topbase::BlobCheck;
 use super::topbase::blob_check_callback_default;
 use super::repo_file;
 use super::cli::MgtCommandCheck;
+use super::core::VALID_REPO_FILE_EXTENSION;
 
 pub struct Checker<'a> {
     upstream_branch: String,
@@ -286,11 +287,6 @@ pub fn _clean_fetch(path_to_repo_root: &PathBuf) -> std::io::Result<bool> {
 pub fn get_all_repo_files(
     dir: &str, recursive: bool, any: bool
 ) -> std::io::Result<Vec<String>> {
-    // TODO: idk is this good enough?
-    // should this be dynamic? should the
-    // default be something different.. should
-    // we check file names too?
-    let valid_repo_file_extension = "rf";
     let mut out_vec = vec![];
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
@@ -306,7 +302,7 @@ pub fn get_all_repo_files(
             match path.extension() {
                 None => (),
                 Some(ext) => {
-                    if ext == valid_repo_file_extension {
+                    if ext == VALID_REPO_FILE_EXTENSION {
                         out_vec.push(path.to_str().unwrap().to_string());
                     }
                 }

@@ -12,6 +12,8 @@ use super::exec_helpers;
 use super::git_helpers3;
 use super::repo_file::RepoFile;
 
+pub const VALID_REPO_FILE_EXTENSION: &str = "rf";
+
 pub fn get_current_ref() -> Option<String> {
     match git_helpers3::get_current_ref() {
         Ok(s) => Some(s),
