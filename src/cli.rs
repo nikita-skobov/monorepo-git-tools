@@ -8,6 +8,8 @@ use super::split_in::run_split_in;
 use super::split_in::run_split_in_as;
 use super::verify::run_verify;
 use super::topbase::run_topbase;
+use super::sync::run_sync;
+use std::path::PathBuf;
 
 #[derive(Debug, Options)]
 pub struct MgtCommandCheck {
@@ -112,8 +114,23 @@ pub struct MgtCommandVerify {
 }
 
 #[derive(Debug, Options)]
+pub struct MgtCommandSync {
+    #[options(short = "h")]
+    pub help: bool,
+
+    #[options(free, help = "path to repo file(s) or a folder container repo files")]
+    pub repo_files: Vec<PathBuf>,
+
+    #[options(help = "when iterating the sync of multiple repo files, if a single one fails, do not sync the rest")]
+    pub fail_fast: bool,
+}
+
+#[derive(Debug, Options)]
 pub enum MgtSubcommands {
     Help(MgtCommandHelp),
+
+    #[options(help = "Interactively sync one or more repo files between local and remote repositorie(s)")]
+    Sync(MgtCommandSync),
 
     #[options(help = "check if there are changes ready to be pushed or pulled")]
     Check(MgtCommandCheck),
@@ -269,6 +286,9 @@ impl AsRef<MgtCommandSplit> for MgtCommandSplit {
 impl AsRef<MgtCommandVerify> for MgtCommandVerify {
     fn as_ref(&self) -> &MgtCommandVerify { self }
 }
+impl AsRef<MgtCommandSync> for MgtCommandSync {
+    fn as_ref(&self) -> &MgtCommandSync { self }
+}
 
 impl Mgt {
     pub fn new() -> Mgt {
@@ -342,6 +362,12 @@ pub fn get_cli_input() -> Mgt {
             MgtSubcommands::VerifyRf(v) => {
                 if cli.help || v.help {
                     print_usage(&v, Some("mgt verify"), None);
+                    true
+                } else { false }
+            }
+            MgtSubcommands::Sync(s) => {
+                if cli.help || s.help {
+                    print_usage(&s, Some("mgt sync"), None);
                     true
                 } else { false }
             }
@@ -429,6 +455,9 @@ pub fn validate_input_and_run(mgt_opts: Mgt) {
             MgtSubcommands::VerifyRepoFile(ref mut cmd) |
             MgtSubcommands::VerifyRf(ref mut cmd) => {
                 run_verify(cmd);
+            }
+            MgtSubcommands::Sync(ref mut cmd) => {
+                run_sync(cmd);
             }
         },
     }
