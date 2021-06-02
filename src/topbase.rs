@@ -20,6 +20,13 @@ pub fn topbase(
 ) -> Result<(), String> {
     let log_p = if dry_run { "   # " } else { "" };
 
+    // we want this ref name to be unambiguous to the get_all_commits
+    // command, otherwise it might conflict with a file/folder name
+    let current_branch = if current_branch.contains("refs/heads") {
+        current_branch
+    } else {
+        format!("refs/heads/{}", current_branch)
+    };
     let all_upstream_blobs = get_all_blobs_in_branch(upstream_branch.as_str());
     let all_commits_of_current = match git_helpers3::get_all_commits_from_ref(current_branch.as_str()) {
         Ok(v) => v,

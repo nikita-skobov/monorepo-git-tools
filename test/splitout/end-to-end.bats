@@ -939,3 +939,23 @@ function teardown() {
     [[ $status != "0" ]]
     [[ "$(git status)" == *"rebase in progress"* ]]
 }
+
+@test 'works for ambiguous branch/folder name' {
+    repo_file_contents="
+    include = [\"$test_remote_repo2/\"]
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    "
+    echo "$repo_file_contents" > repo_file.sh
+
+    mkdir -p "$test_remote_repo2"
+    echo "a" > "$test_remote_repo2/a.txt"
+    git add "$test_remote_repo2"
+    git commit -m "ambiguous"
+
+    run $PROGRAM_PATH split-out repo_file.sh --topbase --verbose
+    echo "$output"
+    echo "$(git status)"
+    [[ $output == *"Success"* ]]
+    [[ $status == "0" ]]
+}
