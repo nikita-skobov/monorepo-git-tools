@@ -1,7 +1,10 @@
-use std::collections::HashSet;
+use std::{io, collections::HashSet, process::Stdio};
+use io::{BufReader, BufRead};
 
+use super::ioerr;
 use super::git_helpers3;
 use super::git_helpers3::Commit;
+use super::git_helpers3::Oid;
 use super::exec_helpers;
 use super::check::topbase_check_alg;
 use super::die;
@@ -352,5 +355,198 @@ fn get_current_branch() -> String {
     match git_helpers3::get_current_ref() {
         Ok(s) => s,
         Err(e) => die!("Failed to find current git branch: {}", e),
+    }
+}
+
+// TODO:
+
+// refactor 'topbase' and also add other algorithms
+// (mainly 'fullbase' which would find all commits that differ
+// between two branches, even if theres some stuff in the middle.)
+// get rid of the "one branch gets all blobs, the other gets all commits, and then we search
+// in order from top to bottom of the one where we found the commits"...
+// its unnecessary and creates complexity about "which one should be top/bottom?"
+// It should be possible to only use git-rev-list to get all commits, and all blobs of those commits
+// from both branches.
+// also: might want to look into reading two streams of git-rev-list from the two branches
+// instead of allocating all of that memory at once...
+// alsO: might want to look into commit limiting. could be useful for something where
+// we 'know' that we already are ahead of remote at point X, so no point
+// in looking before X. This would be useful for massive repos.
+// the command for that would be:
+// git --no-pager log --raw --pretty=oneline <branch-name>
+// optionally add a "-m" if you DO WANT merge commits to show
+// a diff format with blobs/trees. this would be useful if you want
+// to explicitly find merge commits when finding a fork point, which is
+// NOT what we do by default anyway (ie: by default dont pass the -m)
+
+#[derive(Debug, PartialOrd, PartialEq)]
+pub enum BlobMode {
+    Add,
+    Modify,
+    Delete,
+    // TODO: handle Rename (R100)
+}
+
+#[derive(Debug)]
+pub struct Blob {
+    pub mode: BlobMode,
+    pub id: String,
+    pub path: String,
+}
+
+// TODO: Do we want the blob_set to be a blob_map
+// and point to the commit that its part of?
+// but a blob can belong to many commits...
+// also do we want to know the blobs that pertain to an individual commit?
+#[derive(Default)]
+pub struct AllCommitsAndBlobs {
+    pub blob_set: HashSet<String>,
+    pub commits: Vec<(Commit, Vec<Blob>)>,
+}
+
+pub fn generate_commit_list_and_blob_set_from_lines<T: BufRead>(
+    line_reader: &mut T
+) -> io::Result<AllCommitsAndBlobs> {
+    let mut out = AllCommitsAndBlobs::default();
+    let mut last_commit = Commit::new("", "".into(), true);
+    let mut last_blobs = vec![];
+    let mut add_last_commit = false;
+
+    for line in line_reader.lines() {
+        let line = line?;
+        if ! line.starts_with(':') {
+            // parsing a commit line
+            if add_last_commit {
+                out.commits.push((last_commit, last_blobs));
+                last_blobs = vec![];
+                last_commit = Commit::new("", "".into(), true);
+            }
+
+            let first_space_index = line.find(' ').ok_or(ioerr!("Failed to read line of git log output:\n{}", line))?;
+            let hash = &line[0..first_space_index];
+            let summary = &line[(first_space_index+1)..];
+            last_commit.id = Oid { hash: hash.to_string() };
+            last_commit.summary = summary.to_string();
+            add_last_commit = true;
+        } else {
+            // parsing a blob line
+
+            // if we see a blob, then by definition that means its not
+            // a merge commit because in our git log format we dont pass the '-m' flag
+            // TODO: what happens if we do pass that?
+            last_commit.is_merge = false;
+            let items = line.split_whitespace().collect::<Vec<&str>>();
+            // there are technically 6 items from this output:
+            // the last item (items[5]) is a path to the file that this blob
+            // is for (and the array could have more than 6 if file names
+            // have spaces in them)
+            let (
+                // TODO: do we care about the modes?
+                _mode_prev, _mode_next,
+                blob_prev, blob_next,
+                diff_type
+            ) = (items[0], items[1], items[2], items[3], items[4]);
+
+            // the path of this blob starts at index 5, but we combine the rest
+            // in case there are spaces
+            let blob_path = items[5..].join(" ");
+            let blob_mode = match diff_type {
+                "A" => BlobMode::Add,
+                "D" => BlobMode::Delete,
+                _ => BlobMode::Modify,
+            };
+            // if its a delete blob, we use the previous blob id
+            // otherwise we use the current
+            let blob_id = if let BlobMode::Delete = blob_mode {
+                blob_prev
+            } else {
+                blob_next
+            };
+            let blob = Blob {
+                mode: blob_mode,
+                id: blob_id.to_string(),
+                path: blob_path,
+            };
+            out.blob_set.insert(blob.id.clone());
+            last_blobs.push(blob);
+        }
+    }
+
+    // after iteration have to add the last one:
+    out.commits.push((last_commit, last_blobs));
+
+    Ok(out)
+}
+
+/// specify a committish of what branch/commit youd like to pass to
+/// `git log --raw --pretty=oneline <committish>`
+pub fn generate_commit_list_and_blob_set(
+    committish: &str
+) -> io::Result<AllCommitsAndBlobs> {
+    // TODO: allow us to specify a stopping commit
+    // TODO: add the '-m' flag if we want to see merge commits with a full blob diff
+    let exec_args = [
+        "git", "--no-pager", "log", "--no-color", "--raw", "--pretty=oneline", committish
+    ];
+
+    let mut child = exec_helpers::spawn_with_env_ex(
+        &exec_args,
+        &[], &[],
+        None, None, Some(Stdio::piped()),
+    )?;
+
+    let stdout = child.stdout.as_mut()
+        .ok_or(ioerr!("Failed to get child stdout for reading git log of {}", committish))?;
+    let mut stdout_read = BufReader::new(stdout);
+    let output = generate_commit_list_and_blob_set_from_lines(&mut stdout_read);
+    // let stdout_lines = stdout_read.lines();
+
+    let exit = child.wait()?;
+    // eprintln!("{:?}", exit);
+
+    output
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use io::Cursor;
+
+    #[test]
+    fn commit_list_properly_detects_merge_commits() {
+        let log_output = "somehash commit message here\n01010101010110 another commit message here";
+        let mut cursor = Cursor::new(log_output.as_bytes());
+        let all_things = generate_commit_list_and_blob_set_from_lines(&mut cursor).unwrap();
+        assert_eq!(all_things.commits.len(), 2);
+        assert!(all_things.commits[0].0.is_merge);
+        assert!(all_things.commits[1].0.is_merge);
+    }
+
+    #[test]
+    fn commit_list_properly_parses_blobs() {
+        let log_output = "hash1 msg1\n:100644 100644 xyz abc M file1.txt\n:100644 00000 123 000 D file2.txt";
+        let mut cursor = Cursor::new(log_output.as_bytes());
+        let all_things = generate_commit_list_and_blob_set_from_lines(&mut cursor).unwrap();
+        assert_eq!(all_things.commits.len(), 1);
+        assert!(!all_things.commits[0].0.is_merge);
+        let blobs = &all_things.commits[0].1;
+        assert_eq!(blobs.len(), 2);
+        assert_eq!(blobs[0].mode, BlobMode::Modify);
+        assert_eq!(blobs[0].id, "abc");
+        assert_eq!(blobs[1].mode, BlobMode::Delete);
+        assert_eq!(blobs[1].id, "123");
+    }
+
+    // not exactly a unit test, but simple enough to implement:
+    // basically just want to check if it runs successfully on a real
+    // repo. this assumes this command is ran from a valid repo
+    #[test]
+    fn commit_list_properly_runs_from_head() {
+        let all_things = generate_commit_list_and_blob_set("HEAD").unwrap();
+        for (commit, blobs) in all_things.commits {
+            println!("{} {}\n{:#?}\n", commit.id.short(), commit.summary, blobs);
+        }
     }
 }
