@@ -2,9 +2,10 @@
 use super::cli::MgtCommandSync;
 use super::core;
 use super::die;
+use super::git_helpers3;
 use super::repo_file;
 use std::{io, path::PathBuf};
-use crate::{split_out::validate_repo_file_res, ioerr};
+use crate::{split_out::{generate_gitfilter_filterrules, validate_repo_file_res}, ioerr, ioerre, topbase};
 
 pub struct RepoSplitItem {
     pub repofilepath: PathBuf,
@@ -42,8 +43,9 @@ pub fn get_all_repo_files_ex(list: &Vec<PathBuf>) -> Vec<PathBuf> {
 }
 
 pub fn sync_repo_file(
+    starting_branch_name: &str,
     repo_split_item: &RepoSplitItem,
-    cmd: &MgtCommandSync
+    cmd: &MgtCommandSync,
 ) -> io::Result<()> {
     let mut repo_file = repo_file::parse_repo_file_from_toml_path_res(&repo_split_item.repofilepath)?;
     // the output branch doesnt matter here because
@@ -51,9 +53,46 @@ pub fn sync_repo_file(
     let mut out_branch = None;
     validate_repo_file_res(&mut repo_file, &mut out_branch)?;
 
-    let mut out_branch = Some(repo_split_item.split_branch.clone());
-    core::make_and_checkout_output_branch_res(&mut out_branch, false, false)?;
+    let mut out_branch_opt = Some(repo_split_item.split_branch.clone());
+    core::make_and_checkout_output_branch_res(&mut out_branch_opt, false, false)?;
+    let filter_rules = generate_gitfilter_filterrules(&repo_file, false);
+    core::perform_gitfilter_res(
+        filter_rules, repo_split_item.split_branch.clone(), false, false)?;
 
+    core::make_and_checkout_orphan_branch_res(
+        &repo_split_item.topbase_branch, false, false)?;
+
+    core::populate_empty_branch_with_remote_commits_res(
+        &repo_file, None, None, None, false
+    )?;
+
+    if let Err(e) = git_helpers3::checkout_branch(
+        &repo_split_item.split_branch, false
+    ) {
+        return ioerre!("{}", e);
+    }
+
+    let should_add_branch_label = false;
+    let res = topbase::topbase(
+        repo_split_item.split_branch.clone(),
+        repo_split_item.topbase_branch.clone(),
+        false,
+        false,
+        should_add_branch_label,
+    );
+    core::delete_branch(&repo_split_item.topbase_branch);
+
+    // TODO: its possible we cant checkout because the topbase went wrong?
+    if let Err(e) = git_helpers3::checkout_branch(
+        &starting_branch_name, false
+    ) {
+        return ioerre!("Failed to return back to starting branch after performing sync:\n{}", e);
+    }
+
+    // TODO: how to clean this up if the topbase went wrong?
+    if let Err(e) = res {
+        return ioerre!("{}", e);
+    }
 
     Ok(())
 }
@@ -129,7 +168,7 @@ pub fn run_sync(cmd: &mut MgtCommandSync) {
 
         // TODO: need a --no-cleanup flag
         // to avoid trying to cleanup state if theres a failure
-        if let Err(e) = sync_repo_file(&repo_split_item, cmd) {
+        if let Err(e) = sync_repo_file(&starting_branch_name, &repo_split_item, cmd) {
             eprintln!("{}\n{}", potential_err, e);
             if cmd.fail_fast {
                 attempt_cleanup_or_die(branches_to_delete, starting_branch_name);
@@ -140,3 +179,12 @@ pub fn run_sync(cmd: &mut MgtCommandSync) {
 
     attempt_cleanup_or_die(branches_to_delete, starting_branch_name);
 }
+
+// TODO:
+// instead of just blindly running topbase
+// after the split-out, maybe we can finally do some smart sync here...
+// consider the 5 (main?) cases:
+// - we are directly ahead of remote by N commits
+// - we are directly behind of remote by N commits
+// - we have a common fork point such that remote is ahead of fork by N,
+// and we are ahead of fork by M. in this case we would
