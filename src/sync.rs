@@ -1,4 +1,4 @@
-use super::interact;
+// use super::interact;
 use super::cli::MgtCommandSync;
 use super::core;
 use super::die;

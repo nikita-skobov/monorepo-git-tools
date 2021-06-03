@@ -18,13 +18,19 @@ impl Oid {
         &self.hash
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Commit {
     pub id: Oid,
     pub summary: String,
     pub is_merge: bool,
 }
 
+impl Commit {
+    pub fn new(hash: &str, summary: String, is_merge: bool) -> Commit {
+        let oid = Oid { hash: hash.to_string() };
+        Commit { id: oid, summary, is_merge }
+    }
+}
 
 pub fn pull(
     remote_name: &str,
