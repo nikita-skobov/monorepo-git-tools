@@ -506,11 +506,15 @@ pub fn generate_commit_list_and_blob_set_from_lines<T: BufRead>(
     Ok(out)
 }
 
-/// specify a committish of what branch/commit youd like to pass to
-/// `git log --raw --pretty=oneline <committish>`
-pub fn generate_commit_list_and_blob_set(
-    committish: &str
-) -> io::Result<AllCommitsAndBlobs> {
+/// same as `generate_commit_list_and_blob_set` but you can specify
+/// a callback to evaluate/modify the commits/blobs before they are
+/// added to the output
+pub fn generate_commit_list_and_blob_set_with_callback<T>(
+    committish: &str,
+    callback: Option<T>
+) -> io::Result<AllCommitsAndBlobs>
+    where T: FnMut(&mut Commit, &mut Vec<Blob>) -> bool
+{
     // TODO: allow us to specify a stopping commit
     // TODO: add the '-m' flag if we want to see merge commits with a full blob diff
     let exec_args = [
@@ -526,13 +530,52 @@ pub fn generate_commit_list_and_blob_set(
     let stdout = child.stdout.as_mut()
         .ok_or(ioerr!("Failed to get child stdout for reading git log of {}", committish))?;
     let mut stdout_read = BufReader::new(stdout);
-    let output = generate_commit_list_and_blob_set_from_lines(&mut stdout_read, |_, _| true);
+    let output = match callback {
+        Some(cb) => generate_commit_list_and_blob_set_from_lines(&mut stdout_read, cb),
+        None => generate_commit_list_and_blob_set_from_lines(&mut stdout_read, |_, _| true),
+    };
     // let stdout_lines = stdout_read.lines();
 
     let exit = child.wait()?;
     // eprintln!("{:?}", exit);
 
     output
+}
+
+pub const NOP_CB: Option<fn (&mut Commit, &mut Vec<Blob>) -> bool> = None;
+
+/// specify a committish of what branch/commit youd like to pass to
+/// `git log --raw --pretty=oneline <committish>`
+pub fn generate_commit_list_and_blob_set(
+    committish: &str
+) -> io::Result<AllCommitsAndBlobs> {
+    generate_commit_list_and_blob_set_with_callback(committish, NOP_CB)
+}
+
+/// given two branch/committishes A, and B
+/// find the differences between them. NOTE THAT
+/// B is the 'bottom' branch which implies its entire log is loaded into memory
+/// first, whereas A's branch is traversed one entry at a time, and not loaded into memory.
+/// There are tradeoffs to which branch should be A, and which should be B. A common example:
+/// - If you are fairly confident that branch Y is ahead of branch X, you should make 
+///   call `find_a_b_difference(Y, X)` because X will get entirely loaded, and then we only
+///   traverse the tip of Y until we find their shared fork point (using topbase mode)
+/// - If you know that branch X is massive, but branch Y is not that big, then you have a
+///   tradeoff: by making X the B branch, it will get loaded entirely, which is potentially
+///   a lot of memory, but then searching through the Y branch is really fast because
+///   now we have a fully built map to the X branch. Conversely, we can make Y the B branch
+///   and then we traverse the X branch one commit at a time, so we use less memory, but
+///   our traversal would be quite a bit slower.
+pub fn find_a_b_difference(
+    a_committish: &str, b_committish: &str,
+    // TODO: different modes of traversal. default
+    // should be Topbase, but maybe also include Fullbase which will
+    // look for every possible difference instead of stopping at the first one?
+    // TODO: add stop at X commit for both A and B branch.
+) -> io::Result<()> {
+    let fully_loaded_b = generate_commit_list_and_blob_set(b_committish)?;
+
+    Ok(())
 }
 
 
