@@ -405,9 +405,63 @@ pub struct AllCommitsAndBlobs {
     pub commits: Vec<(Commit, Vec<Blob>)>,
 }
 
+pub fn parse_blob_from_line(line: &str) -> io::Result<Blob> {
+    let items = line.split_whitespace().collect::<Vec<&str>>();
+    // there are technically 6 items from this output:
+    // the last item (items[5]) is a path to the file that this blob
+    // is for (and the array could have more than 6 if file names
+    // have spaces in them)
+    let (
+        // TODO: do we care about the modes?
+        _mode_prev, _mode_next,
+        blob_prev, blob_next,
+        diff_type
+    ) = (
+        items.get(0).ok_or_else(|| ioerr!("Failed to parse git blob line: {}", line))?,
+        items.get(1).ok_or_else(|| ioerr!("Failed to parse git blob line: {}", line))?,
+        items.get(2).ok_or_else(|| ioerr!("Failed to parse git blob line: {}", line))?,
+        items.get(3).ok_or_else(|| ioerr!("Failed to parse git blob line: {}", line))?,
+        items.get(4).ok_or_else(|| ioerr!("Failed to parse git blob line: {}", line))?
+    );
+
+    // the path of this blob starts at index 5, but we combine the rest
+    // in case there are spaces
+    let blob_path = items.get(5..)
+        .ok_or_else(|| ioerr!("Failed to parse git blob line: {}", line))?.join(" ");
+    let blob_mode = match *diff_type {
+        "A" => BlobMode::Add,
+        "D" => BlobMode::Delete,
+        _ => BlobMode::Modify,
+        // TODO: Handle renames.. the path component is actually <SRC>\t<DEST>
+    };
+    // if its a delete blob, we use the previous blob id
+    // otherwise we use the current
+    let blob_id = if let BlobMode::Delete = blob_mode {
+        blob_prev
+    } else {
+        blob_next
+    };
+    let blob = Blob {
+        mode: blob_mode,
+        id: blob_id.to_string(),
+        path: blob_path,
+    };
+
+    Ok(blob)
+}
+
+/// read from a buf read interface of a list of lines that contain the git log
+/// output corresponding to the specifically --raw --pretty=oneline format.
+/// Parse line by line and return a blob set of all of the blobs in this output
+/// as well as a list of all commits.
+/// optionally pass in a callback to modify/inspect the blobs/commits before
+/// they are inserted into the output. This callback function is optional. If you want
+/// to use the default behavior, you can pass: `|_, _| true`
 pub fn generate_commit_list_and_blob_set_from_lines<T: BufRead>(
-    line_reader: &mut T
+    line_reader: &mut T,
+    should_add: impl FnMut(&mut Commit, &mut Vec<Blob>) -> bool,
 ) -> io::Result<AllCommitsAndBlobs> {
+    let mut should_add = should_add;
     let mut out = AllCommitsAndBlobs::default();
     let mut last_commit = Commit::new("", "".into(), true);
     let mut last_blobs = vec![];
@@ -418,7 +472,9 @@ pub fn generate_commit_list_and_blob_set_from_lines<T: BufRead>(
         if ! line.starts_with(':') {
             // parsing a commit line
             if add_last_commit {
-                out.commits.push((last_commit, last_blobs));
+                if should_add(&mut last_commit, &mut last_blobs) {
+                    out.commits.push((last_commit, last_blobs));
+                }
                 last_blobs = vec![];
                 last_commit = Commit::new("", "".into(), true);
             }
@@ -436,45 +492,16 @@ pub fn generate_commit_list_and_blob_set_from_lines<T: BufRead>(
             // a merge commit because in our git log format we dont pass the '-m' flag
             // TODO: what happens if we do pass that?
             last_commit.is_merge = false;
-            let items = line.split_whitespace().collect::<Vec<&str>>();
-            // there are technically 6 items from this output:
-            // the last item (items[5]) is a path to the file that this blob
-            // is for (and the array could have more than 6 if file names
-            // have spaces in them)
-            let (
-                // TODO: do we care about the modes?
-                _mode_prev, _mode_next,
-                blob_prev, blob_next,
-                diff_type
-            ) = (items[0], items[1], items[2], items[3], items[4]);
-
-            // the path of this blob starts at index 5, but we combine the rest
-            // in case there are spaces
-            let blob_path = items[5..].join(" ");
-            let blob_mode = match diff_type {
-                "A" => BlobMode::Add,
-                "D" => BlobMode::Delete,
-                _ => BlobMode::Modify,
-            };
-            // if its a delete blob, we use the previous blob id
-            // otherwise we use the current
-            let blob_id = if let BlobMode::Delete = blob_mode {
-                blob_prev
-            } else {
-                blob_next
-            };
-            let blob = Blob {
-                mode: blob_mode,
-                id: blob_id.to_string(),
-                path: blob_path,
-            };
+            let blob = parse_blob_from_line(&line)?;
             out.blob_set.insert(blob.id.clone());
             last_blobs.push(blob);
         }
     }
 
     // after iteration have to add the last one:
-    out.commits.push((last_commit, last_blobs));
+    if should_add(&mut last_commit, &mut last_blobs) {
+        out.commits.push((last_commit, last_blobs));
+    }
 
     Ok(out)
 }
@@ -499,7 +526,7 @@ pub fn generate_commit_list_and_blob_set(
     let stdout = child.stdout.as_mut()
         .ok_or(ioerr!("Failed to get child stdout for reading git log of {}", committish))?;
     let mut stdout_read = BufReader::new(stdout);
-    let output = generate_commit_list_and_blob_set_from_lines(&mut stdout_read);
+    let output = generate_commit_list_and_blob_set_from_lines(&mut stdout_read, |_, _| true);
     // let stdout_lines = stdout_read.lines();
 
     let exit = child.wait()?;
@@ -518,7 +545,7 @@ mod tests {
     fn commit_list_properly_detects_merge_commits() {
         let log_output = "somehash commit message here\n01010101010110 another commit message here";
         let mut cursor = Cursor::new(log_output.as_bytes());
-        let all_things = generate_commit_list_and_blob_set_from_lines(&mut cursor).unwrap();
+        let all_things = generate_commit_list_and_blob_set_from_lines(&mut cursor, |_, _| true).unwrap();
         assert_eq!(all_things.commits.len(), 2);
         assert!(all_things.commits[0].0.is_merge);
         assert!(all_things.commits[1].0.is_merge);
@@ -528,7 +555,7 @@ mod tests {
     fn commit_list_properly_parses_blobs() {
         let log_output = "hash1 msg1\n:100644 100644 xyz abc M file1.txt\n:100644 00000 123 000 D file2.txt";
         let mut cursor = Cursor::new(log_output.as_bytes());
-        let all_things = generate_commit_list_and_blob_set_from_lines(&mut cursor).unwrap();
+        let all_things = generate_commit_list_and_blob_set_from_lines(&mut cursor, |_, _| true).unwrap();
         assert_eq!(all_things.commits.len(), 1);
         assert!(!all_things.commits[0].0.is_merge);
         let blobs = &all_things.commits[0].1;
