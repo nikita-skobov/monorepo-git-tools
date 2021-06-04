@@ -2,6 +2,7 @@
 /// with git via the CLI instead of libgit2
 
 use super::exec_helpers;
+use std::{io::BufReader, io::BufRead, process::Stdio};
 
 #[derive(Debug, Clone)]
 pub struct Oid {
@@ -211,6 +212,32 @@ pub fn get_all_commits_from_ref(
     }
 
     Ok(commits)
+}
+
+pub fn get_number_of_commits_in_ref(refname: &str) -> Result<usize, String> {
+    let exec_args = [
+        "git", "log", refname, "--format=%H",
+    ];
+    let mut child = exec_helpers::spawn_with_env_ex(
+        &exec_args,
+        &[], &[],
+        None, None, Some(Stdio::piped()),
+    ).map_err(|e| e.to_string())?;
+
+    let stdout = child.stdout.as_mut()
+        .ok_or(format!("Failed to get child stdout for reading number of commits of {}", refname))?;
+    let stdout_read = BufReader::new(stdout);
+
+    let mut num_lines = 0;
+    for line in stdout_read.lines() {
+        let line = line.map_err(|e| e.to_string())?;
+        if ! line.is_empty() {
+            num_lines += 1;
+        }
+    }
+    child.wait().map_err(|e| e.to_string())?;
+
+    Ok(num_lines)
 }
 
 pub fn get_repo_root() -> Result<String, String> {
