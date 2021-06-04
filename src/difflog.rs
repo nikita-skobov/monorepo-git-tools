@@ -96,7 +96,7 @@ pub fn run_actual(cmd: &mut MgtCommandDifflog) -> io::Result<()> {
 
     println!("Comparing {} vs {}", branch_left, branch_right);
     let (left_uniq, right_uniq) = find_a_b_difference(
-        branch_left, branch_right, ABTraversalMode::Fullbase)?;
+        branch_left, branch_right, cmd.traversal_mode)?;
 
     // TODO: how to nicely display full diff log?
     // its easiest to just show the top group, but what if theres
