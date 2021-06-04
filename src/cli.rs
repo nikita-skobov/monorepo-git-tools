@@ -9,6 +9,7 @@ use super::split_in::run_split_in;
 use super::split_in::run_split_in_as;
 use super::verify::run_verify;
 use super::topbase::run_topbase;
+use super::topbase::ABTraversalMode;
 use super::sync::run_sync;
 use std::path::PathBuf;
 
@@ -43,6 +44,12 @@ pub struct MgtCommandCheck {
 pub struct MgtCommandDifflog {
     #[options(free)]
     pub branches: Vec<String>,
+
+    #[options(short = "m", help = "Valid modes are [topbase, rewind, fullbase]. default is rewind")]
+    pub traversal_mode: Option<ABTraversalMode>,
+
+    #[options(short = "w", help = "Force specify a width to display the log. default is to use whole terminal")]
+    pub term_width: Option<usize>,
 
     #[options(short = "h")]
     pub help: bool,

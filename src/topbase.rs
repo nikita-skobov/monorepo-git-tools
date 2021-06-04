@@ -716,6 +716,20 @@ pub enum ABTraversalMode {
     Fullbase,
 }
 
+impl FromStr for ABTraversalMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let ok = match s {
+            "topbase" => ABTraversalMode::Topbase,
+            "rewind" => ABTraversalMode::TopbaseRewind,
+            "fullbase" => ABTraversalMode::Fullbase,
+            _ => return Err(format!("{} is not a valid traversal mode", s)),
+        };
+        Ok(ok)
+    }
+}
+
 impl Default for ABTraversalMode {
     fn default() -> Self {
         ABTraversalMode::Topbase
