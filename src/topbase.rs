@@ -6,7 +6,6 @@ use super::git_helpers3;
 use super::git_helpers3::Commit;
 use super::git_helpers3::Oid;
 use super::exec_helpers;
-use super::check::topbase_check_alg;
 use super::die;
 use super::cli::MgtCommandTopbase;
 
@@ -30,21 +29,24 @@ pub fn topbase(
     } else {
         format!("refs/heads/{}", current_branch)
     };
-    let all_upstream_blobs = get_all_blobs_in_branch(upstream_branch.as_str());
-    let all_commits_of_current = match git_helpers3::get_all_commits_from_ref(current_branch.as_str()) {
+
+    let mut rebase_data = vec![];
+    let num_commits_of_current = match git_helpers3::get_number_of_commits_in_ref(&current_branch) {
         Ok(v) => v,
         Err(e) => die!("Failed to get all commits! {}", e),
     };
+    let (current_commits_not_in_upstream, _) = find_a_b_difference(
+        &current_branch, &upstream_branch, ABTraversalMode::Topbase).map_err(|e| e.to_string())?;
 
-    let num_commits_of_current = all_commits_of_current.len();
-    let mut num_commits_to_take = 0;
-    let mut rebase_data = vec![];
-    let mut cb = |c: &Commit| {
-        num_commits_to_take += 1;
-        let rebase_interactive_entry = format!("pick {} {}\n", c.id.long(), c.summary);
-        rebase_data.push(rebase_interactive_entry);
+    let num_commits_to_take = if let Some(top_group) = current_commits_not_in_upstream.first() {
+        for (c, _) in &top_group.commits {
+            let rebase_interactive_entry = format!("pick {} {}\n", c.id.long(), c.summary);
+            rebase_data.push(rebase_interactive_entry);
+        }
+        top_group.commits.len()
+    } else {
+        0
     };
-    topbase_check_alg(all_commits_of_current, all_upstream_blobs, &mut cb);
 
     // need to reverse it because git rebase interactive
     // takes commits in order of oldest to newest, but
