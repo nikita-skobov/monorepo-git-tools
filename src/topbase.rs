@@ -405,6 +405,21 @@ pub struct AllCommitsAndBlobs {
     pub commits: Vec<(Commit, Vec<Blob>)>,
 }
 
+impl AllCommitsAndBlobs {
+    /// returns true if this blob_set contains every single blob
+    /// in the provided list of blobs
+    pub fn contains_all_blobs(&self, blobs: &[Blob]) -> bool {
+        let mut contains_all = true;
+        for blob in blobs {
+            if ! self.blob_set.contains(&blob.id) {
+                contains_all = false;
+                break;
+            }
+        }
+        contains_all
+    }
+}
+
 pub fn parse_blob_from_line(line: &str) -> io::Result<Blob> {
     let items = line.split_whitespace().collect::<Vec<&str>>();
     // there are technically 6 items from this output:
@@ -542,6 +557,7 @@ pub fn generate_commit_list_and_blob_set_with_callback<T>(
     output
 }
 
+// thank you: https://users.rust-lang.org/t/option-fn-and-type-inference-for-none-case/51611/5
 pub const NOP_CB: Option<fn (&mut Commit, &mut Vec<Blob>) -> bool> = None;
 
 /// specify a committish of what branch/commit youd like to pass to
@@ -550,6 +566,107 @@ pub fn generate_commit_list_and_blob_set(
     committish: &str
 ) -> io::Result<AllCommitsAndBlobs> {
     generate_commit_list_and_blob_set_with_callback(committish, NOP_CB)
+}
+
+/// In a Topbase traversal mode, the A branch is considered the 'top', and
+/// the B branch is the 'bottom'. In this traversal mode, we load the entire B
+/// branch and then traverse the A branch, and we stop as soon as we find a commit
+/// in A that exists entirely in B. This means we extract the top commits of A that
+/// are not in B. This is fairly efficient when you know that your A branch is most likely
+/// simply ahead of B, and B is not ahead of any common fork point of A.
+/// On the other hand, if you do not know which branch is ahead (if any), a Fullbase
+/// traversal can tell you the entire story between the two branches. It starts by doing
+/// a topbase, and finding the fork point. Then it searches up from that fork point
+/// on the B branch to see if theres anything in B ahead of the fork point, that is
+/// not in A.
+/// A hybrid approach is the TopbaseRewind which starts with a Topbase, and then backtracks
+/// on the B branch to see if anything *on top* of B has diverged from the top of A.
+/// A TopbaseRewind is sufficient for most "I have worked on the main branch for a few days
+/// but there might also be work done on the remote main branch since then, so I want
+/// to see what kind of merge/rebase I should do".
+/// Examples:
+/// ```
+/// # * denotes a fork point where the blobs match up in the two branches
+/// # [0-9] deontes the order of the commits that are traversed
+/// # ? denotes a commit that was not traversed, and therefore has no traversal order
+/// 
+/// # topbase:
+///   A1       B?
+///   |         |
+///   A2*      B?*
+///   |         |
+///   A?        |
+/// # note that below A2 is not traversed because we found A2 to be a common fork point
+/// # so we stopped there. also we dont traverse any B commits, because in Topbase, we
+/// # only care about finding the different points on the A branch.
+/// # doing this topbase would report to the user a scenario of something like:
+/// #  A1
+/// #   \
+/// #    \
+/// #     |
+/// # (A2 == B?*)
+/// #     |
+/// #     ?
+/// #     ?
+///
+/// # topbase-rewind:
+///   A1       B4
+///   |         |
+///   A2*     B3*
+///   |         |
+///   A?        |
+/// # in topbase-rewind, we would then switch to the B branch once we found the fork point
+/// # in A2, and then we search up, to see if there's anything in B that is not in A.
+/// # in this case we found B4 which does not exist in the A branch (that we know of! 
+/// # remember, we do not search DOWN in A, so it is possible (but highly unlikely) that
+/// # this B4 commit exists somewhere down the A branch), so we can report to the user
+/// # that our two branches have diverged something like:
+/// #  A1     B4
+/// #   \     /
+/// #    \  /
+/// #     |
+/// # (A2 == B3)
+/// #     |
+/// #     ?
+/// #     ?
+/// #
+/// # fullbase:
+///   A1       B4
+///   |         |
+///   A2*      B5*
+///   |         |
+///   A3        B6
+/// # in topbase, both branches commits/blobs are fully loaded into memory
+/// # first, and then we traverse A, and then traverse B. there is nothing smart
+/// # about it. It is both slow, and uses a lot of memory, but it is 100% correct.
+/// # we find the exact scenario. In this case, we would report to the user:
+/// #  A1     B4
+/// #   \     /
+/// #    \  /
+/// #     |
+/// # (A2 == B5)
+/// #     |
+/// #    /\
+/// #   /  \
+/// #  |    \
+/// # A3    B6
+/// #
+/// # this is quite an odd history, and the user most likely wouldn't want to care about
+/// # B6, because the user already synced once before at A2 == B5, but
+/// # in some cases, it might be useful to see the entire branch divergence to
+/// # get a better picture of the state of everything
+/// ```
+#[derive(Debug, Copy, Clone)]
+pub enum ABTraversalMode {
+    Topbase,
+    TopbaseRewind,
+    Fullbase,
+}
+
+impl Default for ABTraversalMode {
+    fn default() -> Self {
+        ABTraversalMode::Topbase
+    }
 }
 
 /// given two branch/committishes A, and B
@@ -566,14 +683,38 @@ pub fn generate_commit_list_and_blob_set(
 ///   now we have a fully built map to the X branch. Conversely, we can make Y the B branch
 ///   and then we traverse the X branch one commit at a time, so we use less memory, but
 ///   our traversal would be quite a bit slower.
-pub fn find_a_b_difference(
+/// Also, you have a choice of traversal mode. See the documentation for `ABTraversalMode`
+/// You can pass in None, if you wish to use the default traversal mode.
+pub fn find_a_b_difference<T: Into<Option<ABTraversalMode>>>(
     a_committish: &str, b_committish: &str,
-    // TODO: different modes of traversal. default
-    // should be Topbase, but maybe also include Fullbase which will
-    // look for every possible difference instead of stopping at the first one?
+    traversal_mode: T
     // TODO: add stop at X commit for both A and B branch.
 ) -> io::Result<()> {
+    let traversal_mode = traversal_mode.into().unwrap_or(ABTraversalMode::default());
     let fully_loaded_b = generate_commit_list_and_blob_set(b_committish)?;
+
+
+    // let mut mylist = vec![];
+    let cb = |commit: &mut Commit, blobs: &mut Vec<Blob>| -> bool {
+        // mylist.push(c.id.short().to_string());
+        // TODO: is it sufficient to say "this commit in A exists in B because
+        // all of the blob hashes of the A commit exists **somewhere** in B?"
+        // it is certainly computationally efficient, but is it correct?
+        // consider example where A has 3 blobs, and those 3 blobs exist
+        // in *different* commits in B. Should that still count as the A commit
+        // existing? I think maybe not... I think that the most correct
+        // appraoch would be to check through all of B's commits to see if there is
+        // a commit that contains all of the blobs of the current A's commit. However that
+        // is much more computationally expensive, and Im leaning towards its unlikely
+        // that a scenario like this would occur in a real code base.. but who knows...
+        if ! fully_loaded_b.contains_all_blobs(blobs) {
+            println!("FOUND COMMIT IN A THAT IS NOT IN B:\n{} {}\n", commit.id.short(), commit.summary);
+        }
+
+        // pass false so we dont accumulate all of the commits of A in memory
+        false
+    };
+    generate_commit_list_and_blob_set_with_callback(a_committish, Some(cb))?;
 
     Ok(())
 }
