@@ -381,6 +381,14 @@ fn get_current_branch() -> String {
 // NOT what we do by default anyway (ie: by default dont pass the -m)
 
 #[derive(Debug, PartialOrd, PartialEq)]
+pub enum ShouldAddMode {
+    Add,
+    DontAdd,
+    AddAndExit,
+    Exit,
+}
+
+#[derive(Debug, PartialOrd, PartialEq)]
 pub enum BlobMode {
     Add,
     Modify,
@@ -471,12 +479,15 @@ pub fn parse_blob_from_line(line: &str) -> io::Result<Blob> {
 /// as well as a list of all commits.
 /// optionally pass in a callback to modify/inspect the blobs/commits before
 /// they are inserted into the output. This callback function is optional. If you want
-/// to use the default behavior, you can pass: `|_, _| true`
+/// to use the default behavior, you can pass: `|_, _| ShouldAddMode::Add`
+/// The response is a tuple that contains (kill the child process of this command, AllCommitsAndBlobs)
+/// If `should_kill_child` is true, you should/can kill the child process that we are reading from
+/// If you are running this command from your own in-memory stream/buffer, you can ignore that field.
 pub fn generate_commit_list_and_blob_set_from_lines<T: BufRead>(
     line_reader: &mut T,
-    should_add: impl FnMut(&mut Commit, &mut Vec<Blob>) -> bool,
-) -> io::Result<AllCommitsAndBlobs> {
-    let mut should_add = should_add;
+    should_add: impl FnMut(&mut Commit, &mut Vec<Blob>) -> ShouldAddMode,
+) -> io::Result<(bool, AllCommitsAndBlobs)> {
+    let mut should_add_cb = should_add;
     let mut out = AllCommitsAndBlobs::default();
     let mut last_commit = Commit::new("", "".into(), true);
     let mut last_blobs = vec![];
@@ -487,8 +498,17 @@ pub fn generate_commit_list_and_blob_set_from_lines<T: BufRead>(
         if ! line.starts_with(':') {
             // parsing a commit line
             if add_last_commit {
-                if should_add(&mut last_commit, &mut last_blobs) {
+                let (should_add, should_exit) = match should_add_cb(&mut last_commit, &mut last_blobs) {
+                    ShouldAddMode::Add => (true, false),
+                    ShouldAddMode::AddAndExit => (true, true),
+                    ShouldAddMode::DontAdd => (false, false),
+                    ShouldAddMode::Exit => (false, true),
+                };
+                if should_add {
                     out.commits.push((last_commit, last_blobs));
+                }
+                if should_exit {
+                    return Ok((true, out));
                 }
                 last_blobs = vec![];
                 last_commit = Commit::new("", "".into(), true);
@@ -513,12 +533,19 @@ pub fn generate_commit_list_and_blob_set_from_lines<T: BufRead>(
         }
     }
 
+    let should_add = match should_add_cb(&mut last_commit, &mut last_blobs) {
+        ShouldAddMode::Add => true,
+        ShouldAddMode::AddAndExit => true,
+        _ => false,
+    };
+
     // after iteration have to add the last one:
-    if should_add(&mut last_commit, &mut last_blobs) {
+    if should_add {
         out.commits.push((last_commit, last_blobs));
     }
+    // no point in checking if should_exit because we are exiting here anyway
 
-    Ok(out)
+    Ok((false, out))
 }
 
 /// same as `generate_commit_list_and_blob_set` but you can specify
@@ -528,7 +555,7 @@ pub fn generate_commit_list_and_blob_set_with_callback<T>(
     committish: &str,
     callback: Option<T>
 ) -> io::Result<AllCommitsAndBlobs>
-    where T: FnMut(&mut Commit, &mut Vec<Blob>) -> bool
+    where T: FnMut(&mut Commit, &mut Vec<Blob>) -> ShouldAddMode
 {
     // TODO: allow us to specify a stopping commit
     // TODO: add the '-m' flag if we want to see merge commits with a full blob diff
@@ -547,18 +574,42 @@ pub fn generate_commit_list_and_blob_set_with_callback<T>(
     let mut stdout_read = BufReader::new(stdout);
     let output = match callback {
         Some(cb) => generate_commit_list_and_blob_set_from_lines(&mut stdout_read, cb),
-        None => generate_commit_list_and_blob_set_from_lines(&mut stdout_read, |_, _| true),
+        None => generate_commit_list_and_blob_set_from_lines(&mut stdout_read, |_, _| ShouldAddMode::Add),
     };
-    // let stdout_lines = stdout_read.lines();
 
-    let exit = child.wait()?;
-    // eprintln!("{:?}", exit);
+    let (should_kill_child, output) = match output {
+        Ok(o) => {
+            (o.0, Ok(o.1))
+        }
+        Err(e) => {
+            // can probably kill the child if there is an error?
+            // but i suppose child.wait() would also error?
+            // v--- TODO: should this be true?
+            (false, Err(e))
+        }
+    };
+
+    if should_kill_child {
+        // I think if we failed to kill child we dont care?
+        // I think if this errors, it means the child already was killed
+        // so we still want to exit...
+        let _ = child.kill();
+    } else {
+        // only return this child.wait() error if
+        // our output response is ok. if our output is an error,
+        // then we would rather return that error instead of an error
+        // that came from calling child.wait()
+        let child_wait_res = child.wait();
+        if output.is_ok() {
+            let _ = child_wait_res?;
+        }
+    }
 
     output
 }
 
 // thank you: https://users.rust-lang.org/t/option-fn-and-type-inference-for-none-case/51611/5
-pub const NOP_CB: Option<fn (&mut Commit, &mut Vec<Blob>) -> bool> = None;
+pub const NOP_CB: Option<fn (&mut Commit, &mut Vec<Blob>) -> ShouldAddMode> = None;
 
 /// specify a committish of what branch/commit youd like to pass to
 /// `git log --raw --pretty=oneline <committish>`
@@ -669,6 +720,84 @@ impl Default for ABTraversalMode {
     }
 }
 
+/// start and end are inclusive indices of which
+/// commits are part of this group
+#[derive(Debug, Default, Copy, Clone)]
+pub struct ConsecutiveCommitGroup {
+    pub start: usize,
+    pub end: usize,
+}
+
+#[derive(Debug, Default)]
+pub struct ConsecutiveCommitGroups {
+    pub groups: Vec<ConsecutiveCommitGroup>,
+    pub current_group: Option<ConsecutiveCommitGroup>,
+    pub current_index: usize,
+}
+
+impl ConsecutiveCommitGroups {
+    pub fn advance(&mut self, commit_should_be_added_to_group: bool) {
+        match self.current_group {
+            Some(ref mut current_group) => {
+                if commit_should_be_added_to_group {
+                    // advance the end index:
+                    current_group.end = self.current_index;
+                } else {
+                    // we reached the end of the last group,
+                    // ad it to the list, and reset us to None
+                    self.groups.push(current_group.clone());
+                    self.current_group = None;
+                }
+            }
+            None => {
+                if commit_should_be_added_to_group {
+                    // we start a commit group:
+                    let new_commit_group = ConsecutiveCommitGroup {
+                        start: self.current_index,
+                        end: 0, // will be filled in later
+                    };
+                    self.current_group = Some(new_commit_group);
+                }
+            }
+        }
+
+        self.current_index += 1;
+    }
+}
+
+/// this is called by `find_a_b_difference` if your traversal mode
+/// is fullbase. Otherwise you can call this directly.
+/// recall a fullbase loads both A and B branch into memory and
+/// traverses both.
+pub fn find_a_b_difference_fullbase(
+    a_committish: &str, b_committish: &str,
+) -> io::Result<()> {
+    let fully_loaded_b = generate_commit_list_and_blob_set(b_committish)?;
+    let mut a_has_but_not_in_b = vec![];
+    let mut b_has_but_not_in_a = vec![];
+    let mut commit_index: usize = 0;
+    let cb = |_commit: &mut Commit, blobs: &mut Vec<Blob>| -> ShouldAddMode {
+        if ! fully_loaded_b.contains_all_blobs(blobs) {
+            // println!("FOUND COMMIT IN A THAT IS NOT IN B:\n{} {}\n", commit.id.short(), commit.summary);
+            a_has_but_not_in_b.push(commit_index);
+        }
+        commit_index += 1;
+        ShouldAddMode::Add
+    };
+    let fully_loaded_a = generate_commit_list_and_blob_set_with_callback(a_committish, Some(cb))?;
+
+    let mut commit_index: usize = 0;
+    for (_commit, blobs) in &fully_loaded_b.commits {
+        if ! fully_loaded_a.contains_all_blobs(blobs) {
+            // println!("FOUND COMMIT IN B THAT IS NOT IN A:\n{} {}\n", commit.id.short(), commit.summary);
+            b_has_but_not_in_a.push(commit_index);
+        }
+        commit_index += 1;
+    }
+
+    Ok(())
+}
+
 /// given two branch/committishes A, and B
 /// find the differences between them. NOTE THAT
 /// B is the 'bottom' branch which implies its entire log is loaded into memory
@@ -691,12 +820,17 @@ pub fn find_a_b_difference<T: Into<Option<ABTraversalMode>>>(
     // TODO: add stop at X commit for both A and B branch.
 ) -> io::Result<()> {
     let traversal_mode = traversal_mode.into().unwrap_or(ABTraversalMode::default());
+    let (should_rewind, is_fullbase) = match traversal_mode {
+        ABTraversalMode::Topbase => (false, false),
+        ABTraversalMode::TopbaseRewind => (true, false),
+        ABTraversalMode::Fullbase => (false, true),
+    };
     let fully_loaded_b = generate_commit_list_and_blob_set(b_committish)?;
 
+    let mut a_has_but_not_in_b = ConsecutiveCommitGroups::default();
+    let mut b_has_but_not_in_a = ConsecutiveCommitGroups::default();
 
-    // let mut mylist = vec![];
-    let cb = |commit: &mut Commit, blobs: &mut Vec<Blob>| -> bool {
-        // mylist.push(c.id.short().to_string());
+    let cb = |commit: &mut Commit, blobs: &mut Vec<Blob>| -> ShouldAddMode {
         // TODO: is it sufficient to say "this commit in A exists in B because
         // all of the blob hashes of the A commit exists **somewhere** in B?"
         // it is certainly computationally efficient, but is it correct?
@@ -707,12 +841,19 @@ pub fn find_a_b_difference<T: Into<Option<ABTraversalMode>>>(
         // a commit that contains all of the blobs of the current A's commit. However that
         // is much more computationally expensive, and Im leaning towards its unlikely
         // that a scenario like this would occur in a real code base.. but who knows...
-        if ! fully_loaded_b.contains_all_blobs(blobs) {
-            println!("FOUND COMMIT IN A THAT IS NOT IN B:\n{} {}\n", commit.id.short(), commit.summary);
-        }
+        let should_add_to_a = ! fully_loaded_b.contains_all_blobs(blobs);
+        // if should_add_to_a {
+        //     println!("FOUND COMMIT IN A THAT IS NOT IN B:\n{} {}\n", commit.id.short(), commit.summary);
+        // }
+        a_has_but_not_in_b.advance(should_add_to_a);
 
-        // pass false so we dont accumulate all of the commits of A in memory
-        false
+        // if fullbase, we collect A's commits too. but if not in fullbase
+        // then we pass false so we dont accumulate all of the commits of A in memory
+        if is_fullbase {
+            ShouldAddMode::Add
+        } else {
+            ShouldAddMode::DontAdd
+        }
     };
     generate_commit_list_and_blob_set_with_callback(a_committish, Some(cb))?;
 
@@ -729,7 +870,7 @@ mod tests {
     fn commit_list_properly_detects_merge_commits() {
         let log_output = "somehash commit message here\n01010101010110 another commit message here";
         let mut cursor = Cursor::new(log_output.as_bytes());
-        let all_things = generate_commit_list_and_blob_set_from_lines(&mut cursor, |_, _| true).unwrap();
+        let (_, all_things) = generate_commit_list_and_blob_set_from_lines(&mut cursor, |_, _| ShouldAddMode::Add).unwrap();
         assert_eq!(all_things.commits.len(), 2);
         assert!(all_things.commits[0].0.is_merge);
         assert!(all_things.commits[1].0.is_merge);
@@ -739,7 +880,7 @@ mod tests {
     fn commit_list_properly_parses_blobs() {
         let log_output = "hash1 msg1\n:100644 100644 xyz abc M file1.txt\n:100644 00000 123 000 D file2.txt";
         let mut cursor = Cursor::new(log_output.as_bytes());
-        let all_things = generate_commit_list_and_blob_set_from_lines(&mut cursor, |_, _| true).unwrap();
+        let (_, all_things) = generate_commit_list_and_blob_set_from_lines(&mut cursor, |_, _| ShouldAddMode::Add).unwrap();
         assert_eq!(all_things.commits.len(), 1);
         assert!(!all_things.commits[0].0.is_merge);
         let blobs = &all_things.commits[0].1;
