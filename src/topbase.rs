@@ -1,4 +1,4 @@
-use std::{io, collections::HashSet, process::Stdio};
+use std::{io, collections::HashSet, process::Stdio, str::FromStr};
 use io::{BufReader, BufRead};
 
 use super::ioerr;
@@ -852,6 +852,100 @@ impl ConsecutiveCommitGroups {
     }
 }
 
+/// a callback helper for making your own parser of
+/// `generate_commit_list_and_blob_set_with_callback`
+/// this function should be called from within your closure
+/// that is passed to the generate commit list.
+/// Note that it depends on several mutable variables, so youd need
+/// to create those beforehand. See the `find_a_b_difference`
+/// function for an example of how this callback can be used.
+/// Example:
+/// ```
+/// let cb = |commit: &mut Commit, blobs: &mut Vec<Blob>| -> ShouldAddMode {
+///     should_add_commit_callback_helper(
+///         commit, blobs,
+///         &fully_loaded_b, &mut a_has_but_not_in_b,
+///         &mut stop_search_b_at_blobs,
+///         is_fullbase, should_rewind, is_regular_topbase,
+///     )
+/// };
+/// generate_commit_list_and_blob_set_with_callback(a_committish, Some(cb))?;
+/// ```
+pub fn should_add_commit_callback_helper(
+    commit: &mut Commit, blobs: &mut Vec<Blob>,
+    fully_loaded_b: &AllCommitsAndBlobs,
+    a_output: &mut ConsecutiveCommitGroups,
+    stop_search_b_at_blobs: &mut Option<Vec<Blob>>,
+    is_fullbase: bool,
+    is_rewind: bool,
+    is_regular_topbase: bool,
+) -> ShouldAddMode {
+    // TODO: what if we want merge commits?
+    // by default skip merge commits:
+    if commit.is_merge {
+        return ShouldAddMode::DontAdd;
+    }
+    // TODO: is it sufficient to say "this commit in A exists in B because
+    // all of the blob hashes of the A commit exists **somewhere** in B?"
+    // it is certainly computationally efficient, but is it correct?
+    // consider example where A has 3 blobs, and those 3 blobs exist
+    // in *different* commits in B. Should that still count as the A commit
+    // existing? I think maybe not... I think that the most correct
+    // appraoch would be to check through all of B's commits to see if there is
+    // a commit that contains all of the blobs of the current A's commit. However that
+    // is much more computationally expensive, and Im leaning towards its unlikely
+    // that a scenario like this would occur in a real code base.. but who knows...
+    let should_add_to_a = ! fully_loaded_b.contains_all_blobs(blobs);
+    // if should_add_to_a {
+    //     println!("FOUND COMMIT IN A THAT IS NOT IN B:\n{} {}\n", commit.id.short(), commit.summary);
+    // }
+
+    // if we a Some() with the commit/blobs to the ConsecutiveCommitGroups, then
+    // it will clone it and store it internally. Otherwise, if we pass None, then
+    // we will rely on the ShouldAddMode::Add for our caller to store it on our behalf.
+    // so the only case where we want to pass Some(...) here is if we are doing a regular
+    // topbase. Otherwise, the commit data will be in the returned output in `a_commits`.
+    let take_commit = if is_regular_topbase {
+        Some((commit, &blobs))
+    } else { None };
+    a_output.advance(should_add_to_a, take_commit);
+
+    // fullbase mode: always add
+    if is_fullbase {
+        return ShouldAddMode::Add;
+    }
+
+    // in topbase mode:
+    // if we are not rewinding, we can just
+    // exit if we find a commit that is in both A and B
+    if ! is_rewind {
+        // dont be confused by the semantics here of "should_add_to_a"
+        // we are 'adding' this commit locally above in the
+        // `a_has_but_not_in_b.advance(should_add_to_a);`
+        // but by telling our caller to "DontAdd", we are basically saying
+        // dont allocate memory for all of these commits, because
+        // we will do that ourselves instead.
+        return if ! should_add_to_a {
+            ShouldAddMode::Exit
+        } else {
+            ShouldAddMode::DontAdd
+        };
+    }
+
+    // otherwise we are in topbase:rewind mode:
+    // if we reached a commit that is in both A, and B
+    // we can add it and exit and then rewind from this point
+    if ! should_add_to_a {
+        // this is the last commit in rewind mode.
+        // make sure to save its list of blobs so that when we
+        // are traversing B, we know when to stop:
+        *stop_search_b_at_blobs = Some(blobs.clone());
+        ShouldAddMode::AddAndExit
+    } else {
+        ShouldAddMode::Add
+    }
+}
+
 /// given two branch/committishes A, and B
 /// find the differences between them. NOTE THAT
 /// B is the 'bottom' branch which implies its entire log is loaded into memory
@@ -890,70 +984,12 @@ pub fn find_a_b_difference<T: Into<Option<ABTraversalMode>>>(
     let mut stop_search_b_at_blobs = None;
     let mut a_has_but_not_in_b = ConsecutiveCommitGroups::default();
     let cb = |commit: &mut Commit, blobs: &mut Vec<Blob>| -> ShouldAddMode {
-        // TODO: what if we want merge commits?
-        // by default skip merge commits:
-        if commit.is_merge {
-            return ShouldAddMode::DontAdd;
-        }
-        // TODO: is it sufficient to say "this commit in A exists in B because
-        // all of the blob hashes of the A commit exists **somewhere** in B?"
-        // it is certainly computationally efficient, but is it correct?
-        // consider example where A has 3 blobs, and those 3 blobs exist
-        // in *different* commits in B. Should that still count as the A commit
-        // existing? I think maybe not... I think that the most correct
-        // appraoch would be to check through all of B's commits to see if there is
-        // a commit that contains all of the blobs of the current A's commit. However that
-        // is much more computationally expensive, and Im leaning towards its unlikely
-        // that a scenario like this would occur in a real code base.. but who knows...
-        let should_add_to_a = ! fully_loaded_b.contains_all_blobs(blobs);
-        // if should_add_to_a {
-        //     println!("FOUND COMMIT IN A THAT IS NOT IN B:\n{} {}\n", commit.id.short(), commit.summary);
-        // }
-
-        // if we a Some() with the commit/blobs to the ConsecutiveCommitGroups, then
-        // it will clone it and store it internally. Otherwise, if we pass None, then
-        // we will rely on the ShouldAddMode::Add for our caller to store it on our behalf.
-        // so the only case where we want to pass Some(...) here is if we are doing a regular
-        // topbase. Otherwise, the commit data will be in the returned output in `a_commits`.
-        let take_commit = if is_regular_topbase {
-            Some((commit, &blobs))
-        } else { None };
-        a_has_but_not_in_b.advance(should_add_to_a, take_commit);
-
-        // fullbase mode: always add
-        if is_fullbase {
-            return ShouldAddMode::Add;
-        }
-
-        // in topbase mode:
-        // if we are not rewinding, we can just
-        // exit if we find a commit that is in both A and B
-        if ! should_rewind {
-            // dont be confused by the semantics here of "should_add_to_a"
-            // we are 'adding' this commit locally above in the
-            // `a_has_but_not_in_b.advance(should_add_to_a);`
-            // but by telling our caller to "DontAdd", we are basically saying
-            // dont allocate memory for all of these commits, because
-            // we will do that ourselves instead.
-            return if ! should_add_to_a {
-                ShouldAddMode::Exit
-            } else {
-                ShouldAddMode::DontAdd
-            };
-        }
-
-        // otherwise we are in topbase:rewind mode:
-        // if we reached a commit that is in both A, and B
-        // we can add it and exit and then rewind from this point
-        if ! should_add_to_a {
-            // this is the last commit in rewind mode.
-            // make sure to save its list of blobs so that when we
-            // are traversing B, we know when to stop:
-            stop_search_b_at_blobs = Some(blobs.clone());
-            ShouldAddMode::AddAndExit
-        } else {
-            ShouldAddMode::Add
-        }
+        should_add_commit_callback_helper(
+            commit, blobs,
+            &fully_loaded_b, &mut a_has_but_not_in_b,
+            &mut stop_search_b_at_blobs,
+            is_fullbase, should_rewind, is_regular_topbase,
+        )
     };
     let a_commits = generate_commit_list_and_blob_set_with_callback(a_committish, Some(cb))?;
 
