@@ -13,6 +13,7 @@ mod cli;
 mod verify;
 mod core;
 mod sync;
+mod difflog;
 
 fn main() {
     let mgt = cli::get_cli_input();
