@@ -831,39 +831,6 @@ impl ConsecutiveCommitGroups {
     }
 }
 
-/// this is called by `find_a_b_difference` if your traversal mode
-/// is fullbase. Otherwise you can call this directly.
-/// recall a fullbase loads both A and B branch into memory and
-/// traverses both.
-pub fn find_a_b_difference_fullbase(
-    a_committish: &str, b_committish: &str,
-) -> io::Result<()> {
-    let fully_loaded_b = generate_commit_list_and_blob_set(b_committish)?;
-    let mut a_has_but_not_in_b = vec![];
-    let mut b_has_but_not_in_a = vec![];
-    let mut commit_index: usize = 0;
-    let cb = |_commit: &mut Commit, blobs: &mut Vec<Blob>| -> ShouldAddMode {
-        if ! fully_loaded_b.contains_all_blobs(blobs) {
-            // println!("FOUND COMMIT IN A THAT IS NOT IN B:\n{} {}\n", commit.id.short(), commit.summary);
-            a_has_but_not_in_b.push(commit_index);
-        }
-        commit_index += 1;
-        ShouldAddMode::Add
-    };
-    let fully_loaded_a = generate_commit_list_and_blob_set_with_callback(a_committish, Some(cb))?;
-
-    let mut commit_index: usize = 0;
-    for (_commit, blobs) in &fully_loaded_b.commits {
-        if ! fully_loaded_a.contains_all_blobs(blobs) {
-            // println!("FOUND COMMIT IN B THAT IS NOT IN A:\n{} {}\n", commit.id.short(), commit.summary);
-            b_has_but_not_in_a.push(commit_index);
-        }
-        commit_index += 1;
-    }
-
-    Ok(())
-}
-
 /// given two branch/committishes A, and B
 /// find the differences between them. NOTE THAT
 /// B is the 'bottom' branch which implies its entire log is loaded into memory
