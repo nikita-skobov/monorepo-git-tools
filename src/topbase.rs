@@ -869,6 +869,11 @@ pub fn find_a_b_difference<T: Into<Option<ABTraversalMode>>>(
     let mut stop_search_b_at_blobs = None;
     let mut a_has_but_not_in_b = ConsecutiveCommitGroups::default();
     let cb = |commit: &mut Commit, blobs: &mut Vec<Blob>| -> ShouldAddMode {
+        // TODO: what if we want merge commits?
+        // by default skip merge commits:
+        if commit.is_merge {
+            return ShouldAddMode::DontAdd;
+        }
         // TODO: is it sufficient to say "this commit in A exists in B because
         // all of the blob hashes of the A commit exists **somewhere** in B?"
         // it is certainly computationally efficient, but is it correct?
