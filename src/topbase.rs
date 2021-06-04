@@ -388,7 +388,7 @@ pub enum ShouldAddMode {
     Exit,
 }
 
-#[derive(Debug, PartialOrd, PartialEq)]
+#[derive(Debug, PartialOrd, PartialEq, Copy, Clone)]
 pub enum BlobMode {
     Add,
     Modify,
@@ -396,7 +396,7 @@ pub enum BlobMode {
     // TODO: handle Rename (R100)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Blob {
     pub mode: BlobMode,
     pub id: String,
@@ -720,28 +720,51 @@ impl Default for ABTraversalMode {
     }
 }
 
+/// helper struct used to keep track of commit groups.
+/// eventually this will be unfolded into just a ConsecutiveCommitGroup
+/// which does not need a start/end index
 /// start and end are inclusive indices of which
 /// commits are part of this group
-#[derive(Debug, Default, Copy, Clone)]
-pub struct ConsecutiveCommitGroup {
+#[derive(Debug, Default, Clone)]
+pub struct TrackConsecutiveCommitGroup {
     pub start: usize,
     pub end: usize,
+    pub commits: Vec<(Commit, Vec<Blob>)>,
 }
 
 #[derive(Debug, Default)]
+pub struct ConsecutiveCommitGroup {
+    pub commits: Vec<(Commit, Vec<Blob>)>,
+}
+
+/// keep track of a list of consecutive commits. When calling advance, we will
+/// keep track of the commit indices, so we can refer to these commits later externally.
+/// otherwise, if you don't have anything external that is keeping track of these commits
+/// then you can pass in a Some(..) option as `this_commit`, and we will store
+/// copies of those commits internally. When you call: unfold(), you must either specify
+/// an external source to dereference via the indices we store, or otherwise
+/// we will unfold from our internal commits Vec.
+#[derive(Debug, Default)]
 pub struct ConsecutiveCommitGroups {
-    pub groups: Vec<ConsecutiveCommitGroup>,
-    pub current_group: Option<ConsecutiveCommitGroup>,
+    pub groups: Vec<TrackConsecutiveCommitGroup>,
+    pub current_group: Option<TrackConsecutiveCommitGroup>,
     pub current_index: usize,
 }
 
 impl ConsecutiveCommitGroups {
-    pub fn advance(&mut self, commit_should_be_added_to_group: bool) {
+    pub fn advance(
+        &mut self,
+        commit_should_be_added_to_group: bool,
+        this_commit: Option<(&mut Commit, &&mut Vec<Blob>)>,
+    ) {
         match self.current_group {
             Some(ref mut current_group) => {
                 if commit_should_be_added_to_group {
                     // advance the end index:
                     current_group.end = self.current_index;
+                    if let Some((commit, blobs)) = this_commit {
+                        current_group.commits.push((commit.clone(), (*blobs).clone()));
+                    }
                 } else {
                     // we reached the end of the last group,
                     // ad it to the list, and reset us to None
@@ -751,10 +774,16 @@ impl ConsecutiveCommitGroups {
             }
             None => {
                 if commit_should_be_added_to_group {
+                    let commits = if let Some((commit, blobs)) = this_commit {
+                        vec![(commit.clone(), (*blobs).clone())]
+                    } else {
+                        vec![]
+                    };
                     // we start a commit group:
-                    let new_commit_group = ConsecutiveCommitGroup {
+                    let new_commit_group = TrackConsecutiveCommitGroup {
                         start: self.current_index,
-                        end: 0, // will be filled in later
+                        commits,
+                        end: self.current_index, // will be filled in later
                     };
                     self.current_group = Some(new_commit_group);
                 }
@@ -762,6 +791,43 @@ impl ConsecutiveCommitGroups {
         }
 
         self.current_index += 1;
+    }
+
+    /// get back a vec of consecutive commit groups where these groups actually contain the
+    /// commit info. If you pass None for the external_commit_source, we will try to
+    /// use our own internal source of commits. Otherwise, if you pass Some(..) then we
+    /// will extract and clone your commits via the tracked indices. an error return
+    /// indicates that the external_commit_source that you passed does not have the correct
+    /// range that we are tracking internally.
+    pub fn unfold(
+        &mut self,
+        external_commit_source: Option<&Vec<(Commit, Vec<Blob>)>>
+    ) -> Result<Vec<ConsecutiveCommitGroup>, String> {
+        let mut out = vec![];
+
+        if let Some(external_source) = external_commit_source {
+            // if we have an external source, then return clones from this external
+            // source using the start/end indices we have internally
+            for commit_group in &self.groups {
+                let commits = external_source.get(commit_group.start..=commit_group.end)
+                    .ok_or(format!("Failed to get commit range from {}..={}", commit_group.start, commit_group.end))?;
+                let out_group = ConsecutiveCommitGroup {
+                    commits: commits.to_vec(),
+                };
+                out.push(out_group);
+            }
+        } else {
+            // if not given an external source, just iterate our own TrackedGroups
+            // and return the commits from there
+            for commit_group in self.groups.drain(..) {
+                let out_group = ConsecutiveCommitGroup {
+                    commits: commit_group.commits
+                };
+                out.push(out_group);
+            }
+        }
+
+        Ok(out)
     }
 }
 
@@ -814,22 +880,27 @@ pub fn find_a_b_difference_fullbase(
 ///   our traversal would be quite a bit slower.
 /// Also, you have a choice of traversal mode. See the documentation for `ABTraversalMode`
 /// You can pass in None, if you wish to use the default traversal mode.
+/// returns a tuple of (A ConsecutiveCommitGroup, B ConsecutiveCommitGroup)
+/// where the consecutive commit group for A contains commits that A has, but B does not,
+/// and the consecutive commit group for B contains commits that B has, but A does not.
+/// again: the "Y has, but X does not" is specific to the traversal mode. If you want to find
+/// ALL of the possible different commits, use Fullbase as your traversal mode.
 pub fn find_a_b_difference<T: Into<Option<ABTraversalMode>>>(
     a_committish: &str, b_committish: &str,
     traversal_mode: T
     // TODO: add stop at X commit for both A and B branch.
-) -> io::Result<()> {
+) -> io::Result<(Vec<ConsecutiveCommitGroup>, Vec<ConsecutiveCommitGroup>)> {
     let traversal_mode = traversal_mode.into().unwrap_or(ABTraversalMode::default());
     let (should_rewind, is_fullbase) = match traversal_mode {
         ABTraversalMode::Topbase => (false, false),
         ABTraversalMode::TopbaseRewind => (true, false),
         ABTraversalMode::Fullbase => (false, true),
     };
+    let is_regular_topbase = !should_rewind && !is_fullbase;
     let fully_loaded_b = generate_commit_list_and_blob_set(b_committish)?;
 
+    let mut stop_search_b_at_blobs = None;
     let mut a_has_but_not_in_b = ConsecutiveCommitGroups::default();
-    let mut b_has_but_not_in_a = ConsecutiveCommitGroups::default();
-
     let cb = |commit: &mut Commit, blobs: &mut Vec<Blob>| -> ShouldAddMode {
         // TODO: is it sufficient to say "this commit in A exists in B because
         // all of the blob hashes of the A commit exists **somewhere** in B?"
@@ -845,19 +916,104 @@ pub fn find_a_b_difference<T: Into<Option<ABTraversalMode>>>(
         // if should_add_to_a {
         //     println!("FOUND COMMIT IN A THAT IS NOT IN B:\n{} {}\n", commit.id.short(), commit.summary);
         // }
-        a_has_but_not_in_b.advance(should_add_to_a);
 
-        // if fullbase, we collect A's commits too. but if not in fullbase
-        // then we pass false so we dont accumulate all of the commits of A in memory
+        // if we a Some() with the commit/blobs to the ConsecutiveCommitGroups, then
+        // it will clone it and store it internally. Otherwise, if we pass None, then
+        // we will rely on the ShouldAddMode::Add for our caller to store it on our behalf.
+        // so the only case where we want to pass Some(...) here is if we are doing a regular
+        // topbase. Otherwise, the commit data will be in the returned output in `a_commits`.
+        let take_commit = if is_regular_topbase {
+            Some((commit, &blobs))
+        } else { None };
+        a_has_but_not_in_b.advance(should_add_to_a, take_commit);
+
+        // fullbase mode: always add
         if is_fullbase {
-            ShouldAddMode::Add
+            return ShouldAddMode::Add;
+        }
+
+        // in topbase mode:
+        // if we are not rewinding, we can just
+        // exit if we find a commit that is in both A and B
+        if ! should_rewind {
+            // dont be confused by the semantics here of "should_add_to_a"
+            // we are 'adding' this commit locally above in the
+            // `a_has_but_not_in_b.advance(should_add_to_a);`
+            // but by telling our caller to "DontAdd", we are basically saying
+            // dont allocate memory for all of these commits, because
+            // we will do that ourselves instead.
+            return if ! should_add_to_a {
+                ShouldAddMode::Exit
+            } else {
+                ShouldAddMode::DontAdd
+            };
+        }
+
+        // otherwise we are in topbase:rewind mode:
+        // if we reached a commit that is in both A, and B
+        // we can add it and exit and then rewind from this point
+        if ! should_add_to_a {
+            // this is the last commit in rewind mode.
+            // make sure to save its list of blobs so that when we
+            // are traversing B, we know when to stop:
+            stop_search_b_at_blobs = Some(blobs.clone());
+            ShouldAddMode::AddAndExit
         } else {
-            ShouldAddMode::DontAdd
+            ShouldAddMode::Add
         }
     };
-    generate_commit_list_and_blob_set_with_callback(a_committish, Some(cb))?;
+    let a_commits = generate_commit_list_and_blob_set_with_callback(a_committish, Some(cb))?;
 
-    Ok(())
+    // in regular topbase we do not need to search through B's commits
+    let mut b_has_but_not_in_a = ConsecutiveCommitGroups::default();
+    if is_fullbase || should_rewind {
+        for (_commit, blobs) in &fully_loaded_b.commits {
+            if let Some(ref stop_at_blobs) = stop_search_b_at_blobs {
+                // if we found the commit where we previously stopped searching A,
+                // then this is where we also stop searching B. this is only valid for
+                // rewind mode
+                if all_blobs_exist(stop_at_blobs, blobs) {
+                    break;
+                }
+            }
+            let should_add_to_b = ! a_commits.contains_all_blobs(blobs);
+            // if should_add_to_b {
+            //     println!("FOUND COMMIT IN B THAT IS NOT IN A:\n{} {}\n", commit.id.short(), commit.summary);
+            // }
+            b_has_but_not_in_a.advance(should_add_to_b, None);
+        }
+    }
+
+    // again, only in topbase mode do we keep track of the commits ourselves, otherwise
+    // we wish to unfold using the external source. so for topbase, pass None, but
+    // for non-topbase, pass in a Some(..) with the list of commits we collected
+    // from `generate_commit_list_...`
+    let a_external_source = if is_regular_topbase {
+        None
+    } else {
+        Some(&a_commits.commits)
+    };
+    let b_external_source = Some(&fully_loaded_b.commits);
+    let consecutive_groups_in_a = a_has_but_not_in_b.unfold(a_external_source)
+        .map_err(|e| ioerr!("{}", e))?;
+    let consecutive_groups_in_b = b_has_but_not_in_a.unfold(b_external_source)
+        .map_err(|e| ioerr!("{}", e))?;
+    
+
+    Ok((consecutive_groups_in_a, consecutive_groups_in_b))
+}
+
+/// returns true if all of A's blobs exist in B
+pub fn all_blobs_exist(a: &[Blob], b: &[Blob]) -> bool {
+    let mut contains_all = true;
+    for blob in a {
+        let b_contains_a_blob = b.iter().any(|x| x.id == blob.id);
+        if ! b_contains_a_blob {
+            contains_all = false;
+            break;
+        }
+    }
+    return contains_all;
 }
 
 
