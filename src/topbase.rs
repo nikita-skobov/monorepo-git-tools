@@ -805,6 +805,11 @@ impl ConsecutiveCommitGroups {
     ) -> Result<Vec<ConsecutiveCommitGroup>, String> {
         let mut out = vec![];
 
+        if let Some(dangling_group) = &self.current_group {
+            self.groups.push(dangling_group.clone());
+            self.current_group = None;
+        }
+
         if let Some(external_source) = external_commit_source {
             // if we have an external source, then return clones from this external
             // source using the start/end indices we have internally
