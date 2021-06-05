@@ -7,8 +7,17 @@ use super::topbase::find_a_b_difference;
 use super::topbase::ABTraversalMode;
 use crate::{git_helpers3::Commit, topbase::ConsecutiveCommitGroup};
 
-pub fn format_right_string(commit: &Commit) -> String {
-    format!("{}", commit.summary)
+pub fn format_right_string(
+    commit: &Commit,
+    right_allowance: usize,
+) -> String {
+    let summary_len = commit.summary.len();
+    if summary_len > right_allowance {
+        let minus_5 = &commit.summary[0..right_allowance - 5];
+        format!("{}[...]", minus_5)
+    } else {
+        format!("{}", commit.summary)
+    }
 }
 
 pub fn format_left_string(
@@ -44,7 +53,7 @@ pub fn format_group_string_left_ahead(
 
         if countdown == 0 {
             let (right_commit, _) = &right_group.commits[i - ahead_by];
-            out = format!("{}{}{}", out, seperator, format_right_string(right_commit));
+            out = format!("{}{}{}", out, seperator, format_right_string(right_commit, left_allowance));
         } else {
             out = format!("{}{}", out, seperator);
             countdown -= 1;
@@ -58,9 +67,29 @@ pub fn format_group_string_left_ahead(
 pub fn format_group_string_right_ahead(
     left_group: &ConsecutiveCommitGroup,
     right_group: &ConsecutiveCommitGroup,
-    ahead_by: usize
+    ahead_by: usize,
+    term_width: usize,
 ) -> String {
     let mut out = "".into();
+
+    let approx_half = term_width / 2;
+    let seperator = " | ";
+    let left_allowance = approx_half - seperator.len();
+    let empty_left_string = " ".repeat(left_allowance);
+
+    let mut countdown = ahead_by;
+    for (i, (right_commit, _)) in right_group.commits.iter().enumerate() {
+        if countdown != 0 {
+            // add the empty left string first
+            out = format!("{}{}", out, empty_left_string);
+            countdown -= 1;
+        } else {
+            let (left_commit, _) = &left_group.commits[i - ahead_by];
+            out = format!("{}{}", out, format_left_string(left_commit, left_allowance));
+        }
+
+        out = format!("{}{}{}\n", out, seperator, format_right_string(right_commit, left_allowance));
+    }
 
     out
 }
@@ -75,7 +104,7 @@ pub fn format_group_string(
     if left_commits >= right_commits {
         format_group_string_left_ahead(left_group, right_group, left_commits - right_commits, term_width)
     } else {
-        format_group_string_right_ahead(left_group, right_group, right_commits - left_commits)
+        format_group_string_right_ahead(left_group, right_group, right_commits - left_commits, term_width)
     }
 }
 
