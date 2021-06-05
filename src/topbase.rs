@@ -746,43 +746,25 @@ impl Default for ABTraversalMode {
     }
 }
 
-/// helper struct used to keep track of commit groups.
-/// eventually this will be unfolded into just a ConsecutiveCommitGroup
-/// which does not need a start/end index
-/// start and end are inclusive indices of which
-/// commits are part of this group
-#[derive(Debug, Default, Clone)]
-pub struct TrackConsecutiveCommitGroup {
-    pub start: usize,
-    pub end: usize,
-    pub commits: Vec<(Commit, Vec<Blob>)>,
-    pub is_shared: bool,
-}
-
 /// a group of consecutive commits.
 /// if `is_shared` is true then this consecutive group of commits
 /// exists in another branch (although possibly by different commit hashes
 /// but can be looked up via blob ids). Throughout the
 /// documentation we use the terms exclusive and shared.
 /// `is_shared` is the opposite of exclusive
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct ConsecutiveCommitGroup {
     pub commits: Vec<(Commit, Vec<Blob>)>,
     pub is_shared: bool,
 }
 
 /// keep track of a list of consecutive commits. When calling advance, we will
-/// keep track of the commit indices, so we can refer to these commits later externally.
-/// otherwise, if you don't have anything external that is keeping track of these commits
-/// then you can pass in a Some(..) option as `this_commit`, and we will store
-/// copies of those commits internally. When you call: unfold(), you must either specify
-/// an external source to dereference via the indices we store, or otherwise
-/// we will unfold from our internal commits Vec.
+/// add to the consecutive group, or make a new group if we found a non-consecutive
+/// commit. Call unfold() when done, and get back a Vec of ConsecutiveCommitGroups
 #[derive(Debug, Default)]
 pub struct ConsecutiveCommitGroups {
-    pub groups: Vec<TrackConsecutiveCommitGroup>,
-    pub current_group: Option<TrackConsecutiveCommitGroup>,
-    pub current_index: usize,
+    pub groups: Vec<ConsecutiveCommitGroup>,
+    pub current_group: Option<ConsecutiveCommitGroup>,
     pub last_commit_was_exclusive: bool,
 }
 
@@ -790,19 +772,14 @@ impl ConsecutiveCommitGroups {
     pub fn make_new_commit_group(
         &self,
         this_commit_is_exclusive: bool,
-        this_commit: Option<(&mut Commit, &&mut Vec<Blob>)>,
-    ) -> TrackConsecutiveCommitGroup {
-        let commits = if let Some((commit, blobs)) = this_commit {
-            vec![(commit.clone(), (*blobs).clone())]
-        } else {
-            vec![]
-        };
+        this_commit: (&mut Commit, &&mut Vec<Blob>),
+    ) -> ConsecutiveCommitGroup {
+        let (commit, blobs) = this_commit;
+        let commits = vec![(commit.clone(), (*blobs).clone())];
         // we start a commit group:
-        let new_commit_group = TrackConsecutiveCommitGroup {
-            start: self.current_index,
+        let new_commit_group = ConsecutiveCommitGroup {
             commits,
             is_shared: ! this_commit_is_exclusive,
-            end: self.current_index, // will be filled in later
         };
         new_commit_group
     }
@@ -810,15 +787,13 @@ impl ConsecutiveCommitGroups {
     pub fn advance_same(
         &mut self,
         this_commit_is_exclusive: bool,
-        this_commit: Option<(&mut Commit, &&mut Vec<Blob>)>,
+        this_commit: (&mut Commit, &&mut Vec<Blob>),
         should_collect_shared: bool,
     ) {
         if let Some(ref mut current_group) = self.current_group {
-            // advance the end index:
-            current_group.end = self.current_index;
-            if let Some((commit, blobs)) = this_commit {
-                current_group.commits.push((commit.clone(), (*blobs).clone()));
-            }
+            // append a commit to current group
+            let (commit, blobs) = this_commit;
+            current_group.commits.push((commit.clone(), (*blobs).clone()));
         } else {
             // DO NOT create a new group if we are only interested
             // in exclusive groups, and this commit is shared:
@@ -832,7 +807,7 @@ impl ConsecutiveCommitGroups {
     pub fn advance_different(
         &mut self,
         this_commit_is_exclusive: bool,
-        this_commit: Option<(&mut Commit, &&mut Vec<Blob>)>,
+        this_commit: (&mut Commit, &&mut Vec<Blob>),
         should_collect_shared: bool,
     ) {
         // we reached the end of the last group,
@@ -857,7 +832,7 @@ impl ConsecutiveCommitGroups {
     pub fn advance(
         &mut self,
         this_commit_is_exclusive: bool,
-        this_commit: Option<(&mut Commit, &&mut Vec<Blob>)>,
+        this_commit: (&mut Commit, &&mut Vec<Blob>),
         should_collect_shared: bool,
     ) {
         match (self.last_commit_was_exclusive, this_commit_is_exclusive) {
@@ -889,19 +864,10 @@ impl ConsecutiveCommitGroups {
         }
 
         self.last_commit_was_exclusive = this_commit_is_exclusive;
-        self.current_index += 1;
     }
 
-    /// get back a vec of consecutive commit groups where these groups actually contain the
-    /// commit info. If you pass None for the external_commit_source, we will try to
-    /// use our own internal source of commits. Otherwise, if you pass Some(..) then we
-    /// will extract and clone your commits via the tracked indices. an error return
-    /// indicates that the external_commit_source that you passed does not have the correct
-    /// range that we are tracking internally.
-    pub fn unfold(
-        &mut self,
-        external_commit_source: Option<&Vec<(Commit, Vec<Blob>)>>
-    ) -> Result<Vec<ConsecutiveCommitGroup>, String> {
+    /// get back a vec of consecutive commit groups
+    pub fn unfold(&mut self) -> Result<Vec<ConsecutiveCommitGroup>, String> {
         let mut out = vec![];
 
         if let Some(dangling_group) = &self.current_group {
@@ -909,28 +875,12 @@ impl ConsecutiveCommitGroups {
             self.current_group = None;
         }
 
-        if let Some(external_source) = external_commit_source {
-            // if we have an external source, then return clones from this external
-            // source using the start/end indices we have internally
-            for commit_group in &self.groups {
-                let commits = external_source.get(commit_group.start..=commit_group.end)
-                    .ok_or(format!("Failed to get commit range from {}..={}", commit_group.start, commit_group.end))?;
-                let out_group = ConsecutiveCommitGroup {
-                    commits: commits.to_vec(),
-                    is_shared: commit_group.is_shared,
-                };
-                out.push(out_group);
-            }
-        } else {
-            // if not given an external source, just iterate our own TrackedGroups
-            // and return the commits from there
-            for commit_group in self.groups.drain(..) {
-                let out_group = ConsecutiveCommitGroup {
-                    commits: commit_group.commits,
-                    is_shared: commit_group.is_shared,
-                };
-                out.push(out_group);
-            }
+        for commit_group in self.groups.drain(..) {
+            let out_group = ConsecutiveCommitGroup {
+                commits: commit_group.commits,
+                is_shared: commit_group.is_shared,
+            };
+            out.push(out_group);
         }
 
         Ok(out)
@@ -963,7 +913,6 @@ pub fn should_add_commit_callback_helper(
     stop_search_b_at_blobs: &mut Option<Vec<Blob>>,
     is_fullbase: bool,
     is_rewind: bool,
-    is_regular_topbase: bool,
     should_collect_shared: bool,
 ) -> ShouldAddMode {
     // TODO: what if we want merge commits?
@@ -986,14 +935,7 @@ pub fn should_add_commit_callback_helper(
     //     println!("FOUND COMMIT IN A THAT IS NOT IN B:\n{} {}\n", commit.id.short(), commit.summary);
     // }
 
-    // if we a Some() with the commit/blobs to the ConsecutiveCommitGroups, then
-    // it will clone it and store it internally. Otherwise, if we pass None, then
-    // we will rely on the ShouldAddMode::Add for our caller to store it on our behalf.
-    // so the only case where we want to pass Some(...) here is if we are doing a regular
-    // topbase. Otherwise, the commit data will be in the returned output in `a_commits`.
-    let take_commit = if is_regular_topbase {
-        Some((commit, &blobs))
-    } else { None };
+    let take_commit = (commit, &blobs);
     a_output.advance(should_add_to_a, take_commit, should_collect_shared);
 
     // fullbase mode: always add
@@ -1073,8 +1015,8 @@ pub fn find_a_b_difference<T: Into<Option<ABTraversalMode>>>(
         ABTraversalMode::TopbaseRewind => (true, false),
         ABTraversalMode::Fullbase => (false, true),
     };
-    let is_regular_topbase = !should_rewind && !is_fullbase;
-    let fully_loaded_b = generate_commit_list_and_blob_set(b_committish)?;
+    // let is_regular_topbase = !should_rewind && !is_fullbase;
+    let mut fully_loaded_b = generate_commit_list_and_blob_set(b_committish)?;
 
     let mut stop_search_b_at_blobs = None;
     let mut a_has_but_not_in_b = ConsecutiveCommitGroups::default();
@@ -1083,7 +1025,7 @@ pub fn find_a_b_difference<T: Into<Option<ABTraversalMode>>>(
             commit, blobs,
             &fully_loaded_b, &mut a_has_but_not_in_b,
             &mut stop_search_b_at_blobs,
-            is_fullbase, should_rewind, is_regular_topbase,
+            is_fullbase, should_rewind,
             should_collect_shared,
         )
     };
@@ -1092,43 +1034,35 @@ pub fn find_a_b_difference<T: Into<Option<ABTraversalMode>>>(
     // in regular topbase we do not need to search through B's commits
     let mut b_has_but_not_in_a = ConsecutiveCommitGroups::default();
     if is_fullbase || should_rewind {
-        for (_commit, blobs) in &fully_loaded_b.commits {
+        for (ref mut commit, ref mut blobs) in &mut fully_loaded_b.commits {
             if let Some(ref stop_at_blobs) = stop_search_b_at_blobs {
                 // if we found the commit where we previously stopped searching A,
                 // then this is where we also stop searching B. this is only valid for
                 // rewind mode
-                if all_blobs_exist(stop_at_blobs, blobs) {
+                if all_blobs_exist(stop_at_blobs, &blobs) {
                     // if we wish to collect shared commits,
                     // we must advance one last time before we break:
                     if should_collect_shared {
                         // we say false here because we know this is
                         // not an exclusive commit
-                        b_has_but_not_in_a.advance(false, None, should_collect_shared);
+                        let this_commit = (commit, &blobs);
+                        b_has_but_not_in_a.advance(false, this_commit, should_collect_shared);
                     }
                     break;
                 }
             }
-            let should_add_to_b = ! a_commits.contains_all_blobs(blobs);
+            let should_add_to_b = ! a_commits.contains_all_blobs(&blobs);
             // if should_add_to_b {
             //     println!("FOUND COMMIT IN B THAT IS NOT IN A:\n{} {}\n", commit.id.short(), commit.summary);
             // }
-            b_has_but_not_in_a.advance(should_add_to_b, None, should_collect_shared);
+            let this_commit = (commit, &blobs);
+            b_has_but_not_in_a.advance(should_add_to_b, this_commit, should_collect_shared);
         }
     }
 
-    // again, only in topbase mode do we keep track of the commits ourselves, otherwise
-    // we wish to unfold using the external source. so for topbase, pass None, but
-    // for non-topbase, pass in a Some(..) with the list of commits we collected
-    // from `generate_commit_list_...`
-    let a_external_source = if is_regular_topbase {
-        None
-    } else {
-        Some(&a_commits.commits)
-    };
-    let b_external_source = Some(&fully_loaded_b.commits);
-    let consecutive_groups_in_a = a_has_but_not_in_b.unfold(a_external_source)
+    let consecutive_groups_in_a = a_has_but_not_in_b.unfold()
         .map_err(|e| ioerr!("{}", e))?;
-    let consecutive_groups_in_b = b_has_but_not_in_a.unfold(b_external_source)
+    let consecutive_groups_in_b = b_has_but_not_in_a.unfold()
         .map_err(|e| ioerr!("{}", e))?;
     
 
@@ -1154,8 +1088,6 @@ pub fn all_blobs_exist(a: &[Blob], b: &[Blob]) -> bool {
 // only return a single output collection. it should
 // have references to the different groups it finds as it
 // traverses
-// - rewrite the commit group tracker to just clone the commits...
-// taking the indices is kinda dumb
 // - verify that the way i read stream from stdout of child process
 // is correct... some kind of weird race condition on large repos makes
 // it seem like it never ends... i think maybe trying to read from
