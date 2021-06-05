@@ -1098,6 +1098,13 @@ pub fn find_a_b_difference<T: Into<Option<ABTraversalMode>>>(
                 // then this is where we also stop searching B. this is only valid for
                 // rewind mode
                 if all_blobs_exist(stop_at_blobs, blobs) {
+                    // if we wish to collect shared commits,
+                    // we must advance one last time before we break:
+                    if should_collect_shared {
+                        // we say false here because we know this is
+                        // not an exclusive commit
+                        b_has_but_not_in_a.advance(false, None, should_collect_shared);
+                    }
                     break;
                 }
             }
