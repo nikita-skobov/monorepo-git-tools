@@ -96,7 +96,7 @@ pub fn run_actual(cmd: &mut MgtCommandDifflog) -> io::Result<()> {
 
     println!("Comparing {} vs {}", branch_left, branch_right);
     let (left_uniq, right_uniq) = find_a_b_difference(
-        branch_left, branch_right, cmd.traversal_mode)?;
+        branch_left, branch_right, cmd.traversal_mode, true)?;
 
     // TODO: how to nicely display full diff log?
     // its easiest to just show the top group, but what if theres
@@ -107,6 +107,7 @@ pub fn run_actual(cmd: &mut MgtCommandDifflog) -> io::Result<()> {
 
     let default_empty = ConsecutiveCommitGroup {
         commits: vec![],
+        is_shared: false,
     };
     let left_first_group = left_uniq.first().unwrap_or(&default_empty);
     let right_first_group = right_uniq.first().unwrap_or(&default_empty);

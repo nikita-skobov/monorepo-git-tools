@@ -36,7 +36,9 @@ pub fn topbase(
         Err(e) => die!("Failed to get all commits! {}", e),
     };
     let (current_commits_not_in_upstream, _) = find_a_b_difference(
-        &current_branch, &upstream_branch, ABTraversalMode::Topbase).map_err(|e| e.to_string())?;
+        &current_branch, &upstream_branch, ABTraversalMode::Topbase, false).map_err(|e| e.to_string())?;
+
+    eprintln!("{:#?}", current_commits_not_in_upstream);
 
     let num_commits_to_take = if let Some(top_group) = current_commits_not_in_upstream.first() {
         for (c, _) in &top_group.commits {
@@ -746,11 +748,19 @@ pub struct TrackConsecutiveCommitGroup {
     pub start: usize,
     pub end: usize,
     pub commits: Vec<(Commit, Vec<Blob>)>,
+    pub is_shared: bool,
 }
 
+/// a group of consecutive commits.
+/// if `is_shared` is true then this consecutive group of commits
+/// exists in another branch (although possibly by different commit hashes
+/// but can be looked up via blob ids). Throughout the
+/// documentation we use the terms exclusive and shared.
+/// `is_shared` is the opposite of exclusive
 #[derive(Debug, Default)]
 pub struct ConsecutiveCommitGroup {
     pub commits: Vec<(Commit, Vec<Blob>)>,
+    pub is_shared: bool,
 }
 
 /// keep track of a list of consecutive commits. When calling advance, we will
@@ -765,47 +775,112 @@ pub struct ConsecutiveCommitGroups {
     pub groups: Vec<TrackConsecutiveCommitGroup>,
     pub current_group: Option<TrackConsecutiveCommitGroup>,
     pub current_index: usize,
+    pub last_commit_was_exclusive: bool,
 }
 
 impl ConsecutiveCommitGroups {
-    pub fn advance(
-        &mut self,
-        commit_should_be_added_to_group: bool,
+    pub fn make_new_commit_group(
+        &self,
+        this_commit_is_exclusive: bool,
         this_commit: Option<(&mut Commit, &&mut Vec<Blob>)>,
+    ) -> TrackConsecutiveCommitGroup {
+        let commits = if let Some((commit, blobs)) = this_commit {
+            vec![(commit.clone(), (*blobs).clone())]
+        } else {
+            vec![]
+        };
+        // we start a commit group:
+        let new_commit_group = TrackConsecutiveCommitGroup {
+            start: self.current_index,
+            commits,
+            is_shared: ! this_commit_is_exclusive,
+            end: self.current_index, // will be filled in later
+        };
+        new_commit_group
+    }
+
+    pub fn advance_same(
+        &mut self,
+        this_commit_is_exclusive: bool,
+        this_commit: Option<(&mut Commit, &&mut Vec<Blob>)>,
+        should_collect_shared: bool,
     ) {
-        match self.current_group {
-            Some(ref mut current_group) => {
-                if commit_should_be_added_to_group {
-                    // advance the end index:
-                    current_group.end = self.current_index;
-                    if let Some((commit, blobs)) = this_commit {
-                        current_group.commits.push((commit.clone(), (*blobs).clone()));
-                    }
-                } else {
-                    // we reached the end of the last group,
-                    // ad it to the list, and reset us to None
-                    self.groups.push(current_group.clone());
-                    self.current_group = None;
-                }
+        if let Some(ref mut current_group) = self.current_group {
+            // advance the end index:
+            current_group.end = self.current_index;
+            if let Some((commit, blobs)) = this_commit {
+                current_group.commits.push((commit.clone(), (*blobs).clone()));
             }
-            None => {
-                if commit_should_be_added_to_group {
-                    let commits = if let Some((commit, blobs)) = this_commit {
-                        vec![(commit.clone(), (*blobs).clone())]
-                    } else {
-                        vec![]
-                    };
-                    // we start a commit group:
-                    let new_commit_group = TrackConsecutiveCommitGroup {
-                        start: self.current_index,
-                        commits,
-                        end: self.current_index, // will be filled in later
-                    };
-                    self.current_group = Some(new_commit_group);
-                }
+        } else {
+            // DO NOT create a new group if we are only interested
+            // in exclusive groups, and this commit is shared:
+            if ! should_collect_shared && ! this_commit_is_exclusive {
+                return;
             }
+            self.current_group = Some(self.make_new_commit_group(this_commit_is_exclusive, this_commit));
+        }
+    }
+
+    pub fn advance_different(
+        &mut self,
+        this_commit_is_exclusive: bool,
+        this_commit: Option<(&mut Commit, &&mut Vec<Blob>)>,
+        should_collect_shared: bool,
+    ) {
+        // we reached the end of the last group,
+        // ad it to the list, and reset us to None
+        if let Some(ref mut current_group) = self.current_group {
+            self.groups.push(current_group.clone());
+            self.current_group = None;
         }
 
+        // DO NOT create a new group if we are only interested
+        // in exclusive groups, and this commit is shared:
+        if ! should_collect_shared && ! this_commit_is_exclusive {
+            return;
+        }
+
+        // if we do want to collect shared groups, or if
+        // this commit is exclusive then go ahead and make this new group:
+        // and also create a new group:
+        self.current_group = Some(self.make_new_commit_group(this_commit_is_exclusive, this_commit));
+    }
+
+    pub fn advance(
+        &mut self,
+        this_commit_is_exclusive: bool,
+        this_commit: Option<(&mut Commit, &&mut Vec<Blob>)>,
+        should_collect_shared: bool,
+    ) {
+        match (self.last_commit_was_exclusive, this_commit_is_exclusive) {
+            // the last commit was exclusive, and therefore not shared.
+            // this commit is also exclusive, therefore we just append the
+            // current group, or start a new one that is not shared
+            (true, true) |
+            // both the last commit and this commit are shared. just add it to the
+            // current group, or make a new one that is shared.
+            // NOTE: the case here is the same because we are just appending
+            // to an existing group or making a new one. we are not closing off
+            // a group.
+            (false, false) => {
+                self.advance_same(
+                    this_commit_is_exclusive, this_commit, should_collect_shared);
+            },
+
+            // the last commit was shared, this commit is exclusive. therefore
+            // we finish the last group and add it to the groups list,
+            // and we start a new group that is exclusive
+            (false, true) |
+            // the last commit was exclusive, but this commit is shared.
+            // finish off the last group, add it to the list, and start a new group
+            // that is shared
+            (true, false) => {
+                self.advance_different(
+                    this_commit_is_exclusive, this_commit, should_collect_shared);
+            },
+        }
+
+        self.last_commit_was_exclusive = this_commit_is_exclusive;
         self.current_index += 1;
     }
 
@@ -834,6 +909,7 @@ impl ConsecutiveCommitGroups {
                     .ok_or(format!("Failed to get commit range from {}..={}", commit_group.start, commit_group.end))?;
                 let out_group = ConsecutiveCommitGroup {
                     commits: commits.to_vec(),
+                    is_shared: commit_group.is_shared,
                 };
                 out.push(out_group);
             }
@@ -842,7 +918,8 @@ impl ConsecutiveCommitGroups {
             // and return the commits from there
             for commit_group in self.groups.drain(..) {
                 let out_group = ConsecutiveCommitGroup {
-                    commits: commit_group.commits
+                    commits: commit_group.commits,
+                    is_shared: commit_group.is_shared,
                 };
                 out.push(out_group);
             }
@@ -879,6 +956,7 @@ pub fn should_add_commit_callback_helper(
     is_fullbase: bool,
     is_rewind: bool,
     is_regular_topbase: bool,
+    should_collect_shared: bool,
 ) -> ShouldAddMode {
     // TODO: what if we want merge commits?
     // by default skip merge commits:
@@ -908,7 +986,7 @@ pub fn should_add_commit_callback_helper(
     let take_commit = if is_regular_topbase {
         Some((commit, &blobs))
     } else { None };
-    a_output.advance(should_add_to_a, take_commit);
+    a_output.advance(should_add_to_a, take_commit, should_collect_shared);
 
     // fullbase mode: always add
     if is_fullbase {
@@ -967,9 +1045,18 @@ pub fn should_add_commit_callback_helper(
 /// and the consecutive commit group for B contains commits that B has, but A does not.
 /// again: the "Y has, but X does not" is specific to the traversal mode. If you want to find
 /// ALL of the possible different commits, use Fullbase as your traversal mode.
+/// Also pass a `should_collect_shared` flag. If true, then the returned consecutive groups
+/// can be either shared or exclusive. A shared group means every commit in that group
+/// exists somewhere in the other branch. An exclusive group means this range of commits is
+/// unique to this branch. For performing a topbase rebase, you would want
+/// to pass `should_collect_shared = false` because you only care about
+/// the top-most exclusive commit group. But for diff-log, you would pass
+/// `should_collect_shared = true` because you want to see a
+/// list of shared/exclusive commits
 pub fn find_a_b_difference<T: Into<Option<ABTraversalMode>>>(
     a_committish: &str, b_committish: &str,
-    traversal_mode: T
+    traversal_mode: T,
+    should_collect_shared: bool,
     // TODO: add stop at X commit for both A and B branch.
 ) -> io::Result<(Vec<ConsecutiveCommitGroup>, Vec<ConsecutiveCommitGroup>)> {
     let traversal_mode = traversal_mode.into().unwrap_or(ABTraversalMode::default());
@@ -989,6 +1076,7 @@ pub fn find_a_b_difference<T: Into<Option<ABTraversalMode>>>(
             &fully_loaded_b, &mut a_has_but_not_in_b,
             &mut stop_search_b_at_blobs,
             is_fullbase, should_rewind, is_regular_topbase,
+            should_collect_shared,
         )
     };
     let a_commits = generate_commit_list_and_blob_set_with_callback(a_committish, Some(cb))?;
@@ -1009,7 +1097,7 @@ pub fn find_a_b_difference<T: Into<Option<ABTraversalMode>>>(
             // if should_add_to_b {
             //     println!("FOUND COMMIT IN B THAT IS NOT IN A:\n{} {}\n", commit.id.short(), commit.summary);
             // }
-            b_has_but_not_in_a.advance(should_add_to_b, None);
+            b_has_but_not_in_a.advance(should_add_to_b, None, should_collect_shared);
         }
     }
 
