@@ -464,14 +464,14 @@ pub fn parse_blob_from_line(line: &str) -> io::Result<Blob> {
     // if its a delete blob, we use the previous blob id
     // otherwise we use the current
     let blob_id = if let BlobMode::Delete = blob_mode {
-        blob_prev
+        format!("D_{}", blob_prev)
     } else {
-        blob_next
+        blob_next.to_string()
     };
     let blob = Blob {
         mode: blob_mode,
-        id: blob_id.to_string(),
         path: blob_path,
+        id: blob_id,
     };
 
     Ok(blob)
@@ -1161,7 +1161,9 @@ mod tests {
         assert_eq!(blobs[0].mode, BlobMode::Modify);
         assert_eq!(blobs[0].id, "abc");
         assert_eq!(blobs[1].mode, BlobMode::Delete);
-        assert_eq!(blobs[1].id, "123");
+        // a delete blob should be prefixed by D_ to
+        // differentiate from when it was added/modified
+        assert_eq!(blobs[1].id, "D_123");
     }
 
     // not exactly a unit test, but simple enough to implement:
