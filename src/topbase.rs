@@ -1149,6 +1149,26 @@ pub fn all_blobs_exist(a: &[Blob], b: &[Blob]) -> bool {
 }
 
 
+// TODO:
+// - rewrite the find_ab_diff function to:
+// only return a single output collection. it should
+// have references to the different groups it finds as it
+// traverses
+// - rewrite the commit group tracker to just clone the commits...
+// taking the indices is kinda dumb
+// - verify that the way i read stream from stdout of child process
+// is correct... some kind of weird race condition on large repos makes
+// it seem like it never ends... i think maybe trying to read from
+// the bufread when command is already done, so it stalls? not sure..
+// - rewrite the blob set to be a blob map. need a way to find which
+// commit a blob points to...
+// - instead of hashing by a single blob and checking "does this blob
+// exist somewhere in the other branch?" we should
+// create an entire set of blobs, and then check if the other branch
+// has a commit such that our set of blobs is a subset of that
+// commit... (or vice versa?)
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
