@@ -397,7 +397,7 @@ pub enum BlobMode {
     Add,
     Modify,
     Delete,
-    // TODO: handle Rename (R100)
+    Rename,
 }
 
 #[derive(Debug, Clone)]
@@ -455,16 +455,24 @@ pub fn parse_blob_from_line(line: &str) -> io::Result<Blob> {
     // in case there are spaces
     let blob_path = items.get(5..)
         .ok_or_else(|| ioerr!("Failed to parse git blob line: {}", line))?.join(" ");
-    let blob_mode = match *diff_type {
+    let mut blob_mode = match *diff_type {
         "A" => BlobMode::Add,
         "D" => BlobMode::Delete,
         _ => BlobMode::Modify,
         // TODO: Handle renames.. the path component is actually <SRC>\t<DEST>
     };
+    // ive seen it as R, and also as R100, so I dont
+    // want to just rely on pattern matching...
+    // if it starts with an R, we consider this a rename:
+    if diff_type.starts_with("R") {
+        blob_mode = BlobMode::Rename;
+    }
     // if its a delete blob, we use the previous blob id
     // otherwise we use the current
     let blob_id = if let BlobMode::Delete = blob_mode {
         format!("D_{}", blob_prev)
+    } else if let BlobMode::Rename = blob_mode {
+        format!("R_{}", blob_next)
     } else {
         blob_next.to_string()
     };
