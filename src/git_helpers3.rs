@@ -2,7 +2,8 @@
 /// with git via the CLI instead of libgit2
 
 use super::exec_helpers;
-use std::{io::BufReader, io::BufRead, process::Stdio};
+use std::{io::{self, BufReader}, io::BufRead, process::Stdio, str::FromStr};
+use crate::{ioerre, ioerr};
 
 #[derive(Debug, Clone)]
 pub struct Oid {
@@ -31,6 +32,306 @@ impl Commit {
         let oid = Oid { hash: hash.to_string() };
         Commit { id: oid, summary, is_merge }
     }
+}
+
+/// see: https://www.git-scm.com/docs/git-diff
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+pub enum DiffStatus {
+    Added,
+    Copied,
+    Deleted,
+    Modified,
+    Renamed,
+    TypeChanged,
+    Unmerged,
+    Unknown,
+}
+
+impl FromStr for DiffStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let ok = match &s[0..1] {
+            "A" => DiffStatus::Added,
+            "C" => DiffStatus::Copied,
+            "D" => DiffStatus::Deleted,
+            "M" => DiffStatus::Modified,
+            "R" => DiffStatus::Renamed,
+            "T" => DiffStatus::TypeChanged,
+            "U" => DiffStatus::Unmerged,
+            "X" => DiffStatus::Unknown,
+            _ => return Err(format!("Failed to get diff status from {}", s)),
+        };
+        Ok(ok)
+    }
+}
+
+/// see: https://stackoverflow.com/questions/737673/how-to-read-the-mode-field-of-git-ls-trees-output
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+pub enum FileMode {
+    Empty,
+    Directory,
+    RegularNonEx,
+    RegularNonExGroupWrite,
+    RegularEx,
+    SymbolicLink,
+    GitLink,
+    // Im adding this one just in case... im not sure
+    // if the above are all of the valid file modes,
+    // so in case we cant parse it, we will say its unknown...
+    Unknown,
+}
+
+impl FromStr for FileMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let ok = match s {
+            "000000" => FileMode::Empty,
+            "040000" => FileMode::Directory,
+            "100644" => FileMode::RegularNonEx,
+            "100664" => FileMode::RegularNonExGroupWrite,
+            "100755" => FileMode::RegularEx,
+            "120000" => FileMode::SymbolicLink,
+            "160000" => FileMode::GitLink,
+            _ => FileMode::Unknown,
+        };
+        Ok(ok)
+    }
+}
+
+/// there are 8 possible values for the DiffStatus enum,
+/// as well as the FileMode. that means to represent a single
+/// item (where the item includes the source filemode, dest filemode
+/// and the diff status) we only need 8 * 8 * 8 = 64 possible states, so
+/// we can store that in 9 bits, or otherwise: a u16
+/// packing mode:
+/// 000 000 0000000 000
+///  ^   ^     ^     ^
+///  |   |     |     |
+///  |  /     /     /
+///  | /     /     /
+///  | |    /     /
+///  | |   /     /
+///  | |  /     /
+///  | | |     /
+///  | | |    /
+///  | | |   /
+///  | | |  |
+///  | | |  > 3 LSB are the diff status
+///  | | > 7 middle bits are unused :(
+///  | > these 3 bits are the dest file mode
+///  > 3 MSB are the source file mode
+#[derive(Debug, Copy, Clone)]
+pub struct DiffStatusAndFileMode {
+    pub data: u16,
+}
+
+pub fn diff_status_to_u16(status: DiffStatus) -> u16 {
+    match status {
+        DiffStatus::Added => 0,
+        DiffStatus::Copied => 1,
+        DiffStatus::Deleted => 2,
+        DiffStatus::Modified => 3,
+        DiffStatus::Renamed => 4,
+        DiffStatus::TypeChanged => 5,
+        DiffStatus::Unmerged => 6,
+        DiffStatus::Unknown => 7,
+    }
+}
+
+pub fn filemode_to_u16(mode: FileMode) -> u16 {
+    match mode {
+        FileMode::Empty => 0,
+        FileMode::Directory => 1,
+        FileMode::RegularNonEx => 2,
+        FileMode::RegularNonExGroupWrite => 3,
+        FileMode::RegularEx => 4,
+        FileMode::SymbolicLink => 5,
+        FileMode::GitLink => 6,
+        FileMode::Unknown => 7,
+    }
+}
+
+pub fn u16_to_filemode(u: u16) -> FileMode {
+    match u {
+        0 => FileMode::Empty,
+        1 => FileMode::Directory,
+        2 => FileMode::RegularNonEx,
+        3 => FileMode::RegularNonExGroupWrite,
+        4 => FileMode::RegularEx,
+        5 => FileMode::SymbolicLink,
+        6 => FileMode::GitLink,
+        _ => FileMode::Unknown,
+    }
+}
+
+pub fn u16_to_diff_status(u: u16) -> DiffStatus {
+    match u {
+        0 => DiffStatus::Added,
+        1 => DiffStatus::Copied,
+        2 => DiffStatus::Deleted,
+        3 => DiffStatus::Modified,
+        4 => DiffStatus::Renamed,
+        5 => DiffStatus::TypeChanged,
+        6 => DiffStatus::Unmerged,
+        _ => DiffStatus::Unknown,
+    }
+}
+
+impl From<(DiffStatus, FileMode, FileMode)> for DiffStatusAndFileMode {
+    fn from(orig: (DiffStatus, FileMode, FileMode)) -> Self {
+        let (status, mode_src, mode_dest) = orig;
+        let left_bits1: u16 = filemode_to_u16(mode_src);
+        let left_bits2: u16 = filemode_to_u16(mode_dest);
+        let right_bits: u16 = diff_status_to_u16(status);
+
+        let out = left_bits1 << 13;
+        let out = out | (left_bits2 << 10);
+        let out = out | right_bits;
+        DiffStatusAndFileMode {
+            data: out,
+        }
+    }
+}
+
+impl From<DiffStatusAndFileMode> for (DiffStatus, FileMode, FileMode) {
+    fn from(orig: DiffStatusAndFileMode) -> Self {
+        let right_bits =  orig.data & 0b00000000_00000111;
+        let left_bits1 = (orig.data & 0b11100000_00000000) >> 13;
+        let left_bits2 = (orig.data & 0b00011100_00000000) >> 10;
+        let status = u16_to_diff_status(right_bits);
+        let mode_src = u16_to_filemode(left_bits1);
+        let mode_dest = u16_to_filemode(left_bits2);
+        
+        (status, mode_src, mode_dest)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RawBlobSummary {
+    pub src_dest_mode_and_status: DiffStatusAndFileMode,
+    pub src_sha: u64,
+    pub dest_sha: u64,
+    pub path_str: String,
+}
+
+pub fn hex_char_to_u64(c: char) -> u64 {
+    match c {
+        '0' => 0,
+        '1' => 1,
+        '2' => 2,
+        '3' => 3,
+        '4' => 4,
+        '5' => 5,
+        '6' => 6,
+        '7' => 7,
+        '8' => 8,
+        '9' => 9,
+        'a' => 10,
+        'b' => 11,
+        'c' => 12,
+        'd' => 13,
+        'e' => 14,
+        'f' => 15,
+        _ => 0,
+    }
+}
+
+pub fn u64_to_hex_char(u: u64) -> char {
+    match u {
+        0 => '0',
+        1 => '1',
+        2 => '2',
+        3 => '3',
+        4 => '4',
+        5 => '5',
+        6 => '6',
+        7 => '7',
+        8 => '8',
+        9 => '9',
+        10 => 'a',
+        11 => 'b',
+        12 => 'c',
+        13 => 'd',
+        14 => 'e',
+        15 => 'f',
+        _ => '0',
+    }
+}
+
+/// every hex character is 4 bits,
+/// so max we can handle without overflowing is 16 hex chars
+pub fn hex_to_u64(hex: &str) -> u64 {
+    let mut out = 0;
+    let mut shift = 0;
+    for c in hex.chars().rev() {
+        let hex_val = hex_char_to_u64(c);
+        let shifted_value = hex_val << shift;
+        out += shifted_value;
+        shift += 4;
+    }
+    out
+}
+
+pub fn u64_to_hex(u: u64) -> [char; 16] {
+    [
+        u64_to_hex_char((u & 0xf0_00_00_00_00_00_00_00) >> 60),
+        u64_to_hex_char((u & 0x0f_00_00_00_00_00_00_00) >> 56),
+        u64_to_hex_char((u & 0x00_f0_00_00_00_00_00_00) >> 52),
+        u64_to_hex_char((u & 0x00_0f_00_00_00_00_00_00) >> 48),
+        u64_to_hex_char((u & 0x00_00_f0_00_00_00_00_00) >> 44),
+        u64_to_hex_char((u & 0x00_00_0f_00_00_00_00_00) >> 40),
+        u64_to_hex_char((u & 0x00_00_00_f0_00_00_00_00) >> 36),
+        u64_to_hex_char((u & 0x00_00_00_0f_00_00_00_00) >> 32),
+        u64_to_hex_char((u & 0x00_00_00_00_f0_00_00_00) >> 28),
+        u64_to_hex_char((u & 0x00_00_00_00_0f_00_00_00) >> 24),
+        u64_to_hex_char((u & 0x00_00_00_00_00_f0_00_00) >> 20),
+        u64_to_hex_char((u & 0x00_00_00_00_00_0f_00_00) >> 16),
+        u64_to_hex_char((u & 0x00_00_00_00_00_00_f0_00) >> 12),
+        u64_to_hex_char((u & 0x00_00_00_00_00_00_0f_00) >> 8),
+        u64_to_hex_char((u & 0x00_00_00_00_00_00_00_f0) >> 4),
+        u64_to_hex_char((u & 0x00_00_00_00_00_00_00_0f) >> 0),
+    ]
+}
+
+pub fn parse_blob_line1(line: &str) -> Option<(&str, &str, &str, &str, &str, String)> {
+    let mut items = line.split_ascii_whitespace();
+    let src_mode = items.next()?;
+    // src_mode should be 7 chars because the first is the colon:
+    let src_mode = src_mode.get(1..7)?;
+    let dest_mode = items.next()?;
+    let src_sha = items.next()?;
+    let dest_sha = items.next()?;
+    let status = items.next()?;
+    let path_str: String = items.collect::<Vec<&str>>().join(" ");
+
+    Some((src_mode, dest_mode, src_sha, dest_sha, status, path_str))
+}
+
+pub fn parse_blob_line(line: &str) -> io::Result<RawBlobSummary> {
+    let (
+        src_mode, dest_mode,
+        src_sha, dest_sha,
+        status, path_str,
+    ) = parse_blob_line1(line).ok_or(ioerr!("Failed to parse blob line: {}", line))?;
+
+    let status = DiffStatus::from_str(status).map_err(|e| ioerr!("{}", e))?;
+    let src_mode = FileMode::from_str(src_mode).map_err(|e| ioerr!("{}", e))?;
+    let dest_mode = FileMode::from_str(dest_mode).map_err(|e| ioerr!("{}", e))?;
+    let src_sha = hex_to_u64(src_sha);
+    let dest_sha = hex_to_u64(dest_sha);
+
+    let src_dest_mode_and_status = DiffStatusAndFileMode::from((status, src_mode, dest_mode));
+
+    let out = RawBlobSummary {
+        src_dest_mode_and_status,
+        src_sha,
+        dest_sha,
+        path_str,
+    };
+    
+    Ok(out)
 }
 
 pub fn pull(
@@ -316,5 +617,35 @@ mod test {
         // this only passes if the test is running from
         // a git repository with more than 1 commit...
         assert!(data.len() > 1);
+    }
+
+    #[test]
+    fn sha_parsing_works() {
+        let sha1 = "de1acaefe87e";
+        let shau64 = hex_to_u64(sha1);
+        println!("{}", shau64);
+        let sha_back = u64_to_hex(shau64);
+        let sha_back_str: String = sha_back.iter().collect();
+        // the parsed back to string one contains extra leading zeros
+        // so we test if its somewhere inside:
+        assert!(sha_back_str.contains(sha1));
+
+        let sha2 = "000ff";
+        let shau64 = hex_to_u64(sha2);
+        assert_eq!(shau64, 255);
+    }
+
+    #[test]
+    fn parse_blob_line_works() {
+        let line = ":100644 000000 1234567 0000000 D file5";
+        let parsed = parse_blob_line(line).unwrap();
+        println!("{:#?}", parsed);
+        assert_eq!(parsed.path_str, "file5");
+        assert_eq!(parsed.dest_sha, 0);
+        assert!(parsed.src_sha != 0);
+        let (status, src_mode, dest_mode): (DiffStatus, FileMode, FileMode) = parsed.src_dest_mode_and_status.into();
+        assert!(status == DiffStatus::Deleted);
+        assert!(src_mode == FileMode::RegularNonEx);
+        assert!(dest_mode == FileMode::Empty);
     }
 }
