@@ -1,10 +1,11 @@
-use std::{io, collections::HashSet, process::Stdio, str::FromStr};
+use std::{io, collections::HashSet, process::Stdio, str::FromStr, iter::FromIterator, hash::Hash};
 use io::{BufReader, BufRead, Lines};
 
 use super::ioerr;
 use super::git_helpers3;
 use super::git_helpers3::Commit;
 use super::git_helpers3::Oid;
+use super::git_helpers3::{RawBlobSummaryWithoutPath, RawBlobSummary};
 use super::exec_helpers;
 use super::die;
 use super::cli::MgtCommandTopbase;
@@ -35,19 +36,20 @@ pub fn topbase(
         Ok(v) => v,
         Err(e) => die!("Failed to get all commits! {}", e),
     };
-    let (current_commits_not_in_upstream, _) = find_a_b_difference(
-        &current_branch, &upstream_branch, ABTraversalMode::Topbase, false).map_err(|e| e.to_string())?;
 
-    eprintln!("{:#?}", current_commits_not_in_upstream);
-
-    let num_commits_to_take = if let Some(top_group) = current_commits_not_in_upstream.first() {
-        for (c, _) in &top_group.commits {
+    let current_commits_not_in_upstream = simplest_topbase(&current_branch, &upstream_branch, true)
+        .map_err(|e| e.to_string())?;
+    let num_commits_to_take = if let Some(valid_topbase) = current_commits_not_in_upstream {
+        let mut num_used = 0;
+        for c in &valid_topbase.top_commits {
+            if c.is_merge { continue; }
             let rebase_interactive_entry = format!("pick {} {}\n", c.id.long(), c.summary);
             rebase_data.push(rebase_interactive_entry);
+            num_used += 1;
         }
-        top_group.commits.len()
+        num_used
     } else {
-        0
+        num_commits_of_current
     };
 
     // need to reverse it because git rebase interactive
@@ -753,6 +755,18 @@ impl Default for ABTraversalMode {
     }
 }
 
+/// A successful topbase result will find a fork point between
+/// two branches A, and B. A is considered the top, and contains
+/// a list of commits that are above the common fork point.
+pub struct SuccessfulTopbaseResult {
+    pub top_commits: Vec<Commit>,
+    // its possible that the other branch's commit might have a different
+    // message than A's commit, but they share the same blob set.
+    // so fork_point.0 is the commit from A, and fork_point.1 is the
+    // commit from B.
+    pub fork_point: (Commit, Commit),
+}
+
 /// a group of consecutive commits.
 /// if `is_shared` is true then this consecutive group of commits
 /// exists in another branch (although possibly by different commit hashes
@@ -1089,6 +1103,104 @@ pub fn all_blobs_exist(a: &[Blob], b: &[Blob]) -> bool {
     return contains_all;
 }
 
+/// this is called by `find_a_b_difference2` if you
+/// passed a Some(n) for the traverse n at a time.
+pub fn find_a_b_difference2_iterative_traversal(
+    a_committish: &str, b_committish: &str,
+    traverse_n: usize,
+) {
+    // let mut b_commits = vec![];
+
+    // first we load N of the B branches commits:
+}
+
+pub fn find_a_b_difference2(
+    a_committish: &str, b_committish: &str,
+    traverse_n_at_a_time: Option<usize>,
+    // TODO: add traversal mode...
+) {
+
+}
+
+pub fn simplest_topbase_inner<T: From<RawBlobSummary> + Eq + Hash>(
+    a_committish: &str, b_committish: &str,
+) -> io::Result<Option<SuccessfulTopbaseResult>> {
+    let mut all_b_commits = vec![];
+    git_helpers3::iterate_blob_log(b_committish, None, |c| {
+        let b_blob_set: HashSet<T> = c.blobs.iter().cloned().map(|x| {
+            T::from(x)
+        }).collect();
+        all_b_commits.push((c, b_blob_set));
+        false
+    })?;
+
+    let mut top_a_commits = vec![];
+    let mut fork_point = None;
+    git_helpers3::iterate_blob_log(a_committish, None, |c| {
+        let mut c = c;
+        let a_blob_set: HashSet<T> = c.blobs.drain(..).map(|x| {
+            T::from(x)
+        }).collect();
+        let mut found_matching_commit_in_b = None;
+        for (b_commit, b_blob_set) in all_b_commits.iter() {
+            if c.commit.is_merge {
+                // if its a merge commit, then (unless we passed the -m option to git log)
+                // it will have no blobs, and thus an empty set is a subset of any other set.
+                // so we dont want to check this...
+                break;
+            }
+            if a_blob_set.is_subset(b_blob_set) {
+                found_matching_commit_in_b = Some(b_commit);
+                break;
+            }
+            // TODO: what about checking if B's blob set is a subset of A's set?
+            // I think that would be the most 'correct'
+            // TODO: also remember if you implement checking for B's subsets as well,
+            // then need to remember some of B's blob sets might be empty
+            // because they are merge commits
+        }
+
+        if let Some(matching) = found_matching_commit_in_b {
+            fork_point = Some((c, matching));
+            // in simple topbase, once we found the fork point,
+            // we can return and stop reading the git log stream:
+            return true;
+        } else {
+            top_a_commits.push(c);
+        }
+
+        false
+    })?;
+
+    if let Some((fork_a, fork_b)) = fork_point {
+        let successful_topbase = SuccessfulTopbaseResult {
+            top_commits: top_a_commits.drain(..).map(|x| x.commit).collect(),
+            fork_point: (fork_a.commit, fork_b.commit.clone()),
+        };
+        Ok(Some(successful_topbase))
+    } else {
+        // failed to find a fork point
+        Ok(None)
+    }
+}
+
+/// in the simplest way to topbase, we load entirety
+/// of B branch into memory, then iterate
+/// over the A branch, and stop once we find
+/// a commit that is a subset of one of the B branch's commits.
+/// pass true if you want to consider paths when comparing blobs
+/// or false if you want to make this a bit faster (but possibly slightly less correct)
+pub fn simplest_topbase(
+    a_committish: &str, b_committish: &str,
+    consider_paths: bool,
+) -> io::Result<Option<SuccessfulTopbaseResult>> {
+    if consider_paths {
+        simplest_topbase_inner::<RawBlobSummary>(a_committish, b_committish)
+    } else {
+        simplest_topbase_inner::<RawBlobSummaryWithoutPath>(a_committish, b_committish)
+    }
+}
+
 
 // TODO:
 // - rewrite the find_ab_diff function to:
@@ -1115,7 +1227,13 @@ pub fn all_blobs_exist(a: &[Blob], b: &[Blob]) -> bool {
 // the fork point we are looking for, or until we load the entirety of the branches.
 // i think this will be the optimal strategy for 99% of cases because chances are
 // we will find the fork point in the first thousand...
-
+// if doing this, you can do:
+// git log --raw --pretty=oneline <last-seen-sha> -n 1000
+// NOTE that you can do <last-seen-sha>^1 if you want
+// to get everything AFTER the last seen sha.. but theres a risk
+// that if your last seen sha is the first commit, then if you run that
+// you will get an error because there is no commit
+// past that..
 
 #[cfg(test)]
 mod tests {
