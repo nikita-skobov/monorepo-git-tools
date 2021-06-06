@@ -1,5 +1,5 @@
 use std::{io, collections::HashSet, process::Stdio, str::FromStr};
-use io::{BufReader, BufRead};
+use io::{BufReader, BufRead, Lines};
 
 use super::ioerr;
 use super::git_helpers3;
@@ -505,8 +505,17 @@ pub fn generate_commit_list_and_blob_set_from_lines<T: BufRead>(
     let mut last_blobs = vec![];
     let mut add_last_commit = false;
 
-    for line in line_reader.lines() {
-        let line = line?;
+    let mut buf = vec![];
+    while let Ok(bytes_read) = line_reader.read_until(b'\n', &mut buf) {
+        if bytes_read == 0 {
+            break;
+        }
+        let line = String::from_utf8_lossy(&buf);
+        let line = &line[..];
+        let line_len = line.len();
+        let line = if line.ends_with('\n') {
+            &line[0..line_len - 1]
+        } else { line };
         if ! line.starts_with(':') {
             // parsing a commit line
             if add_last_commit {
@@ -543,6 +552,7 @@ pub fn generate_commit_list_and_blob_set_from_lines<T: BufRead>(
             out.blob_set.insert(blob.id.clone());
             last_blobs.push(blob);
         }
+        buf.clear();
     }
 
     let should_add = match should_add_cb(&mut last_commit, &mut last_blobs) {
@@ -594,10 +604,7 @@ pub fn generate_commit_list_and_blob_set_with_callback<T>(
             (o.0, Ok(o.1))
         }
         Err(e) => {
-            // can probably kill the child if there is an error?
-            // but i suppose child.wait() would also error?
-            // v--- TODO: should this be true?
-            (false, Err(e))
+            (true, Err(e))
         }
     };
 
@@ -1088,10 +1095,6 @@ pub fn all_blobs_exist(a: &[Blob], b: &[Blob]) -> bool {
 // only return a single output collection. it should
 // have references to the different groups it finds as it
 // traverses
-// - verify that the way i read stream from stdout of child process
-// is correct... some kind of weird race condition on large repos makes
-// it seem like it never ends... i think maybe trying to read from
-// the bufread when command is already done, so it stalls? not sure..
 // - rewrite the blob set to be a blob map. need a way to find which
 // commit a blob points to...
 // - instead of hashing by a single blob and checking "does this blob
