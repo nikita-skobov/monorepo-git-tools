@@ -717,8 +717,8 @@ function teardown() {
     cd "$BATS_TMPDIR/test_remote_repo2"
     # for this test, we want to ensure that the remote repo has 2 commits
     # in its history after the rewrite:
-    echo "doesntmatter" > file1.txt
-    git add file1.txt && git commit -m "doesntmatter"
+    echo "doesntmatter" > file2.txt
+    git add file2.txt && git commit -m "doesntmatter"
     # now this commit matters because it should have the same blob as the local repository will
     echo "file1" > file1.txt
     git add file1.txt && git commit -m "file1"

@@ -1,8 +1,11 @@
 use std::path::Path;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::io;
 use toml::Value;
 use super::die;
+use super::ioerre;
+use super::ioerr;
 
 #[derive(Debug, PartialEq, Default)]
 pub struct RepoFile {
@@ -20,20 +23,23 @@ impl RepoFile {
     }
 }
 
-pub fn read_file_into_lines(filename: &str) -> Vec<String> {
+pub fn read_file_into_lines(filename: &str) -> io::Result<Vec<String>> {
     let repo_file_path = Path::new(filename);
     if !repo_file_path.exists() {
-        die!("Failed to find repo_file: {}", filename);
+        return ioerre!("Failed to find repo_file: {}", filename);
     }
 
-    let file = File::open(repo_file_path);
-    if let Err(file_error) = file {
-        die!("Failed to open file: {}, {}", filename, file_error);
-    }
+    let file_contents = File::open(repo_file_path).map_err(|e| {
+        ioerr!("Failed to open file: {}, {}", filename, e)
+    })?;
 
-    let file_contents = file.unwrap();
     let reader = BufReader::new(file_contents);
-    reader.lines().map(|x| x.unwrap()).collect()
+    let mut out = vec![];
+    for line in reader.lines() {
+        let line = line?;
+        out.push(line);
+    }
+    Ok(out)
 }
 
 pub fn line_is_break(line: &String) -> bool {
@@ -45,19 +51,33 @@ pub fn line_is_break(line: &String) -> bool {
     true
 }
 
-pub fn parse_repo_file_from_toml(filename: &str) -> RepoFile {
-    let lines = read_file_into_lines(filename);
+pub fn parse_repo_file_from_toml(filename: &str) -> io::Result<RepoFile> {
+    let lines = read_file_into_lines(filename)?;
     parse_repo_file_from_toml_lines(lines)
 }
 
+/// this function will exit on error. if you do not want to exit on error,
+/// use `parse_repo_file_from_toml_path_res` instead
 pub fn parse_repo_file_from_toml_path<P: AsRef<Path>>(filename: P) -> RepoFile {
     match filename.as_ref().to_str() {
         None => die!("Failed to find repo file: {:?}", filename.as_ref()),
+        Some(s) => match parse_repo_file_from_toml(s) {
+            Ok(rf) => rf,
+            Err(e) => die!("{}", e),
+        }
+    }
+}
+
+/// this function returns an io result whereas the `parse_repo_file_from_toml_path`
+/// function will exit on error
+pub fn parse_repo_file_from_toml_path_res<P: AsRef<Path>>(filename: P) -> io::Result<RepoFile> {
+    match filename.as_ref().to_str() {
+        None => ioerre!("Failed to find repo file: {:?}", filename.as_ref()),
         Some(s) => parse_repo_file_from_toml(s)
     }
 }
 
-pub fn parse_repo_file_from_toml_lines(lines: Vec<String>) -> RepoFile {
+pub fn parse_repo_file_from_toml_lines(lines: Vec<String>) -> io::Result<RepoFile> {
     // even though this is a toml file, and we have a toml parser
     // we still want to split by lines, and then parse specific sections
     // this is because if a user has:
@@ -176,7 +196,7 @@ pub fn parse_exclude_section(toml_value: &Value, repofile: &mut RepoFile) {
 
 pub fn parse_repo_file_from_toml_segments(
     toml_segments: Vec<String>
-) -> RepoFile {
+) -> io::Result<RepoFile> {
     let mut repo_file = RepoFile::default();
     // now we have toml_segments where each segment can be its own toml file
     // we parse each into a toml::Value, and then apply the result into a repo file object
@@ -198,7 +218,7 @@ pub fn parse_repo_file_from_toml_segments(
         }
     }
 
-    repo_file
+    Ok(repo_file)
 }
 
 
@@ -323,7 +343,7 @@ mod test {
 
     fn parse_from_lines(toml_str: &str) -> RepoFile {
         let lines: Vec<String> = toml_str.split('\n').map(|s| s.to_string()).collect();
-        parse_repo_file_from_toml_lines(lines)
+        parse_repo_file_from_toml_lines(lines).unwrap()
     }
 
     #[test]

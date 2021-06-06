@@ -4,6 +4,8 @@ use super::repo_file;
 use super::die;
 use super::verify;
 use super::cli::MgtCommandSplit;
+use std::io;
+use crate::{ioerre, ioerr};
 
 pub fn run_split_out(
     cmd: &mut MgtCommandSplit,
@@ -135,11 +137,10 @@ pub fn run_split_out_from_repo_file(
     }
 }
 
-
-pub fn validate_repo_file(
+pub fn validate_repo_file_res(
     repo_file: &mut RepoFile,
     output_branch: &mut Option<String>,
-) {
+) -> io::Result<()> {
     let missing_output_branch = output_branch.is_none();
     let missing_repo_name = repo_file.repo_name.is_none();
     let missing_remote_repo = repo_file.remote_repo.is_none();
@@ -147,11 +148,11 @@ pub fn validate_repo_file(
     let missing_include = repo_file.include.is_none();
 
     if missing_remote_repo && missing_repo_name && missing_output_branch {
-        die!("Must provide either repo_name or remote_repo in your repofile");
+        return ioerre!("Must provide either repo_name or remote_repo in your repofile");
     }
 
     if missing_include && missing_include_as {
-        die!("Must provide either include or include_as in your repofile");
+        return ioerre!("Must provide either include or include_as in your repofile");
     }
 
     if missing_output_branch && missing_repo_name && !missing_remote_repo {
@@ -165,8 +166,20 @@ pub fn validate_repo_file(
         *output_branch = Some(repo_file.repo_name.clone().unwrap());
     }
 
-    core::panic_if_array_invalid(&repo_file.include, true, "include");
-    core::panic_if_array_invalid(&repo_file.include_as, false, "include_as");
+    core::error_if_array_invalid(&repo_file.include, true, "include")?;
+    core::error_if_array_invalid(&repo_file.include_as, false, "include_as")?;
+
+    Ok(())
+}
+
+
+pub fn validate_repo_file(
+    repo_file: &mut RepoFile,
+    output_branch: &mut Option<String>,
+) {
+    if let Err(e) = validate_repo_file_res(repo_file, output_branch) {
+        die!("{}", e);
+    }
 }
 
 fn generate_gitfilter_filterrules(

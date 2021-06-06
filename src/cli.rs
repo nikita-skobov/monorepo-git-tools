@@ -2,12 +2,16 @@ use gumdrop::Options;
 
 use die::die;
 use super::check::run_check;
+use super::difflog::run_difflog;
 use super::split_out::run_split_out;
 use super::split_out::run_split_out_as;
 use super::split_in::run_split_in;
 use super::split_in::run_split_in_as;
 use super::verify::run_verify;
 use super::topbase::run_topbase;
+use super::topbase::ABTraversalMode;
+use super::sync::run_sync;
+use std::path::PathBuf;
 
 #[derive(Debug, Options)]
 pub struct MgtCommandCheck {
@@ -34,6 +38,21 @@ pub struct MgtCommandCheck {
     // but really itll be one string)
     #[options(free)]
     pub repo_file: Vec<String>,
+}
+
+#[derive(Debug, Options)]
+pub struct MgtCommandDifflog {
+    #[options(free)]
+    pub branches: Vec<String>,
+
+    #[options(short = "m", help = "(not implemented yet) Valid modes are [topbase, rewind, fullbase]. default is rewind")]
+    pub traversal_mode: Option<ABTraversalMode>,
+
+    #[options(short = "w", help = "Force specify a width to display the log. default is to use whole terminal")]
+    pub term_width: Option<usize>,
+
+    #[options(short = "h")]
+    pub help: bool,
 }
 
 #[derive(Debug, Options)]
@@ -112,8 +131,26 @@ pub struct MgtCommandVerify {
 }
 
 #[derive(Debug, Options)]
+pub struct MgtCommandSync {
+    #[options(short = "h")]
+    pub help: bool,
+
+    #[options(free, help = "path to repo file(s) or a folder container repo files")]
+    pub repo_files: Vec<PathBuf>,
+
+    #[options(help = "when iterating the sync of multiple repo files, if a single one fails, do not sync the rest")]
+    pub fail_fast: bool,
+}
+
+#[derive(Debug, Options)]
 pub enum MgtSubcommands {
     Help(MgtCommandHelp),
+
+    #[options(help = "Interactively sync one or more repo files between local and remote repositorie(s)")]
+    Sync(MgtCommandSync),
+
+    #[options(help = "View a log comparing two branches that have potentially unrelated history using a topbase algorithm")]
+    DiffLog(MgtCommandDifflog),
 
     #[options(help = "check if there are changes ready to be pushed or pulled")]
     Check(MgtCommandCheck),
@@ -269,6 +306,12 @@ impl AsRef<MgtCommandSplit> for MgtCommandSplit {
 impl AsRef<MgtCommandVerify> for MgtCommandVerify {
     fn as_ref(&self) -> &MgtCommandVerify { self }
 }
+impl AsRef<MgtCommandSync> for MgtCommandSync {
+    fn as_ref(&self) -> &MgtCommandSync { self }
+}
+impl AsRef<MgtCommandDifflog> for MgtCommandDifflog {
+    fn as_ref(&self) -> &MgtCommandDifflog { self }
+}
 
 impl Mgt {
     pub fn new() -> Mgt {
@@ -316,6 +359,12 @@ pub fn get_cli_input() -> Mgt {
                     true
                 } else { false }
             }
+            MgtSubcommands::DiffLog(c) => {
+                if cli.help || c.help {
+                    print_usage(&c, Some("mgt diff-log"), None);
+                    true
+                } else { false}
+            }
             MgtSubcommands::Topbase(t) => {
                 if cli.help || t.help {
                     print_usage(&t, Some("mgt topbase"), Some("[FLAGS] <base> [top]"));
@@ -342,6 +391,12 @@ pub fn get_cli_input() -> Mgt {
             MgtSubcommands::VerifyRf(v) => {
                 if cli.help || v.help {
                     print_usage(&v, Some("mgt verify"), None);
+                    true
+                } else { false }
+            }
+            MgtSubcommands::Sync(s) => {
+                if cli.help || s.help {
+                    print_usage(&s, Some("mgt sync"), None);
                     true
                 } else { false }
             }
@@ -381,6 +436,12 @@ pub fn validate_input_and_run(mgt_opts: Mgt) {
                 }
                 run_check(&mut cmd);
             },
+            MgtSubcommands::DiffLog(mut cmd) => {
+                if cmd.branches.len() != 2 {
+                    die!("Must provide exactly two branches to compare. You provided:\n{:?}", cmd.branches);
+                }
+                run_difflog(&mut cmd);
+            }
             MgtSubcommands::Topbase(mut cmd) => {
                 cmd.verbose = cmd.verbose || mgt_opts.verbose;
                 cmd.dry_run = cmd.dry_run || mgt_opts.dry_run;
@@ -429,6 +490,9 @@ pub fn validate_input_and_run(mgt_opts: Mgt) {
             MgtSubcommands::VerifyRepoFile(ref mut cmd) |
             MgtSubcommands::VerifyRf(ref mut cmd) => {
                 run_verify(cmd);
+            }
+            MgtSubcommands::Sync(ref mut cmd) => {
+                run_sync(cmd);
             }
         },
     }
