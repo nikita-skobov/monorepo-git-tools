@@ -5,6 +5,7 @@ use super::ioerr;
 use super::git_helpers3;
 use super::git_helpers3::Commit;
 use super::git_helpers3::Oid;
+use super::git_helpers3::CommitWithBlobs;
 use super::git_helpers3::{RawBlobSummaryWithoutPath, RawBlobSummary};
 use super::exec_helpers;
 use super::die;
@@ -37,8 +38,12 @@ pub fn topbase(
         Err(e) => die!("Failed to get all commits! {}", e),
     };
 
-    let current_commits_not_in_upstream = simplest_topbase(&current_branch, &upstream_branch, true)
-        .map_err(|e| e.to_string())?;
+    // TODO: make this a cli option:
+    let traverse_at_a_time = 500;
+    let current_commits_not_in_upstream = find_a_b_difference2(
+        &current_branch, &upstream_branch,
+        Some(traverse_at_a_time),
+        true).map_err(|e| e.to_string())?;
     let num_commits_to_take = if let Some(valid_topbase) = current_commits_not_in_upstream {
         let mut num_used = 0;
         for c in &valid_topbase.top_commits {
@@ -1153,11 +1158,18 @@ impl<'a, T: Default + From<RawBlobSummary> + Eq + Hash> BranchIterativeCommitLoa
             // first commit. but every time afterwards, the
             // first commit will be the same as the last commit we looked at
             // so every load after the first: we should skip this commit
+            // eprintln!("Loader sees: {} {}", c.commit.id.short(), c.commit.summary);
             if is_first_commit && ! our_first_commit_ever {
+                // eprintln!("Loader returning becuase first commit");
                 is_first_commit = false;
+                if self.commit_set.contains(&c.commit.id.hash) {
+                    self.entirely_loaded = true;
+                }
                 return false;
             } else {
+                // TODO: fix this logic... its skipping on the second one for some reason
                 our_first_commit_ever = false;
+                is_first_commit = false;
             }
 
             let blob_set: HashSet<T> = c.blobs.iter().cloned().map(|x| {
@@ -1167,6 +1179,7 @@ impl<'a, T: Default + From<RawBlobSummary> + Eq + Hash> BranchIterativeCommitLoa
             let ret = if already_seen_commit {
                 self.entirely_loaded = true;
                 // we can stop loading this stream
+                // eprintln!("Loader skipping because already seen it before");
                 true
             } else {
                 let ret = cb((&c, &blob_set));
@@ -1241,21 +1254,115 @@ impl<'a, T: Default + From<RawBlobSummary> + Eq + Hash> BranchIterativeCommitLoa
 
 /// this is called by `find_a_b_difference2` if you
 /// passed a Some(n) for the traverse n at a time.
-pub fn find_a_b_difference2_iterative_traversal(
+pub fn find_a_b_difference2_iterative_traversal<T: Default + From<RawBlobSummary> + Eq + Hash>(
     a_committish: &str, b_committish: &str,
     traverse_n: usize,
-) {
-    // let mut b_commits = vec![];
-
+) -> io::Result<Option<SuccessfulTopbaseResult>> {
     // first we load N of the B branches commits:
+    let mut b_loader = BranchIterativeCommitLoader::<T>::new(traverse_n, b_committish);
+    b_loader.load_next(|_| false)?;
+
+    let mut a_loader = BranchIterativeCommitLoader::<T>::new(traverse_n, a_committish);
+    let mut found_fork_point = None;
+
+    while ! a_loader.entirely_loaded || ! b_loader.entirely_loaded {
+        // we check if A's next blob set is a subset of anything in B we've loaded so far
+        a_loader.load_next(|(a_commit, a_blob_set)| {
+            if a_commit.commit.is_merge { return false; }
+    
+            if let Some(b_side_fork) = b_loader.contains_superset_of(a_blob_set) {
+                found_fork_point = Some((a_commit.clone(), b_side_fork));
+                // true because now that we found our fork point we can stop reading the stream
+                true
+            } else {
+                false
+            }
+        })?;
+    
+        if let Some((a_fork, b_fork)) = found_fork_point {
+            let top_a_commits = a_loader.get_all_above(&a_fork.commit.id.hash)
+                .ok_or(ioerr!("Found a fork point {}, but failed to find commits above it?", a_fork.commit.id.short()))?;
+            let successful_topbase = SuccessfulTopbaseResult {
+                top_commits: top_a_commits,
+                fork_point: (a_fork.commit, b_fork.commit),
+            };
+            return Ok(Some(successful_topbase));
+        }
+
+        // if we failed to find the fork point after searching A's next group,
+        // then we load B's next group, and search through all of A:
+        b_loader.load_next(|(b_commit, b_blob_set)| {
+            if b_commit.commit.is_merge { return false; }
+
+            if let Some(a_side_fork) = a_loader.contains_subset_of(b_blob_set) {
+                found_fork_point = Some((a_side_fork, b_commit.clone()));
+                // true because now that we found our fork point we can stop reading the stream
+                true
+            } else {
+                false
+            }
+        })?;
+
+        if let Some((a_fork, b_fork)) = found_fork_point {
+            let top_a_commits = a_loader.get_all_above(&a_fork.commit.id.hash)
+                .ok_or(ioerr!("Found a fork point {}, but failed to find commits above it?", a_fork.commit.id.short()))?;
+            let successful_topbase = SuccessfulTopbaseResult {
+                top_commits: top_a_commits,
+                fork_point: (a_fork.commit, b_fork.commit),
+            };
+            return Ok(Some(successful_topbase));
+        }
+    }
+
+    // if we traversed both A and B and failed to find a fork point, then
+    // the topbase is not successful, ie: there is no common fork point
+    Ok(None)
 }
 
+/// An alternative of `find_a_b_difference` that allows
+/// to pass an option of how many commits to look at from each branch
+/// at a time. The old way of doing this was to load the entire B branch
+/// and then iterate over the A branch. This is very slow for large repos.
+/// The point of topbase is to find a recent fork point between two
+/// potentially unrelated branches. In other words, we have reason to
+/// believe that this fork point is somewhere towards the top of the B branch
+/// and we think the A branch is only a little bit ahead of that potentially.
+/// so we can maybe avoid loading the entire B branch's commits by iteratively
+/// traversing both the A and B branch. The algorithm would work as follows:
+/// load N commits from B, then load N commits from A and traverse the A
+/// commits. If you find a commit in the first N commits from A that
+/// exists somewhere in B, then you are done, that is your fork point.
+/// but if you dont find it, then load another N commits from B,
+/// AND check the first A commits again. If you failed to find it,
+/// then this time load another N from the A branch, AND check all of
+/// the B commits that you have loaded so far. keep alternating which
+/// branch is loaded as a way to average out the length of time
+/// it takes to find the fork point. Worst case is there is no fork
+/// point, and you end up traversing both branches anyway, albeit
+/// across several git log commands. The worst case here is
+/// not that much worse than the old way of doing it where
+/// you would just load the entirety of the B branch anyway.
+/// A good value of N would probably be around 500-1000.
 pub fn find_a_b_difference2(
     a_committish: &str, b_committish: &str,
     traverse_n_at_a_time: Option<usize>,
     // TODO: add traversal mode...
-) {
+    consider_paths: bool,
+) -> io::Result<Option<SuccessfulTopbaseResult>> {
+    if let Some(n) = traverse_n_at_a_time {
+        // 0 is not a valid value of N
+        if n == 0 {
+            return simplest_topbase(a_committish, b_committish, consider_paths);
+        }
 
+        if consider_paths {
+            find_a_b_difference2_iterative_traversal::<RawBlobSummary>(a_committish, b_committish, n)
+        } else {
+            find_a_b_difference2_iterative_traversal::<RawBlobSummaryWithoutPath>(a_committish, b_committish, n)
+        }
+    } else {
+        simplest_topbase(a_committish, b_committish, consider_paths)
+    }
 }
 
 pub fn simplest_topbase_inner<T: From<RawBlobSummary> + Eq + Hash>(
