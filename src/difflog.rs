@@ -3,8 +3,8 @@ use terminal_size::{Width, terminal_size};
 
 
 use super::cli::MgtCommandDifflog;
-use super::topbase::find_a_b_difference;
-use crate::topbase::ConsecutiveCommitGroup;
+use super::topbase::find_a_b_difference2;
+use super::git_helpers3::Commit;
 
 pub fn format_right_string(
     commit: &str,
@@ -34,8 +34,8 @@ pub fn format_left_string(
 }
 
 pub fn format_group_string_left_ahead(
-    left_group: &ConsecutiveCommitGroup,
-    right_group: &ConsecutiveCommitGroup,
+    left_group: &Vec<Commit>,
+    right_group: &Vec<Commit>,
     ahead_by: usize,
     term_width: usize,
 ) -> String {
@@ -47,11 +47,11 @@ pub fn format_group_string_left_ahead(
     // let right_allowance = approx_half;
 
     let mut countdown = ahead_by;
-    for (i, (left_commit, _)) in left_group.commits.iter().enumerate() {
+    for (i, left_commit) in left_group.iter().enumerate() {
         out = format!("{}{}", out, format_left_string(&left_commit.summary, left_allowance));
 
         if countdown == 0 {
-            let (right_commit, _) = &right_group.commits[i - ahead_by];
+            let right_commit = &right_group[i - ahead_by];
             out = format!("{}{}{}", out, seperator, format_right_string(&right_commit.summary, left_allowance));
         } else {
             out = format!("{}{}", out, seperator);
@@ -64,8 +64,8 @@ pub fn format_group_string_left_ahead(
 }
 
 pub fn format_group_string_right_ahead(
-    left_group: &ConsecutiveCommitGroup,
-    right_group: &ConsecutiveCommitGroup,
+    left_group: &Vec<Commit>,
+    right_group: &Vec<Commit>,
     ahead_by: usize,
     term_width: usize,
 ) -> String {
@@ -77,13 +77,13 @@ pub fn format_group_string_right_ahead(
     let empty_left_string = " ".repeat(left_allowance);
 
     let mut countdown = ahead_by;
-    for (i, (right_commit, _)) in right_group.commits.iter().enumerate() {
+    for (i, right_commit) in right_group.iter().enumerate() {
         if countdown != 0 {
             // add the empty left string first
             out = format!("{}{}", out, empty_left_string);
             countdown -= 1;
         } else {
-            let (left_commit, _) = &left_group.commits[i - ahead_by];
+            let left_commit = &left_group[i - ahead_by];
             out = format!("{}{}", out, format_left_string(&left_commit.summary, left_allowance));
         }
 
@@ -94,12 +94,12 @@ pub fn format_group_string_right_ahead(
 }
 
 pub fn format_group_string(
-    left_group: &ConsecutiveCommitGroup,
-    right_group: &ConsecutiveCommitGroup,
+    left_group: &Vec<Commit>,
+    right_group: &Vec<Commit>,
     term_width: usize,
 ) -> String {
-    let left_commits = left_group.commits.len();
-    let right_commits = right_group.commits.len();
+    let left_commits = left_group.len();
+    let right_commits = right_group.len();
     if left_commits >= right_commits {
         format_group_string_left_ahead(left_group, right_group, left_commits - right_commits, term_width)
     } else {
@@ -110,16 +110,16 @@ pub fn format_group_string(
 /// should be guaranteed that there is at
 /// least one commit in each group
 pub fn format_fork_point(
-    left_group: &ConsecutiveCommitGroup,
-    right_group: &ConsecutiveCommitGroup,
+    left_group: &Vec<Commit>,
+    right_group: &Vec<Commit>,
     term_width: usize
 ) -> String {
-    let (left_hash, left_summary) = match left_group.commits.first() {
-        Some((c, _)) => (c.id.short(), c.summary.clone()),
+    let (left_hash, left_summary) = match left_group.first() {
+        Some(c) => (c.id.short(), c.summary.clone()),
         None => ("???????", "".to_string()),
     };
-    let (right_hash, right_summary) = match right_group.commits.first() {
-        Some((c, _)) => (c.id.short(), c.summary.clone()),
+    let (right_hash, right_summary) = match right_group.first() {
+        Some(c) => (c.id.short(), c.summary.clone()),
         None => ("???????", "".to_string()),
     };
 
@@ -133,6 +133,21 @@ pub fn format_fork_point(
     let right_str = format_right_string(&right_summary, left_allowance - right_hash.len() - 1);
     let right_str = format!("{} {}", right_hash, right_str);
     format!("{}{}{}\n", left_str, seperator, right_str)
+}
+
+pub fn format_title(
+    left_ref_name: &str,
+    right_ref_name: &str,
+    term_width: usize
+) -> String {
+    let approx_half = term_width / 2;
+    let seperator = " | ";
+    let left_allowance = approx_half - seperator.len();
+
+    let bottom_seperator = "=".repeat(term_width);
+    let left_str = format_left_string(left_ref_name, left_allowance);
+    let right_str = right_ref_name;
+    format!("{}{}{}\n{}", left_str,seperator, right_str, bottom_seperator)
 }
 
 pub fn run_actual(cmd: &mut MgtCommandDifflog) -> io::Result<()> {
@@ -150,32 +165,26 @@ pub fn run_actual(cmd: &mut MgtCommandDifflog) -> io::Result<()> {
         }
     };
 
-    println!("Comparing {} vs {}", branch_left, branch_right);
-    let (left_list, right_list) = find_a_b_difference(
-        branch_left, branch_right, cmd.traversal_mode, true)?;
-
-    let default_empty = ConsecutiveCommitGroup {
-        commits: vec![],
-        is_shared: false,
+    // TODO: make this a cli option
+    let traverse_at_a_time = 500;
+    let topbase_res = find_a_b_difference2(
+        branch_left, branch_right, Some(traverse_at_a_time), true)?;
+    let successful_topbase = match topbase_res {
+        Some(s) => s,
+        None => {
+            println!("Failed to find a fork point");
+            return Ok(());
+        }
     };
 
-    let left_len = left_list.len();
-    let right_len = right_list.len();
-    let longest = if left_len >= right_len { left_len } else { right_len };
-    let mut left_list_iter = left_list.iter();
-    let mut right_list_iter = right_list.iter();
-    for _ in 0..longest {
-        let left_group = left_list_iter.next().unwrap_or(&default_empty);
-        let right_group = right_list_iter.next().unwrap_or(&default_empty);
-        let left_is_fork = left_group.is_shared;
-        let right_is_fork = right_group.is_shared;
-        if left_is_fork && right_is_fork {
-            // print a fork point differently:
-            println!("{}", format_fork_point(left_group, right_group, term_width));
-        } else {
-            println!("{}", format_group_string(left_group, right_group, term_width));
-        }
-    }
+    let left_group = successful_topbase.top_commits;
+    let right_group = vec![];
+
+    let left_fork = vec![successful_topbase.fork_point.0];
+    let right_fork = vec![successful_topbase.fork_point.1];
+    println!("{}", format_title(branch_left, branch_right, term_width));
+    print!("{}", format_group_string(&left_group, &right_group, term_width));
+    println!("{}", format_fork_point(&left_fork, &right_fork, term_width));
 
     Ok(())
 }
