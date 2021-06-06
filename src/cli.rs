@@ -45,7 +45,7 @@ pub struct MgtCommandDifflog {
     #[options(free)]
     pub branches: Vec<String>,
 
-    #[options(short = "m", help = "Valid modes are [topbase, rewind, fullbase]. default is rewind")]
+    #[options(short = "m", help = "(not implemented yet) Valid modes are [topbase, rewind, fullbase]. default is rewind")]
     pub traversal_mode: Option<ABTraversalMode>,
 
     #[options(short = "w", help = "Force specify a width to display the log. default is to use whole terminal")]
