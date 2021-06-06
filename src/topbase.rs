@@ -1099,6 +1099,19 @@ pub fn all_blobs_exist(a: &[Blob], b: &[Blob]) -> bool {
 // create an entire set of blobs, and then check if the other branch
 // has a commit such that our set of blobs is a subset of that
 // commit... (or vice versa?)
+// - refactor the command stdout processing to try to
+// just read 1000 commits from the B branch at a time without
+// loading it entirely. Then load 1000 commits from the A branch and check
+// through the 1000 we loaded from B. its possible we find our top-most
+// fork point in those first 1000 and then have no need to load the next.
+// but if we dont, then we load another 1000 from B and check all of the ones in A
+// against the ones we just loaded (BUT NOT CHECKING THE ONES FROM THE BEGINNING
+// BECAUSE WE KNOW ITS NOT IN THERE). Then if we again dont find anything, we
+// now load 1000 from A again, and this time these new 1000 from A need to be checked
+// against everything in B. we keep doing this until we have either found
+// the fork point we are looking for, or until we load the entirety of the branches.
+// i think this will be the optimal strategy for 99% of cases because chances are
+// we will find the fork point in the first thousand...
 
 
 #[cfg(test)]
