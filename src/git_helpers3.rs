@@ -128,7 +128,7 @@ impl FromStr for FileMode {
 ///  | | > 7 middle bits are unused :(
 ///  | > these 3 bits are the dest file mode
 ///  > 3 MSB are the source file mode
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct DiffStatusAndFileMode {
     pub data: u16,
 }
@@ -214,12 +214,29 @@ impl From<DiffStatusAndFileMode> for (DiffStatus, FileMode, FileMode) {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RawBlobSummary {
     pub src_dest_mode_and_status: DiffStatusAndFileMode,
     pub src_sha: u64,
     pub dest_sha: u64,
     pub path_str: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RawBlobSummaryWithoutPath {
+    pub src_dest_mode_and_status: DiffStatusAndFileMode,
+    pub src_sha: u64,
+    pub dest_sha: u64,
+}
+
+impl From<RawBlobSummary> for RawBlobSummaryWithoutPath {
+    fn from(orig: RawBlobSummary) -> Self {
+        RawBlobSummaryWithoutPath {
+            src_dest_mode_and_status: orig.src_dest_mode_and_status,
+            src_sha: orig.src_sha,
+            dest_sha: orig.dest_sha,
+        }
+    }
 }
 
 impl RawBlobSummary {
