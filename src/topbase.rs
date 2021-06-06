@@ -1103,6 +1103,142 @@ pub fn all_blobs_exist(a: &[Blob], b: &[Blob]) -> bool {
     return contains_all;
 }
 
+/// A helper struct to manage the iterative loading of commits with blobs
+/// from git log. Load N commits at a time every time `load_next()` is called.
+/// Load next gets a callback that returns true if you wish to stop reading from the log stream.
+#[derive(Debug, Default)]
+pub struct BranchIterativeCommitLoader<'a, T: Default + From<RawBlobSummary> + Eq + Hash> {
+    pub n: usize,
+    pub branch_name: &'a str,
+    pub last_commit_id: Option<String>,
+    pub commit_set: HashSet<String>,
+    pub groups: Vec<Vec<(CommitWithBlobs, HashSet<T>)>>,
+    pub entirely_loaded: bool,
+    pub should_skip_first_commit: bool,
+}
+
+impl<'a, T: Default + From<RawBlobSummary> + Eq + Hash> BranchIterativeCommitLoader<'a, T> {
+    pub fn new(n: usize, branch_name: &'a str) -> BranchIterativeCommitLoader<'a, T> {
+        let mut out = BranchIterativeCommitLoader::default();
+        out.n = n;
+        out.branch_name = branch_name;
+        out
+    }
+
+    pub fn load_next<F>(&mut self, cb: F) -> io::Result<()>
+        where F: FnMut((&CommitWithBlobs, &HashSet<T>)) -> bool
+    {
+        if self.entirely_loaded {
+            return Ok(());
+        }
+
+        let mut cb = cb;
+        let mut this_load_group = vec![];
+        let mut is_first_commit = true;
+        let use_committish: String = if let Some(ref last_id) = self.last_commit_id {
+            last_id.clone()
+        } else {
+            self.branch_name.to_string()
+        };
+        // if we are not doing our first load, then we should
+        // increase N by 1 so that we skip the previous commit when iterating
+        let mut our_first_commit_ever = ! self.should_skip_first_commit;
+        let use_n = if self.should_skip_first_commit {
+            self.n + 1
+        } else {
+            self.n
+        };
+        git_helpers3::iterate_blob_log(&use_committish, Some(use_n), |c| {
+            // the first time we run this command, we want to look at this
+            // first commit. but every time afterwards, the
+            // first commit will be the same as the last commit we looked at
+            // so every load after the first: we should skip this commit
+            if is_first_commit && ! our_first_commit_ever {
+                is_first_commit = false;
+                return false;
+            } else {
+                our_first_commit_ever = false;
+            }
+
+            let blob_set: HashSet<T> = c.blobs.iter().cloned().map(|x| {
+                T::from(x)
+            }).collect();
+            let already_seen_commit = self.commit_set.contains(&c.commit.id.hash);
+            let ret = if already_seen_commit {
+                self.entirely_loaded = true;
+                // we can stop loading this stream
+                true
+            } else {
+                let ret = cb((&c, &blob_set));
+                self.commit_set.insert(c.commit.id.hash.clone());
+                this_load_group.push((c, blob_set));
+                ret
+            };
+            ret
+        })?;
+
+        self.should_skip_first_commit = ! our_first_commit_ever;
+
+        // keep track of the last commit so we can
+        // start from here on the next load
+        if let Some(last) = this_load_group.last() {
+            self.last_commit_id = Some(last.0.commit.id.hash.clone());
+        }
+
+        if ! this_load_group.is_empty() {
+            self.groups.push(this_load_group);
+        }
+
+        Ok(())
+    }
+
+    pub fn contains_superset_of(&self, blob_set: &HashSet<T>) -> Option<CommitWithBlobs> {
+        for group in self.groups.iter() {
+            for (our_commit, our_blob_set) in group.iter() {
+                if blob_set.is_subset(our_blob_set) {
+                    return Some(our_commit.clone());
+                }
+            }
+        }
+        None
+    }
+
+    pub fn contains_subset_of(&self, blob_set: &HashSet<T>) -> Option<CommitWithBlobs> {
+        for group in self.groups.iter() {
+            for (our_commit, our_blob_set) in group.iter() {
+                if our_blob_set.is_subset(blob_set) {
+                    return Some(our_commit.clone());
+                }
+            }
+        }
+        None
+    }
+
+    pub fn get_all_above(&mut self, commit_id: &str) -> Option<Vec<Commit>> {
+        if ! self.commit_set.contains(commit_id) {
+            // we do not have that commit, so we cannot find everything above it...
+            return None;
+        }
+
+        let mut out_list = vec![];
+        for mut group in self.groups.drain(..) {
+            for (our_commit, _) in group.drain(..) {
+                if our_commit.commit.id.hash == commit_id {
+                    return Some(out_list);
+                }
+                out_list.push(our_commit.commit);
+            }
+        }
+
+        // even though we checked above for the commit_id,
+        // if we fail to find it while iterating that is also an error
+        // so we should not return a list of commits
+        // unless we guarantee that we found the hash that the user wants
+        // TODO: maybe make this a result error?
+        None
+    }
+}
+
 /// this is called by `find_a_b_difference2` if you
 /// passed a Some(n) for the traverse n at a time.
 pub fn find_a_b_difference2_iterative_traversal(
@@ -1277,4 +1413,36 @@ mod tests {
             println!("{} {}\n{:#?}\n", commit.id.short(), commit.summary, blobs);
         }
     }
+
+    #[test]
+    fn loader_doesnt_make_more_groups_than_commit_count() {
+        // we pass a very high value of N, if we call
+        // load_next() several times, there should still only be 1 group
+        // TODO: if this repo ever gets more than 1000000 commits, update this:
+        let mut loader = BranchIterativeCommitLoader::<RawBlobSummary>::new(1000000, "HEAD");
+        loader.load_next(|_| false).unwrap();
+        assert_eq!(loader.groups.len(), 1);
+        let num_commits = loader.groups[0].len();
+        loader.load_next(|_| false).unwrap();
+        loader.load_next(|_| false).unwrap();
+        loader.load_next(|_| false).unwrap();
+        assert_eq!(loader.groups.len(), 1);
+        assert_eq!(loader.groups[0].len(), num_commits);
+    }
+
+    #[test]
+    fn loader_groups_are_disjoint() {
+        let mut loader = BranchIterativeCommitLoader::<RawBlobSummary>::new(1, "HEAD");
+        loader.load_next(|_| false).unwrap();
+        assert_eq!(loader.groups.len(), 1);
+        assert_eq!(loader.groups[0].len(), 1);
+        let first_commit = loader.groups[0][0].0.commit.id.hash.clone();
+        loader.load_next(|_| false).unwrap();
+        assert_eq!(loader.groups.len(), 2);
+        assert_eq!(loader.groups[0].len(), 1);
+        assert_eq!(loader.groups[1].len(), 1);
+        let next_commit = loader.groups[1][0].0.commit.id.hash.clone();
+        assert!(first_commit != next_commit);
+    }
+
 }
