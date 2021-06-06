@@ -34,6 +34,12 @@ impl Commit {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct CommitWithBlobs {
+    pub commit: Commit,
+    pub blobs: Vec<RawBlobSummary>,
+}
+
 /// see: https://www.git-scm.com/docs/git-diff
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub enum DiffStatus {
@@ -216,6 +222,13 @@ pub struct RawBlobSummary {
     pub path_str: String,
 }
 
+impl RawBlobSummary {
+    pub fn status(&self) -> DiffStatus {
+        let (status, _, _) = self.src_dest_mode_and_status.into();
+        status
+    }
+}
+
 pub fn hex_char_to_u64(c: char) -> u64 {
     match c {
         '0' => 0,
@@ -332,6 +345,156 @@ pub fn parse_blob_line(line: &str) -> io::Result<RawBlobSummary> {
     };
     
     Ok(out)
+}
+
+/// this is called by `iterate_blob_log`. This is what actually
+/// parses the git log stream into a commit with blob object.
+/// This is useful so that instead of passing a committish
+/// and invoking the git log command, you can pass in a stream of git log output,
+/// or an in-memory buf reader (which is useful for testing).
+/// returns true if the outer function should kill the git log stream
+/// which is only relevant for `iterate_blob_log`. If you are passing your own
+/// in-memory reader, you can ignore the output.
+pub fn iterate_blob_log_from_lines<T, L: BufRead>(
+    line_reader: &mut L,
+    callback: T,
+) -> io::Result<bool>
+    where T: FnMut(CommitWithBlobs) -> bool,
+{
+    let mut cb = callback;
+    let mut last_commit = Commit::new("", "".into(), true);
+    let mut last_blobs = vec![];
+    let mut add_last_commit = false;
+
+    let mut buf = vec![];
+    while let Ok(bytes_read) = line_reader.read_until(b'\n', &mut buf) {
+        if bytes_read == 0 {
+            break;
+        }
+        let line = String::from_utf8_lossy(&buf);
+        let line = &line[..];
+        let line_len = line.len();
+        let line = if line.ends_with('\n') {
+            &line[0..line_len - 1]
+        } else { line };
+        if ! line.starts_with(':') {
+            // parsing a commit line
+            if add_last_commit {
+                // pass the last fully-parsed commit that we parsed
+                // on the previous iteration to the callback and
+                // then reset our commit/blobs for the next iteration
+                // to fill in
+                let commit_with_blobs = CommitWithBlobs {
+                    commit: last_commit,
+                    blobs: last_blobs,
+                };
+                let should_exit = cb(commit_with_blobs);
+                if should_exit {
+                    return Ok(true);
+                }
+                last_blobs = vec![];
+                last_commit = Commit::new("", "".into(), true);
+            }
+
+            let first_space_index = line.find(' ').ok_or(ioerr!("Failed to read line of git log output:\n{}", line))?;
+            let hash = &line[0..first_space_index];
+            let summary = &line[(first_space_index+1)..];
+            last_commit.id = Oid { hash: hash.to_string() };
+            last_commit.summary = summary.to_string();
+            add_last_commit = true;
+        } else {
+            // parsing a blob line
+
+            // if we see a blob, then by definition that means its not
+            // a merge commit because in our git log format we dont pass the '-m' flag
+            // TODO: what happens if we do pass that?
+            last_commit.is_merge = false;
+            let blob = parse_blob_line(&line)?;
+            last_blobs.push(blob);
+        }
+        buf.clear();
+    }
+
+    // we have to call this one more time at the end to make sure
+    // we get the last commit
+    let commit_with_blobs = CommitWithBlobs {
+        commit: last_commit,
+        blobs: last_blobs,
+    };
+    let _ = cb(commit_with_blobs);
+    // no point in checking if should_exit because we are exiting here anyway
+
+    Ok(false)
+}
+
+/// iterates a list of commits and parses
+/// the blob summary of each commit and then passes the commit
+/// and blobs to a callback. The callback function returns true if
+/// it wants to be done reading from the stream, in which case
+/// this function will stop reading from the stream and kill the process.
+/// Optionally pass in a number of commits to read including the first
+/// one indicated by committish. (this corresponds to git log [...] -n <number-of-commits>)
+pub fn iterate_blob_log<T>(
+    committish: &str,
+    num_commits: Option<usize>,
+    callback: T,
+) -> io::Result<()>
+    where T: FnMut(CommitWithBlobs) -> bool,
+{
+    // TODO: add the '-m' flag if we want to see merge commits with a full blob diff
+    // by default, merge commits do not have a blob summary, which
+    // makes it easy to tell which commits are merges or not. this default
+    // is desirable 9 times out of 10. not sure when -m would be desired though.
+    let mut exec_args = vec![
+        "git", "--no-pager", "log", "--no-color", "--raw",
+        "--pretty=oneline", committish,
+    ];
+    let n_str = match num_commits {
+        Some(n) => n.to_string(),
+        None => "".to_string()
+    };
+    if ! n_str.is_empty() {
+        exec_args.push("-n");
+        exec_args.push(&n_str);
+    }
+
+    let mut child = exec_helpers::spawn_with_env_ex(
+        &exec_args,
+        &[], &[],
+        Some(Stdio::null()), Some(Stdio::null()), Some(Stdio::piped()),
+    )?;
+
+    let stdout = child.stdout.as_mut()
+        .ok_or(ioerr!("Failed to get child stdout for reading git log of {}", committish))?;
+    let mut stdout_read = BufReader::new(stdout);
+
+    let output = iterate_blob_log_from_lines(&mut stdout_read, callback);
+    let (should_kill_child, output) = match output {
+        Ok(o) => (o, Ok(o)),
+        // if there was an error parsing the blob log lines,
+        // we should kill the child just in case to prevent
+        // running forever on child.wait()
+        Err(e) => (true, Err(e))
+    };
+
+    if should_kill_child {
+        let _ = child.kill();
+    } else {
+        // only return this child.wait() error if
+        // our output response is ok. if our output is an error,
+        // then we would rather return that error instead of an error
+        // that came from calling child.wait()
+        let child_wait_res = child.wait();
+        if output.is_ok() {
+            let _ = child_wait_res?;
+        }        
+    }
+
+    if let Err(e) = output {
+        return Err(e);
+    }
+
+    Ok(())
 }
 
 pub fn pull(
@@ -594,6 +757,7 @@ pub fn reset_stage() -> Result<String, String> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use io::Cursor;
 
     #[test]
     fn oid_short_and_long_works() {
@@ -647,5 +811,34 @@ mod test {
         assert!(status == DiffStatus::Deleted);
         assert!(src_mode == FileMode::RegularNonEx);
         assert!(dest_mode == FileMode::Empty);
+    }
+
+    #[test]
+    fn blob_log_properly_detects_merge_commits() {
+        let log_output = "somehash commit message here\n01010101010110 another commit message here";
+        let mut cursor = Cursor::new(log_output.as_bytes());
+        let mut num_commits_visited = 0;
+        let _ = iterate_blob_log_from_lines(&mut cursor, |c| {
+            num_commits_visited += 1;
+            assert!(c.commit.is_merge);
+            false
+        }).unwrap();
+        assert_eq!(num_commits_visited, 2);
+    }
+
+    #[test]
+    fn blob_log_properly_parses_blobs() {
+        let log_output = "hash1 msg1\n:100644 100644 xyz abc M file1.txt\n:100644 00000 123 000 D file2.txt";
+        let mut cursor = Cursor::new(log_output.as_bytes());
+        let mut num_commits_visited = 0;
+        let _ = iterate_blob_log_from_lines(&mut cursor, |c| {
+            num_commits_visited += 1;
+            assert!(!c.commit.is_merge);
+            assert_eq!(c.blobs.len(), 2);
+            assert_eq!(c.blobs[0].status(), DiffStatus::Modified);
+            assert_eq!(c.blobs[1].status(), DiffStatus::Deleted);
+            false
+        }).unwrap();
+        assert_eq!(num_commits_visited, 1);
     }
 }
