@@ -537,3 +537,39 @@ function setup() {
     [[ $status == "0" ]]
     [[ $output == *"up to date"* ]]
 }
+
+@test 'should report take even if only one of the blobs applies to the repo file' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    mkdir -p "some path"
+    mkdir -p "some path/lib"
+    # even though this has a different path, because its specified in the include_as
+    # we should figure out that this blob applies to something in our local repo
+    echo "abc" > "some path/lib/abc.txt" && git add "some path/lib/abc.txt"
+    # now this blob will not exist in the other repo,
+    # so when we do a check, we should still detect this abc fork point
+    # because this blob does not apply to the repo file:
+    echo "qqq" > "some path/qqq.txt" && git add "some path/qqq.txt"
+    git commit -m "multiple blobs"
+    echo "REMOTE:"
+    echo "$(git log --oneline)"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \" \" = \"some path/lib/\"
+    "
+    echo "$repo_file_contents" > repo_file.sh
+    # this should be detected as the fork point:
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "xy z" > "xy z.txt" && git add "xy z.txt" && git commit -m "xyz"
+    commit_to_take="$(git log --oneline -n 1)"
+    echo "LOCAL:"
+    echo "$(git log --oneline)"
+    run $PROGRAM_PATH check repo_file.sh --local
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ $output == *"$commit_to_take"* ]]
+}
