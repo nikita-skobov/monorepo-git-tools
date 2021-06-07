@@ -170,21 +170,8 @@ fn get_branch_and_remote_from_str(branch_and_remote: &str) -> (&str, &str) {
 }
 
 pub fn fetch_branch(remote: &str, branch: &str) {
-    let args = [
-        "git", "fetch",
-        remote, branch,
-        "--no-tags",
-    ];
-
-    let err_msg = match exec_helpers::execute(&args) {
-        Err(e) => Some(format!("{}", e)),
-        Ok(o) => match o.status {
-            0 => None,
-            _ => Some(o.stderr),
-        },
-    };
-    if let Some(err) = err_msg {
-        die!("Error fetching {} {}\n{}", remote, branch, err);
+    if let Err(e) = git_helpers3::fetch_branch(remote, branch) {
+        die!("Error fetching {} {}\n{}", remote, branch, e);
     }
 }
 

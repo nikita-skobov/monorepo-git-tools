@@ -792,6 +792,26 @@ pub fn get_repo_root() -> Result<String, String> {
     }
 }
 
+pub fn fetch_branch(remote: &str, branch: &str) -> Result<(), String> {
+    let args = [
+        "git", "fetch",
+        remote, branch,
+        "--no-tags",
+    ];
+
+    let err_msg = match exec_helpers::execute(&args) {
+        Err(e) => Some(format!("{}", e)),
+        Ok(o) => match o.status {
+            0 => None,
+            _ => Some(o.stderr),
+        },
+    };
+    if let Some(err) = err_msg {
+        return Err(err);
+    }
+    Ok(())
+}
+
 pub fn get_all_files_in_repo() -> Result<String, String> {
     let exec_args = [
         "git", "ls-tree", "-r", "HEAD", "--name-only", "--full-tree"
