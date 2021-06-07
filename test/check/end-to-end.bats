@@ -398,60 +398,39 @@ function setup() {
     [[ $output == *"up to date"* ]]
 }
 
-# THIS TEST IS NOT CONSISTENT with the new topbase alg
-# previously, topbase would only care about the blob ID, so when
-# topbasing, it would say that these blobs are the same because
-# their content is the same which is true, but the path is different.
-# so the check command would additionally look at the path to see if
-# this is something it wants or not.
-# THE REASON THIS WAS NECESSARY IS BECAUSE THE CHECK COMMAND TRIED
-# TO BE NON-DESTRUCTIVE BY NOT FILTERING A REPO HISTORY.
-# So in a regular topbase during split-in or
-# split-out, the paths being different wouldnt matter because
-# the repo is rewritten BEFORE topbase is applied. But in the check
-# command, we try to be efficient, and look at a repos blobs of its source
-# history, and then evaluate in memory if that blob applies.
-# This no longer works with the changes to the topbase algorithm because
-# now the topbase algorithm hashes by path string by default.
-# We can explicitly tell topbase to NOT hash by that, which is
-# what the check command would want to do, but then the returned
-# output does not contain the path string, which is what the check
-# command needs to verify the blob applies.
-# So the solution would be to implement a way for the topbase alg to
-# hash WITHOUT the path string, but return WITH the path string...
-# @test 'should report take if current blob is part of include_as path' {
-#     curr_dir="$PWD"
-#     cd "$BATS_TMPDIR/test_remote_repo2"
-#     mkdir -p "some path"
-#     mkdir -p "some path/lib"
-#     # even though this has a different path, because its specified in the include_as
-#     # we should figure out that this blob applies to something in our local repo
-#     echo "abc" > "some path/lib/abc.txt" && git add "some path/lib/abc.txt" && git commit -m "abc"
-#     echo "xy z" > "some path/lib/xy z.txt" && git add "some path/" && git commit -m "some path"
-#     echo "REMOTE:"
-#     echo "$(git log --oneline)"
-#     commit_to_take="$(git log --oneline -n 1)"
-#     cd "$curr_dir"
+@test 'should report take if current blob is part of include_as path' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    mkdir -p "some path"
+    mkdir -p "some path/lib"
+    # even though this has a different path, because its specified in the include_as
+    # we should figure out that this blob applies to something in our local repo
+    echo "abc" > "some path/lib/abc.txt" && git add "some path/lib/abc.txt" && git commit -m "abc"
+    echo "xy z" > "some path/lib/xy z.txt" && git add "some path/" && git commit -m "some path"
+    echo "REMOTE:"
+    echo "$(git log --oneline)"
+    commit_to_take="$(git log --oneline -n 1)"
+    cd "$curr_dir"
 
-#     # the fact that remote has xyz.txt should be irrelevant
-#     # to this check
-#     repo_file_contents="
-#     [repo]
-#     remote = \"..$SEP$test_remote_repo2\"
-#     [include_as]
-#     \" \" = \"some path/lib/\"
-#     "
-#     echo "$repo_file_contents" > repo_file.sh
-#     echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
-#     echo "LOCAL:"
-#     echo "$(git log --oneline)"
+    # the fact that remote has xyz.txt should be irrelevant
+    # to this check
+    repo_file_contents="
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \" \" = \"some path/lib/\"
+    "
+    echo "$repo_file_contents" > repo_file.sh
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "LOCAL:"
+    echo "$(git log --oneline)"
 
 
-#     run $PROGRAM_PATH check repo_file.sh
-#     echo "$output"
-#     [[ $status == "0" ]]
-#     [[ $output == *"$commit_to_take"* ]]
-# }
+    run $PROGRAM_PATH check repo_file.sh
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ $output == *"$commit_to_take"* ]]
+}
 
 @test 'should report up-to-date if current blob is part of include_as path but is excluded' {
     curr_dir="$PWD"
@@ -490,40 +469,37 @@ function setup() {
     [[ $output == *"up to date"* ]]
 }
 
-# Same note as above comment
-# @test '(local) should report take if current blob is part of include_as path' {
-#     curr_dir="$PWD"
-#     cd "$BATS_TMPDIR/test_remote_repo2"
-#     mkdir -p "some path"
-#     mkdir -p "some path/lib"
-#     # even though this has a different path, because its specified in the include_as
-#     # we should figure out that this blob applies to something in our local repo
-#     echo "abc" > "some path/lib/abc.txt" && git add "some path/lib/abc.txt" && git commit -m "abc"
-#     echo "REMOTE:"
-#     echo "$(git log --oneline)"
-#     cd "$curr_dir"
+@test '(local) should report take if current blob is part of include_as path' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    mkdir -p "some path"
+    mkdir -p "some path/lib"
+    # even though this has a different path, because its specified in the include_as
+    # we should figure out that this blob applies to something in our local repo
+    echo "abc" > "some path/lib/abc.txt" && git add "some path/lib/abc.txt" && git commit -m "abc"
+    echo "REMOTE:"
+    echo "$(git log --oneline)"
+    cd "$curr_dir"
 
-#     # the fact that remote has xyz.txt should be irrelevant
-#     # to this check
-#     repo_file_contents="
-#     [repo]
-#     remote = \"..$SEP$test_remote_repo2\"
-#     [include_as]
-#     \" \" = \"some path/lib/\"
-#     "
-#     echo "$repo_file_contents" > repo_file.sh
-#     echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
-#     echo "xy z" > "xy z.txt" && git add "xy z.txt" && git commit -m "xyz"
-#     commit_to_take="$(git log --oneline -n 1)"
-#     echo "LOCAL:"
-#     echo "$(git log --oneline)"
-
-
-#     run $PROGRAM_PATH check repo_file.sh --local
-#     echo "$output"
-#     [[ $status == "0" ]]
-#     [[ $output == *"$commit_to_take"* ]]
-# }
+    # the fact that remote has xyz.txt should be irrelevant
+    # to this check
+    repo_file_contents="
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    [include_as]
+    \" \" = \"some path/lib/\"
+    "
+    echo "$repo_file_contents" > repo_file.sh
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "xy z" > "xy z.txt" && git add "xy z.txt" && git commit -m "xyz"
+    commit_to_take="$(git log --oneline -n 1)"
+    echo "LOCAL:"
+    echo "$(git log --oneline)"
+    run $PROGRAM_PATH check repo_file.sh --local
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ $output == *"$commit_to_take"* ]]
+}
 
 @test '(local) should NOT report take if current blob is part of include_as path but is excluded' {
     curr_dir="$PWD"

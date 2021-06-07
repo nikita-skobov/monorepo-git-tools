@@ -369,24 +369,39 @@ fn check_for_updates(
     current_is_remote: bool,
     should_summarize: bool,
 ) -> (Vec<Oid>, Vec<String>) {
+    // we need to enable rewind mode if our current branch
+    // is on the right.
+    let mut should_rewind = false;
     let (a_branch, b_branch) = if current_is_remote {
         (current_branch, upstream_branch)
     } else {
+        should_rewind = true;
         (upstream_branch, current_branch)
     };
 
-    let hashing_mode = topbase::BlobHashingMode::Full;
+    let hashing_mode = topbase::BlobHashingMode::WithoutPath;
     let traverse_at_a_time = 500;
     let mut out_ids = vec![];
     let mut out_str = vec![];
     let successful_topbase = match topbase::find_a_b_difference2::<CommitWithBlobs>(
-        a_branch, b_branch, Some(traverse_at_a_time), hashing_mode, false)
+        a_branch, b_branch, Some(traverse_at_a_time), hashing_mode, should_rewind)
     {
         Ok(s) => if let Some(t) = s { t } else { return (out_ids, out_str) },
         Err(_) => return (out_ids, out_str),
     };
 
-    for out_commit in successful_topbase.top_commits {
+    // if we should rewind, that means we expect the commits that upstream
+    // wants are on the 'right' side (ie: current branch is the B branch,
+    // and we always care about upstream getting updates from current).
+    // so we iterate the top_right_commits instead of the top_commits
+    // in that case:
+    let iter_commits = if should_rewind {
+        successful_topbase.top_right_commits.iter()
+    } else {
+        successful_topbase.top_commits.iter()
+    };
+
+    for out_commit in iter_commits {
         // check all blob paths to make sure they apply
         // to our repo file:
         let mut all_blob_paths_apply = true;
@@ -399,7 +414,7 @@ fn check_for_updates(
         }
         if ! all_blob_paths_apply { continue; }
         if should_summarize {
-            out_ids.push(out_commit.commit.id);
+            out_ids.push(out_commit.commit.id.clone());
             out_str.push(out_commit.commit.summary.clone());
         }
     }
