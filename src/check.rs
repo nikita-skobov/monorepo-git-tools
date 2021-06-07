@@ -370,6 +370,13 @@ fn check_for_updates(
     let traverse_at_a_time = 500;
     let mut out_ids = vec![];
     let mut out_str = vec![];
+
+    // check all blob paths to make sure they apply
+    // to our repo file:
+    // b is the branch name that this commit belongs to.
+    // we check if the path of this blob is relevant to the repo
+    // and we have to consider if its a local or remote commit,
+    // hence the b == current_branch or b == upstream_branch
     let should_use_blob_cb = |c: &mut RawBlobSummary, b: &str| {
         let this_is_a_remote_blob = if current_is_remote {
             b == current_branch
@@ -399,17 +406,6 @@ fn check_for_updates(
     };
 
     for out_commit in iter_commits {
-        // check all blob paths to make sure they apply
-        // to our repo file:
-        let mut all_blob_paths_apply = true;
-        for blob_info in out_commit.blobs.iter() {
-            let blob_path = &blob_info.path_str;
-            if ! blob_path_applies_to_repo_file(blob_path, repo_file, current_is_remote) {
-                all_blob_paths_apply = false;
-                break;
-            }
-        }
-        if ! all_blob_paths_apply { continue; }
         if should_summarize {
             out_ids.push(out_commit.commit.id.clone());
             out_str.push(out_commit.commit.summary.clone());
