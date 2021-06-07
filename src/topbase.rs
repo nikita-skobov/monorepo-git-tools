@@ -63,7 +63,7 @@ pub fn topbase(
     let hashing_mode = BlobHashingMode::Full;
     // TODO: make this a cli option:
     let traverse_at_a_time = 500;
-    let current_commits_not_in_upstream = find_a_b_difference2(
+    let current_commits_not_in_upstream = find_a_b_difference2::<Commit>(
         &current_branch, &upstream_branch,
         Some(traverse_at_a_time),
         hashing_mode, false).map_err(|e| e.to_string())?;
@@ -515,15 +515,15 @@ impl Default for ABTraversalMode {
 /// A successful topbase result will find a fork point between
 /// two branches A, and B. A is considered the top, and contains
 /// a list of commits that are above the common fork point.
-pub struct SuccessfulTopbaseResult {
-    pub top_commits: Vec<Commit>,
+pub struct SuccessfulTopbaseResult<T: From<CommitWithBlobs>> {
+    pub top_commits: Vec<T>,
     // its possible that the other branch's commit might have a different
     // message than A's commit, but they share the same blob set.
     // so fork_point.0 is the commit from A, and fork_point.1 is the
     // commit from B.
-    pub fork_point: (Commit, Commit),
+    pub fork_point: (T, T),
     // only used for rewind topbase
-    pub top_right_commits: Vec<Commit>,
+    pub top_right_commits: Vec<T>,
 }
 
 /// A helper struct to manage the iterative loading of commits with blobs
@@ -645,7 +645,10 @@ impl<'a, T: Default + From<RawBlobSummary> + Eq + Hash> BranchIterativeCommitLoa
         None
     }
 
-    pub fn get_all_above(&mut self, commit_id: &str) -> Option<Vec<Commit>> {
+    pub fn get_all_above<C: From<CommitWithBlobs>>(
+        &mut self,
+        commit_id: &str
+    ) -> Option<Vec<C>> {
         if ! self.commit_set.contains(commit_id) {
             // we do not have that commit, so we cannot find everything above it...
             return None;
@@ -657,7 +660,7 @@ impl<'a, T: Default + From<RawBlobSummary> + Eq + Hash> BranchIterativeCommitLoa
                 if our_commit.commit.id.hash == commit_id {
                     return Some(out_list);
                 }
-                out_list.push(our_commit.commit);
+                out_list.push(C::from(our_commit));
             }
         }
 
@@ -670,11 +673,20 @@ impl<'a, T: Default + From<RawBlobSummary> + Eq + Hash> BranchIterativeCommitLoa
     }
 }
 
-pub fn get_rewind_commits_from_loader<T: Default + From<RawBlobSummary> + Eq + Hash>(
+impl From<CommitWithBlobs> for Commit {
+    fn from(orig: CommitWithBlobs) -> Self {
+        orig.commit
+    }
+}
+
+pub fn get_rewind_commits_from_loader<
+    T: Default + From<RawBlobSummary> + Eq + Hash,
+    C: From<CommitWithBlobs>
+>(
     right_side_loader: &mut BranchIterativeCommitLoader<T>,
     fork_hash: &str,
     should_rewind: bool,
-) -> Vec<Commit> {
+) -> Vec<C> {
     let out_opt = if should_rewind {
         right_side_loader.get_all_above(fork_hash)
     } else {
@@ -688,11 +700,14 @@ pub fn get_rewind_commits_from_loader<T: Default + From<RawBlobSummary> + Eq + H
 
 /// this is called by `find_a_b_difference2` if you
 /// passed a Some(n) for the traverse n at a time.
-pub fn find_a_b_difference2_iterative_traversal<T: Default + From<RawBlobSummary> + Eq + Hash>(
+pub fn find_a_b_difference2_iterative_traversal<
+    T: Default + From<RawBlobSummary> + Eq + Hash,
+    C: From<CommitWithBlobs>,
+>(
     a_committish: &str, b_committish: &str,
     traverse_n: usize,
     should_rewind: bool,
-) -> io::Result<Option<SuccessfulTopbaseResult>> {
+) -> io::Result<Option<SuccessfulTopbaseResult<C>>> {
     // first we load N of the B branches commits:
     let mut b_loader = BranchIterativeCommitLoader::<T>::new(traverse_n, b_committish);
     b_loader.load_next(|_| false)?;
@@ -715,12 +730,12 @@ pub fn find_a_b_difference2_iterative_traversal<T: Default + From<RawBlobSummary
         })?;
 
         if let Some((a_fork, b_fork)) = found_fork_point {
-            let top_a_commits = a_loader.get_all_above(&a_fork.commit.id.hash)
+            let top_a_commits = a_loader.get_all_above::<C>(&a_fork.commit.id.hash)
                 .ok_or(ioerr!("Found a fork point {}, but failed to find commits above it?", a_fork.commit.id.short()))?;
             let successful_topbase = SuccessfulTopbaseResult {
                 top_commits: top_a_commits,
                 top_right_commits: get_rewind_commits_from_loader(&mut b_loader, &b_fork.commit.id.hash, should_rewind),
-                fork_point: (a_fork.commit, b_fork.commit),
+                fork_point: (a_fork.into(), b_fork.into()),
             };
             return Ok(Some(successful_topbase));
         }
@@ -740,12 +755,12 @@ pub fn find_a_b_difference2_iterative_traversal<T: Default + From<RawBlobSummary
         })?;
 
         if let Some((a_fork, b_fork)) = found_fork_point {
-            let top_a_commits = a_loader.get_all_above(&a_fork.commit.id.hash)
+            let top_a_commits = a_loader.get_all_above::<C>(&a_fork.commit.id.hash)
                 .ok_or(ioerr!("Found a fork point {}, but failed to find commits above it?", a_fork.commit.id.short()))?;
             let successful_topbase = SuccessfulTopbaseResult {
                 top_commits: top_a_commits,
                 top_right_commits: get_rewind_commits_from_loader(&mut b_loader, &b_fork.commit.id.hash, should_rewind),
-                fork_point: (a_fork.commit, b_fork.commit),
+                fork_point: (a_fork.into(), b_fork.into()),
             };
             return Ok(Some(successful_topbase));
         }
@@ -780,13 +795,13 @@ pub fn find_a_b_difference2_iterative_traversal<T: Default + From<RawBlobSummary
 /// not that much worse than the old way of doing it where
 /// you would just load the entirety of the B branch anyway.
 /// A good value of N would probably be around 500-1000.
-pub fn find_a_b_difference2(
+pub fn find_a_b_difference2<C: From<CommitWithBlobs>>(
     a_committish: &str, b_committish: &str,
     traverse_n_at_a_time: Option<usize>,
     // TODO: add traversal mode...
     hashing_mode: BlobHashingMode,
     should_rewind: bool,
-) -> io::Result<Option<SuccessfulTopbaseResult>> {
+) -> io::Result<Option<SuccessfulTopbaseResult<C>>> {
     if let Some(n) = traverse_n_at_a_time {
         // 0 is not a valid value of N
         if n == 0 {
@@ -794,13 +809,13 @@ pub fn find_a_b_difference2(
         }
 
         match hashing_mode {
-            BlobHashingMode::Full => find_a_b_difference2_iterative_traversal::<RawBlobSummary>(
+            BlobHashingMode::Full => find_a_b_difference2_iterative_traversal::<RawBlobSummary, C>(
                 a_committish, b_committish, n, should_rewind),
-            BlobHashingMode::WithoutPath => find_a_b_difference2_iterative_traversal::<RawBlobSummaryWithoutPath>(
+            BlobHashingMode::WithoutPath => find_a_b_difference2_iterative_traversal::<RawBlobSummaryWithoutPath, C>(
                 a_committish, b_committish, n, should_rewind),
-            BlobHashingMode::EndState => find_a_b_difference2_iterative_traversal::<RawBlobSummaryEndState>(
+            BlobHashingMode::EndState => find_a_b_difference2_iterative_traversal::<RawBlobSummaryEndState, C>(
                 a_committish, b_committish, n, should_rewind),
-            BlobHashingMode::EndStateWithoutPath => find_a_b_difference2_iterative_traversal::<RawBlobSummaryEndStateWithoutPath>(
+            BlobHashingMode::EndStateWithoutPath => find_a_b_difference2_iterative_traversal::<RawBlobSummaryEndStateWithoutPath, C>(
                 a_committish, b_committish, n, should_rewind),
         }
     } else {
@@ -808,10 +823,10 @@ pub fn find_a_b_difference2(
     }
 }
 
-pub fn simplest_topbase_inner<T: From<RawBlobSummary> + Eq + Hash>(
+pub fn simplest_topbase_inner<T: From<RawBlobSummary> + Eq + Hash, C: From<CommitWithBlobs>>(
     a_committish: &str, b_committish: &str,
     should_rewind: bool,
-) -> io::Result<Option<SuccessfulTopbaseResult>> {
+) -> io::Result<Option<SuccessfulTopbaseResult<C>>> {
     let mut all_b_commits = vec![];
     git_helpers3::iterate_blob_log(b_committish, None, |c| {
         let b_blob_set: HashSet<T> = c.blobs.iter().cloned().map(|x| {
@@ -869,7 +884,7 @@ pub fn simplest_topbase_inner<T: From<RawBlobSummary> + Eq + Hash>(
                     // found the fork point, dont add this one
                     break;
                 }
-                out.push(b_commit.commit.clone());
+                out.push(b_commit.clone().into());
             }
             // TODO: technically this is not guaranteed that we reach
             // this fork point?
@@ -881,8 +896,8 @@ pub fn simplest_topbase_inner<T: From<RawBlobSummary> + Eq + Hash>(
             vec![]
         };
         let successful_topbase = SuccessfulTopbaseResult {
-            top_commits: top_a_commits.drain(..).map(|x| x.commit).collect(),
-            fork_point: (fork_a.commit, fork_b.commit.clone()),
+            top_commits: top_a_commits.drain(..).map(|x| x.into()).collect(),
+            fork_point: (fork_a.into(), fork_b.clone().into()),
             top_right_commits: b_above_fork,
         };
         Ok(Some(successful_topbase))
@@ -898,34 +913,34 @@ pub fn simplest_topbase_inner<T: From<RawBlobSummary> + Eq + Hash>(
 /// a commit that is a subset of one of the B branch's commits.
 /// see `BlobHashingMode` docs for information about which hashing mode to use.
 /// When in doubt, use Full for maximum correctness, or EndState for maximum flexibility.
-pub fn simplest_topbase(
+pub fn simplest_topbase<C: From<CommitWithBlobs>>(
     a_committish: &str, b_committish: &str,
     hashing_mode: BlobHashingMode,
-) -> io::Result<Option<SuccessfulTopbaseResult>> {
+) -> io::Result<Option<SuccessfulTopbaseResult<C>>> {
     match hashing_mode {
-        BlobHashingMode::Full => simplest_topbase_inner::<RawBlobSummary>(
+        BlobHashingMode::Full => simplest_topbase_inner::<RawBlobSummary, C>(
             a_committish, b_committish, false),
-        BlobHashingMode::WithoutPath => simplest_topbase_inner::<RawBlobSummaryWithoutPath>(
+        BlobHashingMode::WithoutPath => simplest_topbase_inner::<RawBlobSummaryWithoutPath, C>(
             a_committish, b_committish, false),
-        BlobHashingMode::EndState => simplest_topbase_inner::<RawBlobSummaryEndState>(
+        BlobHashingMode::EndState => simplest_topbase_inner::<RawBlobSummaryEndState, C>(
             a_committish, b_committish, false),
-        BlobHashingMode::EndStateWithoutPath => simplest_topbase_inner::<RawBlobSummaryEndStateWithoutPath>(
+        BlobHashingMode::EndStateWithoutPath => simplest_topbase_inner::<RawBlobSummaryEndStateWithoutPath, C>(
             a_committish, b_committish, false),
     }
 }
 
-pub fn rewind_topbase(
+pub fn rewind_topbase<C: From<CommitWithBlobs>>(
     a_committish: &str, b_committish: &str,
     hashing_mode: BlobHashingMode,
-) -> io::Result<Option<SuccessfulTopbaseResult>> {
+) -> io::Result<Option<SuccessfulTopbaseResult<C>>> {
     match hashing_mode {
-        BlobHashingMode::Full => simplest_topbase_inner::<RawBlobSummary>(
+        BlobHashingMode::Full => simplest_topbase_inner::<RawBlobSummary, C>(
             a_committish, b_committish, true),
-        BlobHashingMode::WithoutPath => simplest_topbase_inner::<RawBlobSummaryWithoutPath>(
+        BlobHashingMode::WithoutPath => simplest_topbase_inner::<RawBlobSummaryWithoutPath, C>(
             a_committish, b_committish, true),
-        BlobHashingMode::EndState => simplest_topbase_inner::<RawBlobSummaryEndState>(
+        BlobHashingMode::EndState => simplest_topbase_inner::<RawBlobSummaryEndState, C>(
             a_committish, b_committish, true),
-        BlobHashingMode::EndStateWithoutPath => simplest_topbase_inner::<RawBlobSummaryEndStateWithoutPath>(
+        BlobHashingMode::EndStateWithoutPath => simplest_topbase_inner::<RawBlobSummaryEndStateWithoutPath, C>(
             a_committish, b_committish, true),
     }
 }
