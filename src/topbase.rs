@@ -11,6 +11,27 @@ use super::exec_helpers;
 use super::die;
 use super::cli::MgtCommandTopbase;
 
+/// Determines how blob information should be hashed
+/// when conducting a topbase traversal. The default
+/// is Full, which is the strictest hashing mode which contains
+/// the entire information about the blob. The slightly
+/// faster, and sometimes desired mode would be WithoutPath because
+/// it considers two blobs the same if everything matches except the path
+/// component. A niche hashing mode is
+/// EndState: only hash the end state of the blob, ie:
+/// if a blob started with file mode A and changed to file mode B,
+/// we don't care about the fact it changed from A, we only care that
+/// it is currently at B. This needs to be treated carefully in regards
+/// to deletions because a deletion SHA goes from X to 000000, and all
+/// zeros is of course not unique, and therefore cannot be compared easily.
+/// the solution for this is to use the source SHA for deletes
+pub enum BlobHashingMode {
+    Full,
+    WithoutPath,
+    EndState,
+    EndStateWithoutPath,
+}
+
 /// remember, the 'upstream' is the base branch
 /// because its the branch that is going to receive commits (if any)
 /// and the 'current' branch is the top branch. by default the 'current'
@@ -39,11 +60,13 @@ pub fn topbase(
     };
 
     // TODO: make this a cli option:
+    let hashing_mode = BlobHashingMode::Full;
+    // TODO: make this a cli option:
     let traverse_at_a_time = 500;
     let current_commits_not_in_upstream = find_a_b_difference2(
         &current_branch, &upstream_branch,
         Some(traverse_at_a_time),
-        true).map_err(|e| e.to_string())?;
+        hashing_mode).map_err(|e| e.to_string())?;
     let num_commits_to_take = if let Some(valid_topbase) = current_commits_not_in_upstream {
         let mut num_used = 0;
         for c in &valid_topbase.top_commits {
@@ -215,6 +238,7 @@ pub enum BlobCheckValue {
     TakePrev,
 }
 use BlobCheckValue::*;
+use git_helpers3::{RawBlobSummaryEndStateWithoutPath, RawBlobSummaryEndState};
 pub struct BlobCheck<'a> {
     pub mode_prev: &'a str,
     pub mode_next: &'a str,
@@ -739,21 +763,26 @@ pub fn find_a_b_difference2(
     a_committish: &str, b_committish: &str,
     traverse_n_at_a_time: Option<usize>,
     // TODO: add traversal mode...
-    consider_paths: bool,
+    hashing_mode: BlobHashingMode,
 ) -> io::Result<Option<SuccessfulTopbaseResult>> {
     if let Some(n) = traverse_n_at_a_time {
         // 0 is not a valid value of N
         if n == 0 {
-            return simplest_topbase(a_committish, b_committish, consider_paths);
+            return simplest_topbase(a_committish, b_committish, hashing_mode);
         }
 
-        if consider_paths {
-            find_a_b_difference2_iterative_traversal::<RawBlobSummary>(a_committish, b_committish, n)
-        } else {
-            find_a_b_difference2_iterative_traversal::<RawBlobSummaryWithoutPath>(a_committish, b_committish, n)
+        match hashing_mode {
+            BlobHashingMode::Full => find_a_b_difference2_iterative_traversal::<RawBlobSummary>(
+                a_committish, b_committish, n),
+            BlobHashingMode::WithoutPath => find_a_b_difference2_iterative_traversal::<RawBlobSummaryWithoutPath>(
+                a_committish, b_committish, n),
+            BlobHashingMode::EndState => find_a_b_difference2_iterative_traversal::<RawBlobSummaryEndState>(
+                a_committish, b_committish, n),
+            BlobHashingMode::EndStateWithoutPath => find_a_b_difference2_iterative_traversal::<RawBlobSummaryEndStateWithoutPath>(
+                a_committish, b_committish, n),
         }
     } else {
-        simplest_topbase(a_committish, b_committish, consider_paths)
+        simplest_topbase(a_committish, b_committish, hashing_mode)
     }
 }
 
@@ -823,16 +852,21 @@ pub fn simplest_topbase_inner<T: From<RawBlobSummary> + Eq + Hash>(
 /// of B branch into memory, then iterate
 /// over the A branch, and stop once we find
 /// a commit that is a subset of one of the B branch's commits.
-/// pass true if you want to consider paths when comparing blobs
-/// or false if you want to make this a bit faster (but possibly slightly less correct)
+/// see `BlobHashingMode` docs for information about which hashing mode to use.
+/// When in doubt, use Full for maximum correctness, or EndState for maximum flexibility.
 pub fn simplest_topbase(
     a_committish: &str, b_committish: &str,
-    consider_paths: bool,
+    hashing_mode: BlobHashingMode,
 ) -> io::Result<Option<SuccessfulTopbaseResult>> {
-    if consider_paths {
-        simplest_topbase_inner::<RawBlobSummary>(a_committish, b_committish)
-    } else {
-        simplest_topbase_inner::<RawBlobSummaryWithoutPath>(a_committish, b_committish)
+    match hashing_mode {
+        BlobHashingMode::Full => simplest_topbase_inner::<RawBlobSummary>(
+            a_committish, b_committish),
+        BlobHashingMode::WithoutPath => simplest_topbase_inner::<RawBlobSummaryWithoutPath>(
+            a_committish, b_committish),
+        BlobHashingMode::EndState => simplest_topbase_inner::<RawBlobSummaryEndState>(
+            a_committish, b_committish),
+        BlobHashingMode::EndStateWithoutPath => simplest_topbase_inner::<RawBlobSummaryEndStateWithoutPath>(
+            a_committish, b_committish),
     }
 }
 

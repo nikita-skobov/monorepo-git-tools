@@ -5,6 +5,7 @@ use terminal_size::{Width, terminal_size};
 use super::cli::MgtCommandDifflog;
 use super::topbase::find_a_b_difference2;
 use super::git_helpers3::Commit;
+use crate::topbase::BlobHashingMode;
 
 pub fn format_right_string(
     commit: &str,
@@ -166,9 +167,11 @@ pub fn run_actual(cmd: &mut MgtCommandDifflog) -> io::Result<()> {
     };
 
     // TODO: make this a cli option
+    let hashing_mode = BlobHashingMode::Full;
+    // TODO: make this a cli option
     let traverse_at_a_time = 500;
     let topbase_res = find_a_b_difference2(
-        branch_left, branch_right, Some(traverse_at_a_time), true)?;
+        branch_left, branch_right, Some(traverse_at_a_time), hashing_mode)?;
     let successful_topbase = match topbase_res {
         Some(s) => s,
         None => {

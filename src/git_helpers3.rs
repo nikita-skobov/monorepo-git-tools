@@ -41,7 +41,7 @@ pub struct CommitWithBlobs {
 }
 
 /// see: https://www.git-scm.com/docs/git-diff
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Eq, Hash)]
 pub enum DiffStatus {
     Added,
     Copied,
@@ -51,6 +51,12 @@ pub enum DiffStatus {
     TypeChanged,
     Unmerged,
     Unknown,
+}
+
+impl Default for DiffStatus {
+    fn default() -> Self {
+        DiffStatus::Unknown
+    }
 }
 
 impl FromStr for DiffStatus {
@@ -73,7 +79,7 @@ impl FromStr for DiffStatus {
 }
 
 /// see: https://stackoverflow.com/questions/737673/how-to-read-the-mode-field-of-git-ls-trees-output
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Eq, Hash)]
 pub enum FileMode {
     Empty,
     Directory,
@@ -86,6 +92,12 @@ pub enum FileMode {
     // if the above are all of the valid file modes,
     // so in case we cant parse it, we will say its unknown...
     Unknown,
+}
+
+impl Default for FileMode {
+    fn default() -> Self {
+        FileMode::Unknown
+    }
 }
 
 impl FromStr for FileMode {
@@ -229,12 +241,54 @@ pub struct RawBlobSummaryWithoutPath {
     pub dest_sha: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub struct RawBlobSummaryEndState {
+    pub sha: u64,
+    pub file_mode: FileMode,
+    pub status: DiffStatus,
+    pub path_str: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub struct RawBlobSummaryEndStateWithoutPath {
+    pub sha: u64,
+    pub file_mode: FileMode,
+    pub status: DiffStatus,
+}
+
 impl From<RawBlobSummary> for RawBlobSummaryWithoutPath {
     fn from(orig: RawBlobSummary) -> Self {
         RawBlobSummaryWithoutPath {
             src_dest_mode_and_status: orig.src_dest_mode_and_status,
             src_sha: orig.src_sha,
             dest_sha: orig.dest_sha,
+        }
+    }
+}
+
+impl From<RawBlobSummary> for RawBlobSummaryEndState {
+    fn from(orig: RawBlobSummary) -> Self {
+        let (status, src_mode, dest_mode) = orig.src_dest_mode_and_status.into();
+        let (use_mode, use_sha) = match status {
+            DiffStatus::Deleted => (src_mode, orig.src_sha),
+            _ => (dest_mode, orig.dest_sha),
+        };
+        RawBlobSummaryEndState {
+            status,
+            sha: use_sha,
+            file_mode: use_mode,
+            path_str: orig.path_str,
+        }
+    }
+}
+
+impl From<RawBlobSummary> for RawBlobSummaryEndStateWithoutPath {
+    fn from(orig: RawBlobSummary) -> Self {
+        let orig: RawBlobSummaryEndState = orig.into();
+        RawBlobSummaryEndStateWithoutPath {
+            sha: orig.sha,
+            file_mode: orig.file_mode,
+            status: orig.status,
         }
     }
 }
