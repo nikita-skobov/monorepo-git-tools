@@ -6,7 +6,7 @@ use super::topbase::ABTraversalMode;
 use super::cli::MgtCommandDifflog;
 use super::topbase::find_a_b_difference2;
 use super::git_helpers3::Commit;
-use crate::topbase::BlobHashingMode;
+use crate::topbase::{NopCB, BlobHashingMode};
 
 pub fn format_right_string(
     commit: &str,
@@ -180,8 +180,8 @@ pub fn run_actual(cmd: &mut MgtCommandDifflog) -> io::Result<()> {
     let hashing_mode = BlobHashingMode::Full;
     // TODO: make this a cli option
     let traverse_at_a_time = 500;
-    let topbase_res = find_a_b_difference2(
-        branch_left, branch_right, Some(traverse_at_a_time), hashing_mode, should_rewind)?;
+    let topbase_res = find_a_b_difference2::<_, NopCB>(
+        branch_left, branch_right, Some(traverse_at_a_time), hashing_mode, should_rewind, None)?;
     let successful_topbase = match topbase_res {
         Some(s) => s,
         None => {

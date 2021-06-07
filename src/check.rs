@@ -9,7 +9,7 @@ use super::topbase;
 use super::repo_file;
 use super::cli::MgtCommandCheck;
 use super::core::get_all_repo_files;
-use git_helpers3::CommitWithBlobs;
+use git_helpers3::{RawBlobSummary, CommitWithBlobs};
 
 pub struct Checker<'a> {
     upstream_branch: String,
@@ -370,12 +370,22 @@ fn check_for_updates(
     let traverse_at_a_time = 500;
     let mut out_ids = vec![];
     let mut out_str = vec![];
-    let successful_topbase = match topbase::find_a_b_difference2::<CommitWithBlobs>(
-        a_branch, b_branch, Some(traverse_at_a_time), hashing_mode, should_rewind)
+    let should_use_blob_cb = |c: &mut RawBlobSummary, b: &str| {
+        let this_is_a_remote_blob = if current_is_remote {
+            b == current_branch
+        } else {
+            b == upstream_branch
+        };
+        blob_path_applies_to_repo_file(&c.path_str, repo_file, this_is_a_remote_blob)
+    };
+    let successful_topbase = match topbase::find_a_b_difference2::<CommitWithBlobs, _>(
+        a_branch, b_branch, Some(traverse_at_a_time), hashing_mode, should_rewind, Some(should_use_blob_cb))
     {
         Ok(s) => if let Some(t) = s { t } else { return (out_ids, out_str) },
         Err(_) => return (out_ids, out_str),
     };
+    // TODO: failure to find a fork point returns (vec![], vec![])
+    // which we interpret as an "up-to-date" case above, which is not correct
 
     // if we should rewind, that means we expect the commits that upstream
     // wants are on the 'right' side (ie: current branch is the B branch,
