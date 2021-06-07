@@ -171,7 +171,7 @@ pub fn run_actual(cmd: &mut MgtCommandDifflog) -> io::Result<()> {
     // TODO: make this a cli option
     let traverse_at_a_time = 500;
     let topbase_res = find_a_b_difference2(
-        branch_left, branch_right, Some(traverse_at_a_time), hashing_mode)?;
+        branch_left, branch_right, Some(traverse_at_a_time), hashing_mode, false)?;
     let successful_topbase = match topbase_res {
         Some(s) => s,
         None => {
