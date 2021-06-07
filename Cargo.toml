@@ -8,6 +8,7 @@ edition = "2018"
 
 
 [dependencies]
+terminal_size = { git = "https://github.com/eminence/terminal-size" }
 toml =  { version = "0.5.7", features = ["preserve_order"] }
 git-url-parse = "0.3.0"
 die = { path="die" }
