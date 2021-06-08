@@ -10,7 +10,7 @@ use crate::{ioerr, topbase, check::blob_path_applies_to_repo_file, split_out::ge
 use git_helpers3::{RawBlobSummary, CommitWithBlobs};
 use topbase::SuccessfulTopbaseResult;
 use repo_file::RepoFile;
-use std::{fmt::Display, time::{Duration, SystemTime}};
+use std::{fmt::Display, time::{Duration, SystemTime}, process::Stdio};
 use gitfilter::filter::FilterRule;
 
 /// What kind of sync are we doing? There are 5 possible
@@ -174,6 +174,100 @@ pub fn try_rebase_onto(
     Ok(())
 }
 
+pub fn try_get_output_branch_name(
+    random_branch: &str,
+    starting_branch_name: &str,
+) -> io::Result<String> {
+    let message = "Enter the desired branch name to be created on the remote repo (hit Enter to use an auto-generated branch name)";
+    let interact_choice = interact::InteractChoices::choose_word(&message);
+    let push_branch_name = interact::interact_word(interact_choice)
+        .map_err(|err| {
+            // failed to interact, but instead of just exiting here,
+            // we still need to cleanup.
+            if let Err(e) = try_checkout_back_to_starting_branch(starting_branch_name, &err) {
+                return e;
+            }
+            if let Err(e) = try_delete_branch(&random_branch, &err) {
+                return e;
+            }
+            err
+        })?;
+    let push_branch_name = push_branch_name.trim_end().trim_start();
+    let push_branch_name = if push_branch_name.is_empty() {
+        // if its empty, user hit enter, and then we use the default
+        // which is the auto generated branch name
+        &random_branch
+    } else { push_branch_name };
+
+    Ok(push_branch_name.to_string())
+}
+
+/// NOTE: obviously pushing to a remote repo requires authentication.
+/// I don't want to add auth logic to mgt (at least for now), but I think
+/// the following is a good solution:
+/// we simply inherit the stdin of the git push command.
+/// If the user is using a regular https git url, then chances
+/// are that theyll be asked for a user/password, and they just enter
+/// it into their terminal and it works! However, for syncing many
+/// repos this can be annoying to do each time... mgt WILL NOT try
+/// to make that easier on the user by storing/caching their credentials...
+/// git already has that capability, so if the user wants push to not
+/// ask for their credentials each time, they should use git credential store
+/// or git credential cache, or better yet, use ssh-agent with an ssh key
+/// that they authorize before running mgt.
+pub fn try_push_out(
+    remote_url: &str,
+    random_branch: &str,
+    push_branch: &str,
+    starting_branch_name: &str,
+) -> io::Result<()> {
+    let push_branch_ref = format!("{}:{}", random_branch, push_branch);
+    let exec_args = [
+        "git", "push", remote_url, &push_branch_ref
+    ];
+
+    let child = exechelper::spawn_with_env_ex(
+        &exec_args, &[], &[], Some(Stdio::inherit()),
+        Some(Stdio::piped()), Some(Stdio::piped())).map_err(|err| {
+            // failed to start child, but instead of just exiting here,
+            // we still need to cleanup.
+            if let Err(e) = try_checkout_back_to_starting_branch(starting_branch_name, &err) {
+                return e;
+            }
+            if let Err(e) = try_delete_branch(&random_branch, &err) {
+                return e;
+            }
+            err
+        })?;
+    let output = child.wait_with_output().map_err(|err| {
+        // failed to run command successfully to the end
+        if let Err(e) = try_checkout_back_to_starting_branch(starting_branch_name, &err) {
+            return e;
+        }
+        if let Err(e) = try_delete_branch(&random_branch, &err) {
+            return e;
+        }
+        err
+    })?;
+    let out_err = if ! output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        println!("git push stdout err:\n{}", stdout);
+        println!("git push stderr err:\n{}", stderr);
+        let err = format!("Failed to run git push command:\n{}", stderr);
+        Some(err)
+    } else { None };
+    if let Some(err) = out_err {
+        // failed to run command successfully to the end
+        try_checkout_back_to_starting_branch(starting_branch_name, &err)?;
+        try_delete_branch(&random_branch, &err)?;
+        return ioerre!("{}", err);
+    }
+
+    // At this point we have made a successful git push
+    Ok(())
+}
+
 // TODO: do these :)
 // AKA: pull remote changes into local
 pub fn try_sync_in(
@@ -190,6 +284,7 @@ pub fn try_sync_in(
 // in our FETCH_HEAD
 pub fn try_sync_out(
     repo_file: &RepoFile,
+    repo_remote_url: &str,
     starting_branch_name: &str,
     fork_point_remote: &str,
     num_commits_to_push: usize,
@@ -212,8 +307,11 @@ pub fn try_sync_out(
     println!("- Rebasing onto calculated fork point");
     try_rebase_onto(fork_point_remote, &random_branch, num_commits_to_push)?;
 
+    let push_branch_name = try_get_output_branch_name(&random_branch, starting_branch_name)?;
+    println!("- git push {} {}:{}", repo_remote_url, random_branch, push_branch_name);
+    try_push_out(repo_remote_url, &random_branch, &push_branch_name, starting_branch_name)?;
+
     // TODO:
-    // - git push repo_file.remote <random_branch>:<remote-branch-name>
     // - checkout back to starting branch
     // - delete temporary random branch
 
@@ -311,7 +409,7 @@ pub fn handle_sync2(
             let remote_fork = &topbase_success.fork_point.1.commit.id.hash;
             let num_to_take = topbase_success.top_commits.len();
             try_sync_out(
-                &repo_file, starting_branch_name, remote_fork, num_to_take
+                &repo_file, remote_url, starting_branch_name, remote_fork, num_to_take
             )
         }
 
