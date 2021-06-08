@@ -691,13 +691,22 @@ pub fn get_current_ref() -> Result<String, String> {
 }
 
 pub fn get_all_commits_from_ref(
-    refname: &str
+    refname: &str,
+    num_commits: Option<usize>,
 ) -> Result<Vec<Commit>, String> {
     // TODO: in the future might want more info than
     // just the hash and summary
-    let exec_args = [
+    let mut exec_args = vec![
         "git", "log", refname, "--format=%H [%p] %s",
     ];
+    let mut n_str = "".to_string();
+    if let Some(n) = num_commits {
+        n_str = n.to_string();
+    }
+    if ! n_str.is_empty() {
+        exec_args.push("-n");
+        exec_args.push(&n_str);
+    }
     let mut commits = vec![];
     let out_str = match exec_helpers::execute(&exec_args) {
         Err(e) => return Err(e.to_string()),
@@ -845,6 +854,51 @@ pub fn reset_stage() -> Result<String, String> {
     }
 }
 
+/// basically does:
+/// git rebase -i --onto onto from~<from_n> from
+/// and feeds in the interactive text to the standard input.
+/// git rebase interactive will read from the standard input
+/// instead of asking user's input. This lets you do
+/// git rebase --interactive programatically.
+/// the interactive_text should be a string with newlines
+/// where each line contains one of the possible commands
+/// for an interactive rebase, eg:
+/// ```
+/// let interactive_text = "pick a022bf message\nfixup bdb0452 other message";
+/// ```
+pub fn rebase_interactively_with_commits(
+    onto: &str,
+    from: &str,
+    from_n: usize,
+    interactive_text: &str,
+) -> Result<(), String> {
+    let from_n_str = format!("{}~{}", from, from_n);
+    let args = [
+        "git", "rebase", "-i",
+        "--onto", onto,
+        &from_n_str, from,
+    ];
+    let rebase_data_str = format!("echo \"{}\" >", interactive_text);
+
+    let err_msg = match exec_helpers::execute_with_env(
+        &args,
+        &["GIT_SEQUENCE_EDITOR"],
+        &[rebase_data_str.as_str()],
+    ) {
+        Err(e) => Some(format!("{}", e)),
+        Ok(o) => {
+            match o.status {
+                0 => None,
+                _ => Some(o.stderr.lines().next().unwrap().to_string()),
+            }
+        },
+    };
+    if let Some(e) = err_msg {
+        return Err(e);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -866,7 +920,7 @@ mod test {
     #[test]
     #[cfg_attr(not(feature = "gittests"), ignore)]
     fn get_all_commits_from_ref_works() {
-        let data = get_all_commits_from_ref("HEAD");
+        let data = get_all_commits_from_ref("HEAD", None);
         assert!(data.is_ok());
         let data = data.unwrap();
         // this only passes if the test is running from
