@@ -273,6 +273,7 @@ pub fn try_push_out(
 pub fn try_sync_in(
 
 ) -> io::Result<()> {
+    println!("Not implemented yet, skipping...");
     Ok(())
 }
 
@@ -335,6 +336,7 @@ pub fn try_sync_out(
 pub fn try_sync_in_then_out(
 
 ) -> io::Result<()> {
+    println!("Not implemented yet, skipping...");
     Ok(())
 }
 
@@ -412,9 +414,8 @@ pub fn handle_sync2(
         "push" => {
             let remote_fork = &topbase_success.fork_point.1.commit.id.hash;
             let num_to_take = topbase_success.top_commits.len();
-            try_sync_out(
-                &repo_file, remote_url, starting_branch_name, remote_fork, num_to_take
-            )
+            try_sync_out(&repo_file, remote_url,
+                starting_branch_name, remote_fork, num_to_take)
         }
 
         // this is pull --rebase then push:
