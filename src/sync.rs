@@ -6,9 +6,12 @@ use super::git_helpers3;
 use super::interact;
 use super::repo_file;
 use std::{io, path::PathBuf};
-use crate::{ioerr, topbase, check::blob_path_applies_to_repo_file};
+use crate::{ioerr, topbase, check::blob_path_applies_to_repo_file, split_out::generate_gitfilter_filterrules, ioerre};
 use git_helpers3::{RawBlobSummary, CommitWithBlobs};
 use topbase::SuccessfulTopbaseResult;
+use repo_file::RepoFile;
+use std::{fmt::Display, time::{Duration, SystemTime}};
+use gitfilter::filter::FilterRule;
 
 /// What kind of sync are we doing? There are 5 possible
 /// sync types I can think of:
@@ -48,16 +51,172 @@ pub fn get_all_repo_files_ex(list: &Vec<PathBuf>) -> Vec<PathBuf> {
     out_vec
 }
 
+pub fn make_random_branch_name(backup_number: usize) -> String {
+    let now = SystemTime::now();
+    match now.duration_since(SystemTime::UNIX_EPOCH) {
+        Err(_) => format!("mgt-tmp-branch-delete-later-{}", backup_number),
+        Ok(n) => {
+            format!("mgt-tmp-branch-delete-later-{}", n.as_secs())
+        }
+    }
+}
+
+pub fn try_checkout_back_to_starting_branch<E: Display>(
+    starting_branch_name: &str,
+    original_error: E,
+) -> io::Result<()> {
+    // cleanup operation?
+    // probably none? most likely this is a branch
+    // that already existed, so no need to
+    // do anything other than tell user, oops, we failed
+    // to make this branch...
+    // also should verify we are back on the starting branch:
+    let mut err_msg = format!("{}", original_error);
+    let current_branch = git_helpers3::get_current_ref();
+    let should_try_to_checkout_back = match current_branch {
+        Ok(bn) => bn != starting_branch_name,
+        Err(e) => {
+            err_msg = format!("{}\nALSO: while trying to ensure we are back on {}, failed to get current branch name because:\n{}\nTrying to checkout back to {} anyway", err_msg, starting_branch_name, e, starting_branch_name);
+            true
+        }
+    };
+    if should_try_to_checkout_back {
+        if let Err(e) = git_helpers3::checkout_branch(starting_branch_name, false) {
+            err_msg = format!("{}\nALSO: failed to checkout back to {} because:\n{}\nThis is probably a bug; please report this.", err_msg, starting_branch_name, e);
+        }
+    }
+
+    return ioerre!("{}", err_msg);
+}
+
+pub fn try_checkout_new_branch(
+    branch: &str,
+    starting_branch_name: &str
+) -> io::Result<()> {
+    let make_new = true;
+    let branch_made = git_helpers3::checkout_branch(&branch, make_new);
+    if let Err(e) = branch_made {
+        let err_msg = format!("Failed to create a temporary branch {} because:\n{}\nDoes this branch already exit maybe?", branch, e);
+        return try_checkout_back_to_starting_branch(starting_branch_name, err_msg);
+    }
+
+    Ok(())
+}
+
+pub fn try_delete_branch<E: Display>(
+    branch: &str,
+    original_error: E,
+) -> io::Result<()> {
+    if let Err(e) = git_helpers3::delete_branch(branch) {
+        return ioerre!("{}\nALSO: Failed to delete branch {} when trying to recover because\n{}", original_error, branch, e);
+    }
+
+    Ok(())
+}
+
+pub fn try_perform_gitfilter(
+    branch: String,
+    starting_branch_name: &str,
+    filter_rules: Vec<FilterRule>,
+) -> io::Result<String> {
+    let is_verbose = false;
+    let is_dry_run = false;
+    let filtered = core::perform_gitfilter_res(
+        filter_rules,
+        branch.clone(),
+        is_dry_run,
+        is_verbose,
+    );
+    if let Err(e) = filtered {
+        // cleanup operation?
+        // TODO: tricky one. probably need
+        // to check the state of this branch. Is it
+        // possible there was some conflict and we have a big
+        // git stage set up? in that case, wed need to
+        // clear the stage index, and then go back to the
+        // starting branch... could be several things wrong here.
+        let err_msg = format!("Failed to perform gitfilter on branch {} because\n{}", branch, e);
+        let err_msg = if let Err(e) = try_checkout_back_to_starting_branch(starting_branch_name, &err_msg) {
+            // failed to go back to starting branch
+            // TODO: need to do anything else here?
+            return Err(e);
+        } else {
+            // succeeded in going back to our starting branch,
+            // now lets try to delete the temporary branch that
+            // we wanted to filter:
+            if let Err(e) = try_delete_branch(&branch, &err_msg) {
+                return Err(e);
+            }
+            err_msg
+        };
+
+
+        return ioerre!("{}", err_msg);
+    }
+    Ok(branch)
+}
+
+pub fn try_rebase_onto(
+    onto_fork_point: &str,
+    top_name: &str,
+    top_num_commits: usize,
+) -> io::Result<()> {
+    let take_commits = format!("{}~{}", top_name, top_num_commits);
+    let exec_args = [
+        "git", "rebase", "--onto", onto_fork_point, &take_commits, top_name
+    ];
+
+    // TODO: not a safe func... fix the unwrap in there:
+    if let Some(err) = exechelper::executed_with_error(&exec_args) {
+        return ioerre!("Failed to rebase top {} commits of {} onto {} because\n{}Leaving you with a git interactive rebase in progress. Go back with 'git rebase --abort', or otherwise rebase manually and then finish with 'git rebase --continue'", top_num_commits, top_name, onto_fork_point, err);
+    }
+
+    Ok(())
+}
+
 // TODO: do these :)
+// AKA: pull remote changes into local
 pub fn try_sync_in(
 
 ) -> io::Result<()> {
     Ok(())
 }
 
+/// AKA: push local changes to remote
+// split-out BUT DONT USE the topbase module
+// since we just did a fetch, and already ran an in-memory
+// topbase, we now know the fork point, so we can
+// just rebase onto that fork point thats currently
+// in our FETCH_HEAD
 pub fn try_sync_out(
-
+    repo_file: &RepoFile,
+    starting_branch_name: &str,
+    fork_point_remote: &str,
+    num_commits_to_push: usize,
 ) -> io::Result<()> {
+    let is_verbose = false;
+    let is_dry_run = false;
+    let filter_rules = generate_gitfilter_filterrules(&repo_file, is_verbose);
+    let random_number = match repo_file.remote_repo {
+        Some(ref s) => s.len(),
+        None => 123531421321, // very secure, got it from some .gov website
+    };
+    println!("- Making temporary branch");
+    let random_branch = make_random_branch_name(random_number);
+    try_checkout_new_branch(&random_branch, starting_branch_name)?;
+
+    println!("- Filtering branch according to repo file");
+    let random_branch = try_perform_gitfilter(
+        random_branch, starting_branch_name, filter_rules)?;
+
+    println!("- Rebasing onto calculated fork point");
+    try_rebase_onto(fork_point_remote, &random_branch, num_commits_to_push)?;
+
+    // TODO:
+    // - git push repo_file.remote <random_branch>:<remote-branch-name>
+    // - checkout back to starting branch
+    // - delete temporary random branch
+
     Ok(())
 }
 
@@ -81,8 +240,10 @@ pub fn handle_sync2(
     cmd: &MgtCommandSync,
     remote_url: &str,
     repo_file_path: &PathBuf,
+    repo_file: &RepoFile,
     sync_type: SyncType,
     topbase_success: SuccessfulTopbaseResult<CommitWithBlobs>,
+    starting_branch_name: &str,
 ) -> io::Result<()> {
     let (left_ahead, right_ahead) = match sync_type {
         SyncType::LocalAhead |
@@ -146,7 +307,13 @@ pub fn handle_sync2(
         "skip" => return Ok(()),
         "exit" => std::process::exit(0),
         "pull" => try_sync_in(),
-        "push" => try_sync_out(),
+        "push" => {
+            let remote_fork = &topbase_success.fork_point.1.commit.id.hash;
+            let num_to_take = topbase_success.top_commits.len();
+            try_sync_out(
+                &repo_file, starting_branch_name, remote_fork, num_to_take
+            )
+        }
 
         // this is pull --rebase then push:
         _ => try_sync_in_then_out(),
@@ -157,11 +324,13 @@ pub fn handle_sync(
     cmd: &MgtCommandSync,
     remote_url: &str,
     repo_file_path: &PathBuf,
+    repo_file: &RepoFile,
     sync_type: SyncType,
     topbase_opt: Option<SuccessfulTopbaseResult<CommitWithBlobs>>,
+    starting_branch_name: &str,
 ) -> io::Result<()> {
     match topbase_opt {
-        Some(s) => handle_sync2(cmd, remote_url, repo_file_path, sync_type, s),
+        Some(s) => handle_sync2(cmd, remote_url, repo_file_path, repo_file, sync_type, s, starting_branch_name),
         None => {
             // TODO: come up with something better than just saying this
             println!("Branches are disjoint. cannot sync");
@@ -228,7 +397,7 @@ pub fn sync_repo_file(
             }
         }
     };
-    handle_sync(cmd, repo_url, repo_file_path, sync_type, topbase_ok)
+    handle_sync(cmd, repo_url, repo_file_path, &repo_file, sync_type, topbase_ok, starting_branch_name)
 }
 
 pub fn canonicalize_all_repo_file_paths(paths: &Vec<PathBuf>) -> Vec<PathBuf> {
