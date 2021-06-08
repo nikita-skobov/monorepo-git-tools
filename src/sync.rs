@@ -290,7 +290,6 @@ pub fn try_sync_out(
     num_commits_to_push: usize,
 ) -> io::Result<()> {
     let is_verbose = false;
-    let is_dry_run = false;
     let filter_rules = generate_gitfilter_filterrules(&repo_file, is_verbose);
     let random_number = match repo_file.remote_repo {
         Some(ref s) => s.len(),
@@ -311,9 +310,14 @@ pub fn try_sync_out(
     println!("- git push {} {}:{}", repo_remote_url, random_branch, push_branch_name);
     try_push_out(repo_remote_url, &random_branch, &push_branch_name, starting_branch_name)?;
 
-    // TODO:
-    // - checkout back to starting branch
-    // - delete temporary random branch
+    println!("- Successfully git pushed. Changing back to original branch: {}", starting_branch_name);
+    if let Err(e) = git_helpers3::checkout_branch(starting_branch_name, false) {
+        return ioerre!("failed to checkout back to {} because:\n{}\nThis is probably a bug; please report this.", starting_branch_name, e);
+    }
+    println!("- Deleting temporary branch");
+    if let Err(e) = git_helpers3::delete_branch(&random_branch) {
+        return ioerre!("failed to delete branch {} because:\n{}\nThis is probably a bug; please report this.", &random_branch, e);
+    }
 
     Ok(())
 }
