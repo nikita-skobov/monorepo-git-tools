@@ -547,11 +547,6 @@ pub fn handle_sync2(
         SyncType::LocalAhead |
         SyncType::RemoteAhead |
         SyncType::Diverged => {
-            // TODO: technically here if we have a local ahead sync type,
-            // we are still looking at the right commits which could contain
-            // merge commits for example, and to the user this would look like
-            // a divergence event when it doesnt have to be...
-            // at what point should merge commits should be filtered from user?
             (&topbase_success.top_commits, &topbase_success.top_right_commits)
         }
         SyncType::UpToDate => {
@@ -565,20 +560,42 @@ pub fn handle_sync2(
     let mut choices = vec![];
     choices.push("exit");
     choices.push("skip");
-    let can_push = ! left_ahead.is_empty();
-    let can_pull = ! right_ahead.is_empty();
+    let mut can_push = ! left_ahead.is_empty();
+    let mut can_pull = ! right_ahead.is_empty();
     if can_push {
-        choices.push("push");
-        println!("\nYou can push:");
+        let mut has_non_merge = false;
+        let mut out_str = "\nYou can push:".to_string();
         for commit in left_ahead {
-            println!("  {} {}", commit.commit.id.short(), commit.commit.summary);
+            if ! commit.commit.is_merge {
+                has_non_merge = true;
+                out_str = format!("{}\n  {} {}", out_str, commit.commit.id.short(), commit.commit.summary);
+            }
+        }
+        if has_non_merge {
+            choices.push("push");
+            println!("{}", out_str);
+        } else {
+            // if there are ONLY merge commits, then say
+            // that we cannot push:
+            can_push = false;
         }
     }
     if can_pull {
-        choices.push("pull");
-        println!("\nYou can pull:");
+        let mut has_non_merge = false;
+        let mut out_str = "\nYou can pull:".to_string();
         for commit in right_ahead {
-            println!("  {} {}", commit.commit.id.short(), commit.commit.summary);
+            if ! commit.commit.is_merge {
+                has_non_merge = true;
+                out_str = format!("{}\n  {} {}", out_str, commit.commit.id.short(), commit.commit.summary);
+            }
+        }
+        if has_non_merge {
+            choices.push("pull");
+            println!("{}", out_str);
+        } else {
+            // if ONLY merge commits, then say
+            // we cannot pull
+            can_pull = false;
         }
     }
     if can_pull && can_push {
@@ -696,9 +713,31 @@ pub fn sync_repo_file(
     let topbase_ok = topbase::find_a_b_difference2::<CommitWithBlobs, _>(
         local_branch, remote_branch, Some(traverse_at_a_time),
         hashing_mode, should_rewind, Some(should_use_blob_cb))?;
-    let sync_type = match topbase_ok {
-        None => SyncType::Disjoint,
-        Some(ref o) => {
+    let (sync_type, topbase_ok) = match topbase_ok {
+        None => (SyncType::Disjoint, None),
+        Some(o) => {
+            // TODO: still not sure if this is how I want to handle
+            // merge commit filtering. This is the simplest solution:
+            // just dont allow merge commits, and dont show them to the
+            // user. Because if we allow a merge commit, then when we
+            // do an interactive rebase after filtering, the merge commit
+            // will throw off the interactive rebase unless we pass an option
+            // that allows them, but what should the desired strategy be?
+            // should merge commits just become empty commits after filtering?
+            // maybe add an interaction question here to ask the user?
+            // i think simply ignoring merge commits is a sensible default.
+            // This was originally done by REMOVING all merge commits
+            // from this topbase result, but that is not safe because
+            // then when we call `try_get_new_commits_after_filter` we are
+            // relying on the number of commits being the same, but if
+            // we remove merge commits, then that means we could be trying
+            // to rebase more commits than we originally wanted to.
+            // The solution is to keep the merge commits in the topbase
+            // result, BUT DO NOT show it to the user so it doesn't cause
+            // any confusion.
+
+            // TODO: can a fork point be a merge commit? I think not, but
+            // that could be an issue if that is ever possible.
             let local_empty = o.top_commits.is_empty();
             let remote_empty = o.top_right_commits.is_empty();
             // TODO: handle merge commit filtering here.
@@ -707,12 +746,13 @@ pub fn sync_repo_file(
             // otherwise, we have to check the bottom case here
             // and if one of the branches only contains merge commits,
             // we pretend they dont exist.
-            match (local_empty, remote_empty) {
+            let sync_type = match (local_empty, remote_empty) {
                 (true, true) => SyncType::UpToDate,
                 (true, false) => SyncType::RemoteAhead,
                 (false, true) => SyncType::LocalAhead,
                 (false, false) => SyncType::Diverged,
-            }
+            };
+            (sync_type, Some(o))
         }
     };
     handle_sync(cmd, repo_url, repo_file_path, &repo_file, sync_type, topbase_ok, starting_branch_name)
