@@ -281,11 +281,20 @@ pub fn try_push_out(
         let err = format!("Failed to run git push command:\n{}", stderr);
         Some(err)
     } else { None };
-    if let Some(err) = out_err {
+    if let Some(orig_err) = out_err {
         // failed to run command successfully to the end
-        try_checkout_back_to_starting_branch(starting_branch_name, &err)?;
-        try_delete_branch(&random_branch, &err)?;
-        return ioerre!("{}", err);
+        let err = try_checkout_back_to_starting_branch(starting_branch_name, &orig_err)
+            .map_err(|e| {
+                match try_delete_branch(&random_branch, &e) {
+                    Ok(_) => e.to_string(),
+                    Err(e2) => e2.to_string(),
+                }
+            });
+        if let Err(e) = err {
+            return ioerre!("{}", e);
+        } else {
+            return ioerre!("{}", orig_err);
+        }
     }
 
     // At this point we have made a successful git push
