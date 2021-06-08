@@ -81,6 +81,7 @@ pub fn try_checkout_back_to_starting_branch<E: Display>(
         }
     };
     if should_try_to_checkout_back {
+        eprintln!("- Switching back to {}", starting_branch_name);
         if let Err(e) = git_helpers3::checkout_branch(starting_branch_name, false) {
             err_msg = format!("{}\nALSO: failed to checkout back to {} because:\n{}\nThis is probably a bug; please report this.", err_msg, starting_branch_name, e);
         }
@@ -134,6 +135,7 @@ pub fn try_delete_branch<E: Display>(
     branch: &str,
     original_error: E,
 ) -> io::Result<()> {
+    eprintln!("- Deleting {}", branch);
     if let Err(e) = git_helpers3::delete_branch(branch) {
         return ioerre!("{}\nALSO: Failed to delete branch {} when trying to recover because\n{}", original_error, branch, e);
     }
@@ -275,10 +277,7 @@ pub fn try_push_out(
         err
     })?;
     let out_err = if ! output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        println!("git push stdout err:\n{}", stdout);
-        println!("git push stderr err:\n{}", stderr);
         let err = format!("Failed to run git push command:\n{}", stderr);
         Some(err)
     } else { None };
