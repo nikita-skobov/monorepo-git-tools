@@ -131,7 +131,7 @@ pub fn run_split_in_from_repo_file(
     println!("{}Success!", log_p);
 }
 
-fn generate_gitfilter_filterrules(
+pub fn generate_gitfilter_filterrules(
     repo_file: &RepoFile,
     _verbose: bool,
 ) -> gitfilter::filter::FilterRules {
