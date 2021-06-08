@@ -456,9 +456,25 @@ pub fn sync_repo_file(
         .ok_or(ioerr!("Failed to find a remote repo in the repo file: {:?}", repo_file_path))?;
     let repo_branch = repo_file.remote_branch.as_ref().unwrap_or(&default_branch);
 
+    // TODO: add a --no-interact mode which would override --ask-branches
+    let repo_branch = if cmd.ask_branches {
+        let mut desired_branch_choice = interact::InteractChoices::choose_word(
+            &format!("What remote branch would you like to fetch? (hit Enter to use {})", repo_branch));
+        let description = format!("About to fetch {}", repo_url);
+        desired_branch_choice.description = Some(description);
+        let desired_branch = interact::interact_word(desired_branch_choice)
+            .map_err(|e| ioerr!("Failed to get user's input for a desired remote branch\n{}", e))?;
+        let desired_branch = desired_branch.trim_start().trim_end();
+        if desired_branch.is_empty() {
+            repo_branch.to_string()
+        } else {
+            desired_branch.to_string()
+        }
+    } else { repo_branch.to_string() };
+
     let divider = "=".repeat(15);
     println!("\n{} Fetching {}:{} {}", divider, repo_url, repo_branch, divider);
-    git_helpers3::fetch_branch(repo_url, repo_branch).map_err(|e| ioerr!("{}", e))?;
+    git_helpers3::fetch_branch(repo_url, &repo_branch).map_err(|e| ioerr!("{}", e))?;
 
     // TODO: support sync from a different branch other than the one
     // we are currently on?

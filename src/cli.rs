@@ -140,6 +140,9 @@ pub struct MgtCommandSync {
 
     #[options(help = "when iterating the sync of multiple repo files, if a single one fails, do not sync the rest")]
     pub fail_fast: bool,
+
+    #[options(short = "b", help = "by default, we fetch the remote HEAD when looking for updates to sync. With --ask-branches you will be asked which remote branch you wish to fetch for each remote url we fetch")]
+    pub ask_branches: bool,
 }
 
 #[derive(Debug, Options)]
