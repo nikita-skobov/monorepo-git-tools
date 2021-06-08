@@ -433,7 +433,7 @@ pub fn try_sync_in(
     println!("- Rebasing onto calculated fork point");
     try_rebase_onto(fork_point_local, &random_branch,
         num_commits_to_pull, &rebase_interactive_string)?;
-    println!("- Successfully rebased");
+    println!("- Successfully rebased temporary branch");
 
     // TODO: what about cli arguments to not ask this:
     // eg: --always-merge or something
@@ -441,12 +441,15 @@ pub fn try_sync_in(
     if user_wants_to_merge {
         // to fast forward merge i believe we have to be
         // on the starting branch to do that...
+        println!("- Checking out back to {}", starting_branch_name);
         if let Err(e) = git_helpers3::checkout_branch(starting_branch_name, false) {
             return ioerre!("failed to checkout back to {} because:\n{}\nThis is probably a bug; please report this.", starting_branch_name, e);
         }
 
+        println!("- Fast-forward merging {}", starting_branch_name);
         try_fast_forward_merge(&random_branch, starting_branch_name)?;
         // if that succeeded, then we can delete the temporary branch
+        println!("- Successfully merged. Deleting temporary branch");
         git_helpers3::delete_branch(&random_branch).map_err(|e| ioerr!("{}", e))?;
         return Ok(());
     }
