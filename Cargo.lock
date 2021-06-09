@@ -163,7 +163,7 @@ checksum = "3728d817d99e5ac407411fa471ff9800a778d88a24685968b36824eaf4bee400"
 
 [[package]]
 name = "mgt"
-version = "4.5.0"
+version = "5.0.0"
 dependencies = [
  "die",
  "exechelper",
