@@ -259,3 +259,126 @@ function setup() {
     echo "$git_branches_after"
     [[ "$git_branches_before" == "$git_branches_after" ]]
 }
+
+# the following two test cases are about stash/pop
+# this first one checks if it works where we stash changes
+# that are unrelated to what we sync in. This is a trivial case
+# where we are pretty likely guaranteed that the sstash pop will succeed.
+# the next test after this one will test if the sync in can stash pop
+# when the stash is the same file (ie: conflict between the stash and what was
+# pulled in).
+@test 'sync in can stash the index changes and then pop afterwards (unrelated changes)' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    # fork point:
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "xyz" > xyz.txt && git add xyz.txt && git commit -m "xyz"
+    echo "REMOTE:"
+    echo "$(git log --oneline)"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+
+    include=[\"abc.txt\", \"xyz.txt\"]
+    "
+    echo "$repo_file_contents" > repo_file.rf
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    # this should be stashed because although its added, its not
+    # committed, so mgt should detect this as a dirty index
+    echo "qqq" > abc.txt && git add abc.txt
+    echo "LOCAL:"
+    echo "$(git log --oneline)"
+    git_branches_before="$(git branch)"
+    # we of course should not have the xyz commit yet
+    [[ "$(git log --oneline)" != *"xyz"* ]]
+
+    # this series of inputs should be:
+    # 1. stash changes
+    # 1. select pull
+    # 1. merge branch
+    interact="1\n1\n1\n"
+    echo -e "$interact" > interact.txt
+
+    run $PROGRAM_PATH sync repo_file.rf --max-interactive-attempts 1 < interact.txt
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ $output == *"You can pull"* ]]
+    [[ $output != *"You can push"* ]]
+
+    # because we merged, we should have the xyz commit now
+    [[ "$(git log --oneline)" == *"xyz"* ]]
+
+    echo "Git branches before:"
+    echo "$git_branches_before"
+    git_branches_after="$(git branch)"
+    echo "Git branches after:"
+    echo "$git_branches_after"
+    [[ "$git_branches_before" == "$git_branches_after" ]]
+
+    # now check the stash: we should have a qqq in our abc.txt file:
+    abc_contents="$(cat abc.txt)"
+    [[ "$abc_contents" == *"qqq"* ]]
+}
+
+@test 'sync in can stash the index changes and then pop afterwards (conflict changes)' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    # fork point:
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "xyz" > xyz.txt && git add xyz.txt && git commit -m "xyz"
+    echo "REMOTE:"
+    echo "$(git log --oneline)"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+
+    include=[\"abc.txt\", \"xyz.txt\"]
+    "
+    echo "$repo_file_contents" > repo_file.rf
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    # this should be stashed because although its added, its not
+    # committed, so mgt should detect this as a dirty index
+    # this should also cause a conflict at the end
+    # because it conflicts with the xyz.txt that we are pulling in
+    echo "qqq" > xyz.txt && git add xyz.txt
+    echo "LOCAL:"
+    echo "$(git log --oneline)"
+    git_branches_before="$(git branch)"
+    # we of course should not have the xyz commit yet
+    [[ "$(git log --oneline)" != *"xyz"* ]]
+
+    # this series of inputs should be:
+    # 1. stash changes
+    # 1. select pull
+    # 1. merge branch
+    interact="1\n1\n1\n"
+    echo -e "$interact" > interact.txt
+
+    run $PROGRAM_PATH sync repo_file.rf --max-interactive-attempts 1 < interact.txt
+    echo "$output"
+    [[ $status != "0" ]]
+    [[ $output == *"You can pull"* ]]
+    [[ $output != *"You can push"* ]]
+
+    # because we merged, we should have the xyz commit now
+    [[ "$(git log --oneline)" == *"xyz"* ]]
+
+    echo "Git branches before:"
+    echo "$git_branches_before"
+    git_branches_after="$(git branch)"
+    echo "Git branches after:"
+    echo "$git_branches_after"
+    [[ "$git_branches_before" == "$git_branches_after" ]]
+
+    echo "GIT STATUS NOW:"
+    echo "$(git status)"
+
+    # our git status should have a conflict:
+    [[ "$(git status)" == *"both added"* ]]
+}
