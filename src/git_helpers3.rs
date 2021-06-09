@@ -758,6 +758,36 @@ pub fn get_all_commits_from_ref(
     Ok(commits)
 }
 
+pub fn has_modified_files() -> io::Result<bool> {
+    let args = ["git", "ls-files", "--modified"];
+    match exec_helpers::execute(&args) {
+        Ok(o) => match o.status {
+            0 => {
+                // if stdout is empty, then there are no
+                // modified files
+                Ok(! o.stdout.trim_end().trim_start().is_empty())
+            },
+            _ => Err(ioerr!("{}", o.stderr)),
+        }
+        Err(e) => Err(e),
+    }
+}
+
+pub fn has_staged_files() -> io::Result<bool> {
+    let args = ["git", "diff", "--name-only", "--cached"];
+    match exec_helpers::execute(&args) {
+        Ok(o) => match o.status {
+            0 => {
+                // if stdout is empty, then there are no
+                // staged files
+                Ok(! o.stdout.trim_end().trim_start().is_empty())
+            },
+            _ => Err(ioerr!("{}", o.stderr)),
+        }
+        Err(e) => Err(e),
+    }
+}
+
 pub fn get_number_of_commits_in_ref(refname: &str) -> Result<usize, String> {
     let exec_args = [
         "git", "log", refname, "--format=%H",

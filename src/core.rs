@@ -12,6 +12,7 @@ use super::exec_helpers;
 use super::git_helpers3;
 use super::repo_file::RepoFile;
 use super::ioerre;
+use super::ioerr;
 
 pub const VALID_REPO_FILE_EXTENSION: &str = "rf";
 
@@ -180,20 +181,22 @@ pub fn verify_dependencies() {
 /// there are modified files, in the middle of a merge conflict
 /// etc...
 pub fn safe_to_proceed() {
-    // TODO: also check for other things like:
-    // are there files staged? are we resolving a conflict?
-    // im just too lazy right now, and this is the most likely scenario
-    let args = ["git", "ls-files", "--modified"];
-    let output = match exec_helpers::execute(&args) {
-        Ok(o) => match o.status {
-            0 => o.stdout,
-            _ => die!("Failed to run ls-files: {}", o.stderr),
+    match safe_to_proceed_res() {
+        Ok(safe) => if !safe {
+            die!("You have modified or staged changes. Please stash or commit your changes before running this command");
         },
-        Err(e) => die!("Failed to run ls-files: {}", e),
-    };
-    if ! output.is_empty() {
-        die!("You have modified changes. Please stash or commit your changes before running this command");
+        Err(e) => {
+            die!("Failed to determine index state:\n{}", e);
+        }
     }
+}
+
+pub fn safe_to_proceed_res() -> io::Result<bool> {
+    let has_modified_files = git_helpers3::has_modified_files()?;
+    if has_modified_files { return Ok(false); }
+    let has_staged_files = git_helpers3::has_staged_files()?;
+    if has_staged_files { return Ok(false); }
+    Ok(true)
 }
 
 pub fn make_and_checkout_output_branch_res(
