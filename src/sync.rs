@@ -563,6 +563,7 @@ pub fn handle_sync2(
     sync_type: SyncType,
     topbase_success: SuccessfulTopbaseResult<CommitWithBlobs>,
     starting_branch_name: &str,
+    can_push_pull: bool,
 ) -> io::Result<()> {
     let (left_ahead, right_ahead) = match sync_type {
         SyncType::LocalAhead |
@@ -629,6 +630,15 @@ pub fn handle_sync2(
         // because thats probably too complex to do myself
     }
 
+    // this is determined by if the user ran the
+    // command with --summary-only or if
+    // they have an unclean index. in this case,
+    // we dont present any interaction choices. we just
+    // show the output above, and continue
+    if ! can_push_pull {
+        return Ok(());
+    }
+
     // the nicest order is actually the reverse because
     // we want exit and skip to be at the bottom:
     choices.reverse();
@@ -669,14 +679,18 @@ pub fn handle_sync(
     sync_type: SyncType,
     topbase_opt: Option<SuccessfulTopbaseResult<CommitWithBlobs>>,
     starting_branch_name: &str,
+    can_push_pull: bool,
 ) -> io::Result<()> {
     match topbase_opt {
-        Some(s) => handle_sync2(cmd, remote_url, repo_file_path, repo_file, sync_type, s, starting_branch_name),
         None => {
             // TODO: come up with something better than just saying this
             println!("Branches are disjoint. cannot sync");
             Ok(())
-        }
+        },
+        Some(s) => handle_sync2(cmd, remote_url,
+            repo_file_path, repo_file,
+            sync_type, s,
+            starting_branch_name, can_push_pull),
     }
 }
 
@@ -684,6 +698,7 @@ pub fn sync_repo_file(
     starting_branch_name: &str,
     repo_file_path: &PathBuf,
     cmd: &MgtCommandSync,
+    can_push_pull: bool,
 ) -> io::Result<()> {
     let repo_file = repo_file::parse_repo_file_from_toml_path_res(
         repo_file_path)?;
@@ -769,7 +784,9 @@ pub fn sync_repo_file(
             (sync_type, Some(o))
         }
     };
-    handle_sync(cmd, repo_url, repo_file_path, &repo_file, sync_type, topbase_ok, starting_branch_name)
+    handle_sync(cmd, repo_url, repo_file_path,
+        &repo_file, sync_type, topbase_ok,
+        starting_branch_name, can_push_pull)
 }
 
 pub fn canonicalize_all_repo_file_paths(paths: &Vec<PathBuf>) -> Vec<PathBuf> {
@@ -795,17 +812,45 @@ pub fn run_sync(cmd: &mut MgtCommandSync) {
     core::verify_dependencies();
     core::go_to_repo_root();
 
-    // core::safe_to_proceed();
-    // TODO:
-    // ideally itd be nice if user just wants to run through and look
-    // at the sync options available (which is totally possible because
-    // we are just fetching, and dont need to rewrite history here
-    // unless the user requests an action!), and not be asked
-    // to stash recent changes... actually maybe
-    // we can ask them interactively:
-    // 1. stash and continue
-    // 2. preview sync without being able to pull/push
-    // 3. exit and manually stash/commit changes
+    let (should_stash_pop, can_pull_push) = match core::safe_to_proceed_res() {
+        Err(e) => die!("Failed to determine state of your index:\n{}\nThis is probably a bug, please report this.", e),
+        Ok(is_safe) => match is_safe {
+            // safe to proceed, so no need to stash, and user
+            // is free to pull/push/etc.
+            true => (false, true),
+            false => {
+                // if its not safe to proceed, we offer the user
+                // some options of what they want to do:
+                let choices = [
+                    "Stash changes and continue (mgt will pop this for you afterwards)",
+                    "Preview the sync without being able to pull/push",
+                    "Exit and manually stash/commit changes",
+                ];
+                let mut interact_choice: interact::InteractChoices = (&choices[..]).into();
+                let description = "You have staged and/or modified changes. mgt cannot safely sync unless the index is clean. What would you like to do?".to_string();
+                interact_choice.description = Some(description);
+                let selection = interact::interact_number(interact_choice);
+                let selection = match selection {
+                    Ok(s) => s,
+                    Err(e) => {
+                        die!("Failed to get a response from user because:\n{}\nExiting...", e)
+                    }
+                };
+                if selection == 3 {
+                    println!("Exiting");
+                    std::process::exit(0);
+                } else if selection == 2 {
+                    // no need to stash pop at the end,
+                    // but user cannot pull/push:
+                    (false, false)
+                } else {
+                    // user can pull/push, but we need
+                    // to stash pop at the end
+                    (true, true)
+                }
+            }
+        }
+    };
 
     let starting_branch_name = core::get_current_ref().unwrap_or_else(|| {
         die!("Failed to get current branch name. Cannot continue")
@@ -816,7 +861,7 @@ pub fn run_sync(cmd: &mut MgtCommandSync) {
 
     for (_index, repo_file) in all_repo_files.drain(..).enumerate() {
         let potential_err = format!("Error trying to sync {:?} :", repo_file);
-        if let Err(e) = sync_repo_file(&starting_branch_name, &repo_file, cmd) {
+        if let Err(e) = sync_repo_file(&starting_branch_name, &repo_file, cmd, can_pull_push) {
             eprintln!("{}\n{}", potential_err, e);
             if cmd.fail_fast {
                 std::process::exit(1);
