@@ -1,6 +1,6 @@
 use die::*;
 use exechelper as exec_helpers;
-// use simple_interaction as interact;
+use simple_interaction as interact;
 use std::io;
 
 mod repo_file;

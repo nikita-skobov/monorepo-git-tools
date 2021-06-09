@@ -1,20 +1,15 @@
-use std::collections::HashSet;
 use std::path::PathBuf;
 
 use super::git_helpers3;
-use super::git_helpers3::Commit;
 use super::git_helpers3::Oid;
 use super::exec_helpers;
 use super::repo_file::RepoFile;
 use super::die;
-use super::topbase::get_all_blobs_in_branch;
-use super::topbase::get_all_blobs_from_commit_with_callback;
-use super::topbase::BlobCheckValue;
-use super::topbase::BlobCheck;
-use super::topbase::blob_check_callback_default;
+use super::topbase;
 use super::repo_file;
 use super::cli::MgtCommandCheck;
 use super::core::get_all_repo_files;
+use git_helpers3::{RawBlobSummary, CommitWithBlobs};
 
 pub struct Checker<'a> {
     upstream_branch: String,
@@ -146,77 +141,6 @@ pub fn blob_path_applies_to_repo_file(
     false
 }
 
-// actually its two callbacks... one to build the commit summary,
-// the other to decide whether or not to take a blob when
-// getting all blobs from commit
-pub fn topbase_check_alg_with_callback<F>(
-    all_commits_of_current: Vec<Commit>,
-    all_upstream_blobs: HashSet<String>,
-    cb: &mut F,
-    should_take_blob: Option<&dyn Fn(&BlobCheck) -> Option<BlobCheckValue>>,
-    // this value is here because if we have filtered out all the blobs
-    // in the above should_take_blob callback, then we want to skip this commit
-    // and not consider it...
-    should_skip_if_no_blobs: bool,
-)
-    where F: FnMut(&Commit)
-{
-    // for every commit in the current branch
-    // check if every single blob of every commit exists in the upstream branch.
-    // as soon as we a commit of this current branch that has all of its blobs
-    // exists in upstream, then we break
-    for c in all_commits_of_current {
-        // I think we want to skip merge commits, because thats what git rebase
-        // interactive does by default.
-        if c.is_merge {
-            continue;
-        }
-
-        let mut current_commit_blobs = HashSet::new();
-        get_all_blobs_from_commit_with_callback(
-            &c.id.long()[..],
-            &mut current_commit_blobs,
-            should_take_blob,
-        );
-        let mut all_blobs_exist = true;
-        let num_blobs_in_current_commit = current_commit_blobs.len();
-        for b in current_commit_blobs {
-            if ! all_upstream_blobs.contains(&b) {
-                all_blobs_exist = false;
-                break;
-            }
-        }
-        // println!("all blobs exist in this comit? {}", all_blobs_exist);
-        // println!("num blobs in this commit? {}", num_blobs_in_current_commit);
-
-        if num_blobs_in_current_commit == 0 && should_skip_if_no_blobs {
-            continue;
-        }
-
-        if all_blobs_exist {
-            break;
-        }
-        cb(&c);
-    }
-}
-
-
-pub fn topbase_check_alg<F>(
-    all_commits_of_current: Vec<Commit>,
-    all_upstream_blobs: HashSet<String>,
-    cb: &mut F
-)
-    where F: FnMut(&Commit),
-{
-    topbase_check_alg_with_callback(
-        all_commits_of_current,
-        all_upstream_blobs,
-        cb,
-        None,
-        false,
-    );
-}
-
 fn get_formatted_remote_or_branch_str(branch_and_remote: &str, is_remote: bool) -> String {
     match is_remote {
         false => branch_and_remote.clone().to_string(),
@@ -246,21 +170,8 @@ fn get_branch_and_remote_from_str(branch_and_remote: &str) -> (&str, &str) {
 }
 
 pub fn fetch_branch(remote: &str, branch: &str) {
-    let args = [
-        "git", "fetch",
-        remote, branch,
-        "--no-tags",
-    ];
-
-    let err_msg = match exec_helpers::execute(&args) {
-        Err(e) => Some(format!("{}", e)),
-        Ok(o) => match o.status {
-            0 => None,
-            _ => Some(o.stderr),
-        },
-    };
-    if let Some(err) = err_msg {
-        die!("Error fetching {} {}\n{}", remote, branch, err);
+    if let Err(e) = git_helpers3::fetch_branch(remote, branch) {
+        die!("Error fetching {} {}\n{}", remote, branch, e);
     }
 }
 
@@ -445,41 +356,61 @@ fn check_for_updates(
     current_is_remote: bool,
     should_summarize: bool,
 ) -> (Vec<Oid>, Vec<String>) {
-    // TODO: probably need to add blob_applies_to_repo_file here?
-    // I think in most cases this isnt necessary, but I should
-    // try to think of what edge cases this would be needed
-    let all_upstream_blobs = get_all_blobs_in_branch(upstream_branch);
-    let all_commits_of_current = match git_helpers3::get_all_commits_from_ref(current_branch) {
-        Ok(v) => v,
-        Err(e) => die!("Failed to get all commits! {}", e),
+    // we need to enable rewind mode if our current branch
+    // is on the right.
+    let mut should_rewind = false;
+    let (a_branch, b_branch) = if current_is_remote {
+        (current_branch, upstream_branch)
+    } else {
+        should_rewind = true;
+        (upstream_branch, current_branch)
     };
-    // println!("GOT ALL UPSTREAM BLOBS: {}", all_upstream_blobs.len());
-    // println!("GOT ALL CURRENT COMMITS: {}", all_commits_of_current.len());
 
-    let mut commits_to_take = vec![];
-    let mut commit_summaries = vec![];
-    let mut summarize_cb = |c: &Commit| {
+    let hashing_mode = topbase::BlobHashingMode::WithoutPath;
+    let traverse_at_a_time = 500;
+    let mut out_ids = vec![];
+    let mut out_str = vec![];
+
+    // check all blob paths to make sure they apply
+    // to our repo file:
+    // b is the branch name that this commit belongs to.
+    // we check if the path of this blob is relevant to the repo
+    // and we have to consider if its a local or remote commit,
+    // hence the b == current_branch or b == upstream_branch
+    let should_use_blob_cb = |c: &mut RawBlobSummary, b: &str| {
+        let this_is_a_remote_blob = if current_is_remote {
+            b == current_branch
+        } else {
+            b == upstream_branch
+        };
+        blob_path_applies_to_repo_file(&c.path_str, repo_file, this_is_a_remote_blob)
+    };
+    let successful_topbase = match topbase::find_a_b_difference2::<CommitWithBlobs, _>(
+        a_branch, b_branch, Some(traverse_at_a_time), hashing_mode, should_rewind, Some(should_use_blob_cb))
+    {
+        Ok(s) => if let Some(t) = s { t } else { return (out_ids, out_str) },
+        Err(_) => return (out_ids, out_str),
+    };
+    // TODO: failure to find a fork point returns (vec![], vec![])
+    // which we interpret as an "up-to-date" case above, which is not correct
+
+    // if we should rewind, that means we expect the commits that upstream
+    // wants are on the 'right' side (ie: current branch is the B branch,
+    // and we always care about upstream getting updates from current).
+    // so we iterate the top_right_commits instead of the top_commits
+    // in that case:
+    let iter_commits = if should_rewind {
+        successful_topbase.top_right_commits.iter()
+    } else {
+        successful_topbase.top_commits.iter()
+    };
+
+    for out_commit in iter_commits {
         if should_summarize {
-            commits_to_take.push(c.id.clone());
-            commit_summaries.push(c.summary.clone());
+            out_ids.push(out_commit.commit.id.clone());
+            out_str.push(out_commit.commit.summary.clone());
         }
-    };
-    let should_take_blob_cb = |c: &BlobCheck| {
-        if ! blob_path_applies_to_repo_file(&c.path, repo_file, current_is_remote) {
-            let blob_check_none: Option<BlobCheckValue> = None;
-            return blob_check_none;
-        }
-        blob_check_callback_default(c)
-    };
+    }
 
-    // TODO: maybe have different algorithms for checking if theres updates?
-    topbase_check_alg_with_callback(
-        all_commits_of_current,
-        all_upstream_blobs,
-        &mut summarize_cb,
-        Some(&should_take_blob_cb),
-        true,
-    );
-
-    (commits_to_take, commit_summaries)
+    (out_ids, out_str)
 }

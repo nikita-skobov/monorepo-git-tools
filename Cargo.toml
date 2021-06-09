@@ -15,6 +15,7 @@ die = { path="die" }
 gumdrop = { git = "https://github.com/nikita-skobov/gumdrop", rev = "7ee4940bd8e6e41d207aa8bf82ba2a80aa82c1c0" }
 exechelper = { path = "exechelper" }
 gitfilter = { path = "gitfilter" }
+simple-interaction = { git = "https://github.com/nikita-skobov/simple-interaction" }
 
 [features]
 gittests = []

@@ -4,12 +4,33 @@ use io::{BufReader, BufRead};
 use super::ioerr;
 use super::git_helpers3;
 use super::git_helpers3::Commit;
-use super::git_helpers3::Oid;
 use super::git_helpers3::CommitWithBlobs;
 use super::git_helpers3::{RawBlobSummaryWithoutPath, RawBlobSummary};
+use super::git_helpers3::{RawBlobSummaryEndStateWithoutPath, RawBlobSummaryEndState};
 use super::exec_helpers;
 use super::die;
 use super::cli::MgtCommandTopbase;
+
+/// Determines how blob information should be hashed
+/// when conducting a topbase traversal. The default
+/// is Full, which is the strictest hashing mode which contains
+/// the entire information about the blob. The slightly
+/// faster, and sometimes desired mode would be WithoutPath because
+/// it considers two blobs the same if everything matches except the path
+/// component. A niche hashing mode is
+/// EndState: only hash the end state of the blob, ie:
+/// if a blob started with file mode A and changed to file mode B,
+/// we don't care about the fact it changed from A, we only care that
+/// it is currently at B. This needs to be treated carefully in regards
+/// to deletions because a deletion SHA goes from X to 000000, and all
+/// zeros is of course not unique, and therefore cannot be compared easily.
+/// the solution for this is to use the source SHA for deletes
+pub enum BlobHashingMode {
+    Full,
+    WithoutPath,
+    EndState,
+    EndStateWithoutPath,
+}
 
 /// remember, the 'upstream' is the base branch
 /// because its the branch that is going to receive commits (if any)
@@ -39,11 +60,13 @@ pub fn topbase(
     };
 
     // TODO: make this a cli option:
+    let hashing_mode = BlobHashingMode::Full;
+    // TODO: make this a cli option:
     let traverse_at_a_time = 500;
-    let current_commits_not_in_upstream = find_a_b_difference2(
+    let current_commits_not_in_upstream = find_a_b_difference2::<Commit, NopCB>(
         &current_branch, &upstream_branch,
         Some(traverse_at_a_time),
-        true).map_err(|e| e.to_string())?;
+        hashing_mode, false, None).map_err(|e| e.to_string())?;
     let num_commits_to_take = if let Some(valid_topbase) = current_commits_not_in_upstream {
         let mut num_used = 0;
         for c in &valid_topbase.top_commits {
@@ -210,135 +233,6 @@ pub fn topbase(
     }
 }
 
-pub enum BlobCheckValue {
-    TakeNext,
-    TakePrev,
-}
-use BlobCheckValue::*;
-pub struct BlobCheck<'a> {
-    pub mode_prev: &'a str,
-    pub mode_next: &'a str,
-    pub blob_prev: &'a str,
-    pub blob_next: &'a str,
-    pub path: String,
-}
-
-pub fn blob_check_callback_default(blob_check: &BlobCheck) -> Option<BlobCheckValue> {
-    match blob_check.is_delete_blob() {
-        true => Some(TakePrev),
-        false => Some(TakeNext),
-    }
-}
-
-impl<'a> BlobCheck<'a> {
-    fn is_delete_blob(&self) -> bool {
-        let blob_prev_not_all_zeroes = ! self.blob_prev.chars().all(|c| c == '0');
-        let blob_next_all_zeroes = self.blob_next.chars().all(|c| c == '0');
-        blob_next_all_zeroes && blob_prev_not_all_zeroes
-    }
-}
-
-// run a git diff-tree on the commit id, and parse the output
-// and for every blob, if callback returns true,
-// insert that blob id into the provided blob hash set
-pub fn get_all_blobs_from_commit_with_callback(
-    commit_id: &str,
-    blob_set: &mut HashSet<String>,
-    insert_callback: Option<&dyn Fn(&BlobCheck) -> Option<BlobCheckValue>>,
-) {
-    // the diff filter is VERY important...
-    // A (added), M (modified), C (copied), D (deleted)
-    // theres a few more..
-    let args = [
-        "git", "diff-tree", commit_id, "-r", "--root",
-        "--diff-filter=AMCD", "--pretty=oneline"
-    ];
-    match exec_helpers::execute(&args) {
-        Err(e) => die!("Failed to get blobs from commit {} : {}", commit_id, e),
-        Ok(out) => {
-            if out.status != 0 { die!("Failed to get blobs from commit {} : {}", commit_id, out.stderr); }
-            for l in out.stdout.lines() {
-                // lines starting with colons are the lines
-                // that contain blob ids
-                if ! l.starts_with(':') { continue; }
-                let items = l.split_whitespace().collect::<Vec<&str>>();
-                // there are technically 6 items from this output:
-                // the last item (items[5]) is a path to the file that this blob
-                // is for (and the array could have more than 6 if file names
-                // have spaces in them)
-                let (
-                    mode_prev, mode_next,
-                    blob_prev, blob_next,
-                    _diff_type
-                ) = (items[0], items[1], items[2], items[3], items[4]);
-                // the path of this blob starts at index 5, but we combine the rest
-                // in case there are spaces
-                let blob_path = items[5..items.len()].join(" ");
-                let blob_check = BlobCheck {
-                    mode_prev,
-                    mode_next,
-                    blob_prev,
-                    blob_next,
-                    path: blob_path,
-                };
-                // if user provided a callback, ask the user A) if they want to take this
-                // blob, and B) which one to take (next or prev)
-                // otherwise, use the default way to decide which one to take
-                let should_take = match insert_callback {
-                    Some(ref which_to_take_callback) => which_to_take_callback(&blob_check),
-                    None => blob_check_callback_default(&blob_check),
-                };
-                if let Some(which) = should_take {
-                    match which {
-                        TakeNext => blob_set.insert(blob_next.into()),
-                        TakePrev => blob_set.insert(blob_prev.into()),
-                    };
-                }
-            }
-        }
-    };
-}
-
-pub fn get_all_blobs_from_commit<'a>(
-    commit_id: &str,
-    blob_set: &mut HashSet<String>,
-) {
-    get_all_blobs_from_commit_with_callback(
-        commit_id,
-        blob_set,
-        None,
-    );
-}
-
-// perform a rev-list of the branch name to get a list of all commits
-// then get every single blob from every single commit, and return
-// a hash set containing unique blob ids
-pub fn get_all_blobs_in_branch(branch_name: &str) -> HashSet<String> {
-    // first get all commits from this branch:
-    let args = [
-        "git", "rev-list", branch_name,
-    ];
-
-    // need the stdout to live outside the match so that the vec of strings
-    // lives outside the match
-    let mut _out_stdout = "".into();
-    let commit_ids = match exec_helpers::execute(&args) {
-        Err(e) => die!("Failed to get all blobs of {} : {}", branch_name, e),
-        Ok(out) => {
-            if out.status != 0 { die!("Failed to get all blobs of {} : {}", branch_name, out.stderr); }
-            _out_stdout = out.stdout;
-            _out_stdout.split_whitespace().collect::<Vec<&str>>()
-        },
-    };
-
-    let mut blob_set = HashSet::new();
-    for commit_id in commit_ids.iter() {
-        get_all_blobs_from_commit(commit_id, &mut blob_set);
-    }
-
-    return blob_set;
-}
-
 pub fn run_topbase(cmd: &mut MgtCommandTopbase) {
     let (base, top) = match cmd.base_or_top.len() {
         0 => die!("Must provide a base branch"),
@@ -370,7 +264,7 @@ fn get_current_branch() -> String {
 }
 
 // TODO:
-// add fullbase and rewind topbase traversal modes
+// add fullbase traversal mode implementation
 
 
 /// In a Topbase traversal mode, the A branch is considered the 'top', and
@@ -491,13 +385,15 @@ impl Default for ABTraversalMode {
 /// A successful topbase result will find a fork point between
 /// two branches A, and B. A is considered the top, and contains
 /// a list of commits that are above the common fork point.
-pub struct SuccessfulTopbaseResult {
-    pub top_commits: Vec<Commit>,
+pub struct SuccessfulTopbaseResult<T: From<CommitWithBlobs>> {
+    pub top_commits: Vec<T>,
     // its possible that the other branch's commit might have a different
     // message than A's commit, but they share the same blob set.
     // so fork_point.0 is the commit from A, and fork_point.1 is the
     // commit from B.
-    pub fork_point: (Commit, Commit),
+    pub fork_point: (T, T),
+    // only used for rewind topbase
+    pub top_right_commits: Vec<T>,
 }
 
 /// A helper struct to manage the iterative loading of commits with blobs
@@ -522,8 +418,13 @@ impl<'a, T: Default + From<RawBlobSummary> + Eq + Hash> BranchIterativeCommitLoa
         out
     }
 
-    pub fn load_next<F>(&mut self, cb: F) -> io::Result<()>
-        where F: FnMut((&CommitWithBlobs, &HashSet<T>)) -> bool
+    pub fn load_next<F, B>(
+        &mut self,
+        should_use_blob: &mut B,
+        cb: F
+    ) -> io::Result<()>
+        where F: FnMut((&CommitWithBlobs, &HashSet<T>)) -> bool,
+        B: FnMut(&mut RawBlobSummary, &str) -> bool,
     {
         if self.entirely_loaded {
             return Ok(());
@@ -559,12 +460,26 @@ impl<'a, T: Default + From<RawBlobSummary> + Eq + Hash> BranchIterativeCommitLoa
                 }
                 return false;
             } else {
-                // TODO: fix this logic... its skipping on the second one for some reason
                 our_first_commit_ever = false;
                 is_first_commit = false;
             }
 
-            let blob_set: HashSet<T> = c.blobs.iter().cloned().map(|x| {
+            let mut before_hash = vec![];
+            for mut blob in c.blobs.iter().cloned() {
+                if should_use_blob(&mut blob, self.branch_name) {
+                    before_hash.push(blob);
+                }
+            }
+            // if we filter out
+            // all of the blobs, then dont
+            // add this commit because its blob_set will be empty,
+            // therefore it will be a subset of any other set,
+            // and will mess up the fork point detection.
+            // if its a merge commit, its blob set will be empty, so
+            // we can insert this because sometimes we might want to look at merge
+            // commits
+            let can_insert_commit = c.commit.is_merge || ! before_hash.is_empty();
+            let blob_set: HashSet<T> = before_hash.drain(..).map(|x| {
                 T::from(x)
             }).collect();
             let already_seen_commit = self.commit_set.contains(&c.commit.id.hash);
@@ -574,9 +489,12 @@ impl<'a, T: Default + From<RawBlobSummary> + Eq + Hash> BranchIterativeCommitLoa
                 // eprintln!("Loader skipping because already seen it before");
                 true
             } else {
-                let ret = cb((&c, &blob_set));
                 self.commit_set.insert(c.commit.id.hash.clone());
-                this_load_group.push((c, blob_set));
+                let ret = if can_insert_commit {
+                    let ret = cb((&c, &blob_set));
+                    this_load_group.push((c, blob_set));
+                    ret
+                } else { false };
                 ret
             };
             ret
@@ -619,7 +537,10 @@ impl<'a, T: Default + From<RawBlobSummary> + Eq + Hash> BranchIterativeCommitLoa
         None
     }
 
-    pub fn get_all_above(&mut self, commit_id: &str) -> Option<Vec<Commit>> {
+    pub fn get_all_above<C: From<CommitWithBlobs>>(
+        &mut self,
+        commit_id: &str
+    ) -> Option<Vec<C>> {
         if ! self.commit_set.contains(commit_id) {
             // we do not have that commit, so we cannot find everything above it...
             return None;
@@ -631,7 +552,7 @@ impl<'a, T: Default + From<RawBlobSummary> + Eq + Hash> BranchIterativeCommitLoa
                 if our_commit.commit.id.hash == commit_id {
                     return Some(out_list);
                 }
-                out_list.push(our_commit.commit);
+                out_list.push(C::from(our_commit));
             }
         }
 
@@ -644,22 +565,54 @@ impl<'a, T: Default + From<RawBlobSummary> + Eq + Hash> BranchIterativeCommitLoa
     }
 }
 
+impl From<CommitWithBlobs> for Commit {
+    fn from(orig: CommitWithBlobs) -> Self {
+        orig.commit
+    }
+}
+
+pub fn get_rewind_commits_from_loader<
+    T: Default + From<RawBlobSummary> + Eq + Hash,
+    C: From<CommitWithBlobs>
+>(
+    right_side_loader: &mut BranchIterativeCommitLoader<T>,
+    fork_hash: &str,
+    should_rewind: bool,
+) -> Vec<C> {
+    let out_opt = if should_rewind {
+        right_side_loader.get_all_above(fork_hash)
+    } else {
+        None
+    };
+    match out_opt {
+        Some(v) => v,
+        None => vec![],
+    }
+}
+
 /// this is called by `find_a_b_difference2` if you
 /// passed a Some(n) for the traverse n at a time.
-pub fn find_a_b_difference2_iterative_traversal<T: Default + From<RawBlobSummary> + Eq + Hash>(
+pub fn find_a_b_difference2_iterative_traversal<
+    T: Default + From<RawBlobSummary> + Eq + Hash,
+    C: From<CommitWithBlobs>,
+    B: FnMut(&mut RawBlobSummary, &str) -> bool,
+>(
     a_committish: &str, b_committish: &str,
     traverse_n: usize,
-) -> io::Result<Option<SuccessfulTopbaseResult>> {
+    should_rewind: bool,
+    should_use_blob_cb: B,
+) -> io::Result<Option<SuccessfulTopbaseResult<C>>> {
+    let mut should_use_blob_cb = should_use_blob_cb;
     // first we load N of the B branches commits:
     let mut b_loader = BranchIterativeCommitLoader::<T>::new(traverse_n, b_committish);
-    b_loader.load_next(|_| false)?;
+    b_loader.load_next(&mut should_use_blob_cb, |_| false)?;
 
     let mut a_loader = BranchIterativeCommitLoader::<T>::new(traverse_n, a_committish);
     let mut found_fork_point = None;
 
     while ! a_loader.entirely_loaded || ! b_loader.entirely_loaded {
         // we check if A's next blob set is a subset of anything in B we've loaded so far
-        a_loader.load_next(|(a_commit, a_blob_set)| {
+        a_loader.load_next(&mut should_use_blob_cb, |(a_commit, a_blob_set)| {
             if a_commit.commit.is_merge { return false; }
     
             if let Some(b_side_fork) = b_loader.contains_superset_of(a_blob_set) {
@@ -670,20 +623,21 @@ pub fn find_a_b_difference2_iterative_traversal<T: Default + From<RawBlobSummary
                 false
             }
         })?;
-    
+
         if let Some((a_fork, b_fork)) = found_fork_point {
-            let top_a_commits = a_loader.get_all_above(&a_fork.commit.id.hash)
+            let top_a_commits = a_loader.get_all_above::<C>(&a_fork.commit.id.hash)
                 .ok_or(ioerr!("Found a fork point {}, but failed to find commits above it?", a_fork.commit.id.short()))?;
             let successful_topbase = SuccessfulTopbaseResult {
                 top_commits: top_a_commits,
-                fork_point: (a_fork.commit, b_fork.commit),
+                top_right_commits: get_rewind_commits_from_loader(&mut b_loader, &b_fork.commit.id.hash, should_rewind),
+                fork_point: (a_fork.into(), b_fork.into()),
             };
             return Ok(Some(successful_topbase));
         }
 
         // if we failed to find the fork point after searching A's next group,
         // then we load B's next group, and search through all of A:
-        b_loader.load_next(|(b_commit, b_blob_set)| {
+        b_loader.load_next(&mut should_use_blob_cb, |(b_commit, b_blob_set)| {
             if b_commit.commit.is_merge { return false; }
 
             if let Some(a_side_fork) = a_loader.contains_subset_of(b_blob_set) {
@@ -696,11 +650,12 @@ pub fn find_a_b_difference2_iterative_traversal<T: Default + From<RawBlobSummary
         })?;
 
         if let Some((a_fork, b_fork)) = found_fork_point {
-            let top_a_commits = a_loader.get_all_above(&a_fork.commit.id.hash)
+            let top_a_commits = a_loader.get_all_above::<C>(&a_fork.commit.id.hash)
                 .ok_or(ioerr!("Found a fork point {}, but failed to find commits above it?", a_fork.commit.id.short()))?;
             let successful_topbase = SuccessfulTopbaseResult {
                 top_commits: top_a_commits,
-                fork_point: (a_fork.commit, b_fork.commit),
+                top_right_commits: get_rewind_commits_from_loader(&mut b_loader, &b_fork.commit.id.hash, should_rewind),
+                fork_point: (a_fork.into(), b_fork.into()),
             };
             return Ok(Some(successful_topbase));
         }
@@ -709,6 +664,26 @@ pub fn find_a_b_difference2_iterative_traversal<T: Default + From<RawBlobSummary
     // if we traversed both A and B and failed to find a fork point, then
     // the topbase is not successful, ie: there is no common fork point
     Ok(None)
+}
+
+pub type NopCB = fn(&mut RawBlobSummary, &str) -> bool;
+
+pub fn find_a_b_difference2_iterative_traversal_opt<
+    T: Default + From<RawBlobSummary> + Eq + Hash,
+    C: From<CommitWithBlobs>,
+    B: FnMut(&mut RawBlobSummary, &str) -> bool,
+>(
+    a_committish: &str, b_committish: &str,
+    traverse_n: usize,
+    should_rewind: bool,
+    should_use_blob_cb: Option<B>,
+) -> io::Result<Option<SuccessfulTopbaseResult<C>>> {
+    if let Some(cb) = should_use_blob_cb {
+        return find_a_b_difference2_iterative_traversal::<T, C, B>(a_committish, b_committish, traverse_n, should_rewind, cb);
+    }
+    
+    let default_cb = |_: &mut RawBlobSummary, _: &str| true;
+    find_a_b_difference2_iterative_traversal::<T, C, NopCB>(a_committish, b_committish, traverse_n, should_rewind, default_cb)
 }
 
 /// An alternative of `find_a_b_difference` that allows
@@ -735,37 +710,75 @@ pub fn find_a_b_difference2_iterative_traversal<T: Default + From<RawBlobSummary
 /// not that much worse than the old way of doing it where
 /// you would just load the entirety of the B branch anyway.
 /// A good value of N would probably be around 500-1000.
-pub fn find_a_b_difference2(
+pub fn find_a_b_difference2<
+    C: From<CommitWithBlobs>,
+    B: FnMut(&mut RawBlobSummary, &str) -> bool,
+>(
     a_committish: &str, b_committish: &str,
     traverse_n_at_a_time: Option<usize>,
     // TODO: add traversal mode...
-    consider_paths: bool,
-) -> io::Result<Option<SuccessfulTopbaseResult>> {
+    hashing_mode: BlobHashingMode,
+    should_rewind: bool,
+    should_use_blob_cb: Option<B>,
+) -> io::Result<Option<SuccessfulTopbaseResult<C>>> {
     if let Some(n) = traverse_n_at_a_time {
         // 0 is not a valid value of N
         if n == 0 {
-            return simplest_topbase(a_committish, b_committish, consider_paths);
+            return simplest_topbase(a_committish, b_committish, hashing_mode);
         }
 
-        if consider_paths {
-            find_a_b_difference2_iterative_traversal::<RawBlobSummary>(a_committish, b_committish, n)
-        } else {
-            find_a_b_difference2_iterative_traversal::<RawBlobSummaryWithoutPath>(a_committish, b_committish, n)
+        match hashing_mode {
+            BlobHashingMode::Full => find_a_b_difference2_iterative_traversal_opt::<RawBlobSummary, C, _>(
+                a_committish, b_committish, n, should_rewind, should_use_blob_cb),
+            BlobHashingMode::WithoutPath => find_a_b_difference2_iterative_traversal_opt::<RawBlobSummaryWithoutPath, C, _>(
+                a_committish, b_committish, n, should_rewind, should_use_blob_cb),
+            BlobHashingMode::EndState => find_a_b_difference2_iterative_traversal_opt::<RawBlobSummaryEndState, C, _>(
+                a_committish, b_committish, n, should_rewind, should_use_blob_cb),
+            BlobHashingMode::EndStateWithoutPath => find_a_b_difference2_iterative_traversal_opt::<RawBlobSummaryEndStateWithoutPath, C, _>(
+                a_committish, b_committish, n, should_rewind, should_use_blob_cb),
         }
     } else {
-        simplest_topbase(a_committish, b_committish, consider_paths)
+        simplest_topbase(a_committish, b_committish, hashing_mode)
     }
 }
 
-pub fn simplest_topbase_inner<T: From<RawBlobSummary> + Eq + Hash>(
+pub fn simplest_topbase_inner<
+    T: From<RawBlobSummary> + Eq + Hash,
+    C: From<CommitWithBlobs>,
+    B: FnMut(&mut RawBlobSummary, &str) -> bool,
+>(
     a_committish: &str, b_committish: &str,
-) -> io::Result<Option<SuccessfulTopbaseResult>> {
+    should_rewind: bool,
+    should_use_blob_cb: Option<B>,
+) -> io::Result<Option<SuccessfulTopbaseResult<C>>> {
+    let mut should_use_blob_cb = should_use_blob_cb;
     let mut all_b_commits = vec![];
     git_helpers3::iterate_blob_log(b_committish, None, |c| {
-        let b_blob_set: HashSet<T> = c.blobs.iter().cloned().map(|x| {
-            T::from(x)
-        }).collect();
-        all_b_commits.push((c, b_blob_set));
+        let b_blob_set = if let Some(ref mut cb) = should_use_blob_cb {
+            // if user provided a callback, then only include this blob
+            // in the hash set if the user wants this to be included
+            let mut before_hash = vec![];
+            for mut blob in c.blobs.iter().cloned() {
+                if cb(&mut blob, b_committish) {
+                    before_hash.push(blob);
+                }
+            }
+            let b_blob_set: HashSet<T> = before_hash.drain(..).map(|x| {
+                T::from(x)
+            }).collect();
+            b_blob_set
+        } else {
+            // otherwise, just hash them all
+            let b_blob_set: HashSet<T> = c.blobs.iter().cloned().map(|x| {
+                T::from(x)
+            }).collect();
+            b_blob_set
+        };
+        let can_insert_commit = c.commit.is_merge || ! b_blob_set.is_empty();
+        // only add it to B's commits if 
+        if can_insert_commit {
+            all_b_commits.push((c, b_blob_set));
+        }
         false
     })?;
 
@@ -773,15 +786,39 @@ pub fn simplest_topbase_inner<T: From<RawBlobSummary> + Eq + Hash>(
     let mut fork_point = None;
     git_helpers3::iterate_blob_log(a_committish, None, |c| {
         let mut c = c;
-        let a_blob_set: HashSet<T> = c.blobs.drain(..).map(|x| {
-            T::from(x)
-        }).collect();
+        let a_blob_set = if let Some(ref mut cb) = should_use_blob_cb {
+            let mut before_hash = vec![];
+            for mut blob in c.blobs.drain(..) {
+                if cb(&mut blob, a_committish) {
+                    before_hash.push(blob);
+                }
+            }
+            let a_blob_set: HashSet<T> = before_hash.drain(..).map(|x| {
+                T::from(x)
+            }).collect();
+            a_blob_set
+        } else {
+            let a_blob_set: HashSet<T> = c.blobs.drain(..).map(|x| {
+                T::from(x)
+            }).collect();
+            a_blob_set
+        };
         let mut found_matching_commit_in_b = None;
         for (b_commit, b_blob_set) in all_b_commits.iter() {
             if c.commit.is_merge {
                 // if its a merge commit, then (unless we passed the -m option to git log)
                 // it will have no blobs, and thus an empty set is a subset of any other set.
                 // so we dont want to check this...
+                break;
+            }
+            if a_blob_set.is_empty() {
+                // if its empty that means its either a merge commit
+                // (which we check for above)
+                // or the user filtered out all of the blobs, ie:
+                // user doesnt want to consider this commit because
+                // none of the blobs apply to what the user is looking for.
+                // in this case, we dont want to try to search
+                // for a fork point for this commit.
                 break;
             }
             if a_blob_set.is_subset(b_blob_set) {
@@ -808,9 +845,30 @@ pub fn simplest_topbase_inner<T: From<RawBlobSummary> + Eq + Hash>(
     })?;
 
     if let Some((fork_a, fork_b)) = fork_point {
+        // if we should rewind, then we iterate over the B commits
+        // and collect everything above B's fork point:
+        let b_above_fork = if should_rewind {
+            let mut out = vec![];
+            for (b_commit, _) in all_b_commits.iter() {
+                if b_commit.commit.id.hash == fork_b.commit.id.hash {
+                    // found the fork point, dont add this one
+                    break;
+                }
+                out.push(b_commit.clone().into());
+            }
+            // TODO: technically this is not guaranteed that we reach
+            // this fork point?
+            // todo think of data structure where we can guarantee if
+            // we found the fork point earlier that we can backtrack from
+            // that fork point and guarantee that those commits exists
+            out
+        } else {
+            vec![]
+        };
         let successful_topbase = SuccessfulTopbaseResult {
-            top_commits: top_a_commits.drain(..).map(|x| x.commit).collect(),
-            fork_point: (fork_a.commit, fork_b.commit.clone()),
+            top_commits: top_a_commits.drain(..).map(|x| x.into()).collect(),
+            fork_point: (fork_a.into(), fork_b.clone().into()),
+            top_right_commits: b_above_fork,
         };
         Ok(Some(successful_topbase))
     } else {
@@ -823,16 +881,41 @@ pub fn simplest_topbase_inner<T: From<RawBlobSummary> + Eq + Hash>(
 /// of B branch into memory, then iterate
 /// over the A branch, and stop once we find
 /// a commit that is a subset of one of the B branch's commits.
-/// pass true if you want to consider paths when comparing blobs
-/// or false if you want to make this a bit faster (but possibly slightly less correct)
-pub fn simplest_topbase(
+/// see `BlobHashingMode` docs for information about which hashing mode to use.
+/// When in doubt, use Full for maximum correctness, or EndState for maximum flexibility.
+pub fn simplest_topbase<C: From<CommitWithBlobs>>(
     a_committish: &str, b_committish: &str,
-    consider_paths: bool,
-) -> io::Result<Option<SuccessfulTopbaseResult>> {
-    if consider_paths {
-        simplest_topbase_inner::<RawBlobSummary>(a_committish, b_committish)
-    } else {
-        simplest_topbase_inner::<RawBlobSummaryWithoutPath>(a_committish, b_committish)
+    hashing_mode: BlobHashingMode,
+) -> io::Result<Option<SuccessfulTopbaseResult<C>>> {
+    match hashing_mode {
+        BlobHashingMode::Full => simplest_topbase_inner::<RawBlobSummary, C, NopCB>(
+            a_committish, b_committish, false, None),
+        BlobHashingMode::WithoutPath => simplest_topbase_inner::<RawBlobSummaryWithoutPath, C, NopCB>(
+            a_committish, b_committish, false, None),
+        BlobHashingMode::EndState => simplest_topbase_inner::<RawBlobSummaryEndState, C, NopCB>(
+            a_committish, b_committish, false, None),
+        BlobHashingMode::EndStateWithoutPath => simplest_topbase_inner::<RawBlobSummaryEndStateWithoutPath, C, NopCB>(
+            a_committish, b_committish, false, None),
+    }
+}
+
+pub fn rewind_topbase<
+    C: From<CommitWithBlobs>,
+    B: FnMut(&mut RawBlobSummary, &str) -> bool,
+>(
+    a_committish: &str, b_committish: &str,
+    hashing_mode: BlobHashingMode,
+    should_use_blob_cb: Option<B>,
+) -> io::Result<Option<SuccessfulTopbaseResult<C>>> {
+    match hashing_mode {
+        BlobHashingMode::Full => simplest_topbase_inner::<RawBlobSummary, C, B>(
+            a_committish, b_committish, true, should_use_blob_cb),
+        BlobHashingMode::WithoutPath => simplest_topbase_inner::<RawBlobSummaryWithoutPath, C, B>(
+            a_committish, b_committish, true, should_use_blob_cb),
+        BlobHashingMode::EndState => simplest_topbase_inner::<RawBlobSummaryEndState, C, B>(
+            a_committish, b_committish, true, should_use_blob_cb),
+        BlobHashingMode::EndStateWithoutPath => simplest_topbase_inner::<RawBlobSummaryEndStateWithoutPath, C, B>(
+            a_committish, b_committish, true, should_use_blob_cb),
     }
 }
 
@@ -846,18 +929,22 @@ mod tests {
     use super::*;
     use io::Cursor;
 
+    fn default_use_blob(_b: &mut RawBlobSummary, _s: &str) -> bool {
+        true
+    }
+
     #[test]
     fn loader_doesnt_make_more_groups_than_commit_count() {
         // we pass a very high value of N, if we call
         // load_next() several times, there should still only be 1 group
         // TODO: if this repo ever gets more than 1000000 commits, update this:
         let mut loader = BranchIterativeCommitLoader::<RawBlobSummary>::new(1000000, "HEAD");
-        loader.load_next(|_| false).unwrap();
+        loader.load_next(&mut default_use_blob, |_| false).unwrap();
         assert_eq!(loader.groups.len(), 1);
         let num_commits = loader.groups[0].len();
-        loader.load_next(|_| false).unwrap();
-        loader.load_next(|_| false).unwrap();
-        loader.load_next(|_| false).unwrap();
+        loader.load_next(&mut default_use_blob, |_| false).unwrap();
+        loader.load_next(&mut default_use_blob, |_| false).unwrap();
+        loader.load_next(&mut default_use_blob, |_| false).unwrap();
         assert_eq!(loader.groups.len(), 1);
         assert_eq!(loader.groups[0].len(), num_commits);
     }
@@ -870,11 +957,11 @@ mod tests {
     // #[test]
     fn loader_groups_are_disjoint() {
         let mut loader = BranchIterativeCommitLoader::<RawBlobSummary>::new(1, "HEAD");
-        loader.load_next(|_| false).unwrap();
+        loader.load_next(&mut default_use_blob, |_| false).unwrap();
         assert_eq!(loader.groups.len(), 1);
         assert_eq!(loader.groups[0].len(), 1);
         let first_commit = loader.groups[0][0].0.commit.id.hash.clone();
-        loader.load_next(|_| false).unwrap();
+        loader.load_next(&mut default_use_blob, |_| false).unwrap();
         assert_eq!(loader.groups.len(), 2);
         assert_eq!(loader.groups[0].len(), 1);
         assert_eq!(loader.groups[1].len(), 1);

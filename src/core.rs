@@ -12,6 +12,7 @@ use super::exec_helpers;
 use super::git_helpers3;
 use super::repo_file::RepoFile;
 use super::ioerre;
+use super::ioerr;
 
 pub const VALID_REPO_FILE_EXTENSION: &str = "rf";
 
@@ -40,7 +41,7 @@ pub fn get_repo_root() -> PathBuf {
 
 pub fn delete_branch(branch_name: &str) {
     if let Err(e) = git_helpers3::delete_branch(branch_name) {
-        println!("Failed to delete branch: {}. {}", branch_name, e);
+        eprintln!("Failed to delete branch: {}. {}", branch_name, e);
     }
 }
 
@@ -51,12 +52,12 @@ pub fn go_to_repo_root() {
     }
 }
 
-pub fn perform_gitfilter(
+pub fn perform_gitfilter_res(
     filter_rules: FilterRules,
     output_branch: String,
     dry_run: bool,
     verbose: bool,
-) {
+) -> io::Result<()> {
     let filter_options = FilterOptions {
         stream: sink(),
         branch: Some(output_branch),
@@ -67,18 +68,30 @@ pub fn perform_gitfilter(
     if dry_run || verbose {
         println!("Running with filter rules:\n{:#?}", filter_rules);
     }
-    if dry_run { return; }
+    if dry_run { return Ok(()); }
 
     let res = gitfilter::filter::filter_with_rules_direct(
         filter_options, filter_rules);
     if let Err(e) = res {
-        die!("Failed to perform gitfilter: {}", e);
+        return ioerre!("Failed to perform gitfilter: {}", e);
     }
 
     // remember, at the end of gitfilter, we have to revert the files that
     // are currently staged:
     if let Err(e) = git_helpers3::reset_stage() {
-        die!("Failed to reset git stage after filer: {}", e);
+        return ioerre!("Failed to reset git stage after filter: {}", e);
+    }
+    Ok(())
+}
+
+pub fn perform_gitfilter(
+    filter_rules: FilterRules,
+    output_branch: String,
+    dry_run: bool,
+    verbose: bool,
+) {
+    if let Err(e) = perform_gitfilter_res(filter_rules, output_branch, dry_run, verbose) {
+        die!("{}", e);
     }
 }
 
@@ -168,20 +181,22 @@ pub fn verify_dependencies() {
 /// there are modified files, in the middle of a merge conflict
 /// etc...
 pub fn safe_to_proceed() {
-    // TODO: also check for other things like:
-    // are there files staged? are we resolving a conflict?
-    // im just too lazy right now, and this is the most likely scenario
-    let args = ["git", "ls-files", "--modified"];
-    let output = match exec_helpers::execute(&args) {
-        Ok(o) => match o.status {
-            0 => o.stdout,
-            _ => die!("Failed to run ls-files: {}", o.stderr),
+    match safe_to_proceed_res() {
+        Ok(safe) => if !safe {
+            die!("You have modified or staged changes. Please stash or commit your changes before running this command");
         },
-        Err(e) => die!("Failed to run ls-files: {}", e),
-    };
-    if ! output.is_empty() {
-        die!("You have modified changes. Please stash or commit your changes before running this command");
+        Err(e) => {
+            die!("Failed to determine index state:\n{}", e);
+        }
     }
+}
+
+pub fn safe_to_proceed_res() -> io::Result<bool> {
+    let has_modified_files = git_helpers3::has_modified_files()?;
+    if has_modified_files { return Ok(false); }
+    let has_staged_files = git_helpers3::has_staged_files()?;
+    if has_staged_files { return Ok(false); }
+    Ok(true)
 }
 
 pub fn make_and_checkout_output_branch_res(
@@ -222,21 +237,21 @@ pub fn make_and_checkout_output_branch(
     }
 }
 
-pub fn make_and_checkout_orphan_branch(
+pub fn make_and_checkout_orphan_branch_res(
     orphan_branch: &str,
     dry_run: bool,
     verbose: bool,
-) {
+) -> io::Result<()> {
     if dry_run {
         println!("git checkout --orphan {}", orphan_branch);
         println!("git rm -rf . > /dev/null");
-        return;
+        return Ok(());
     }
 
     if git_helpers3::make_orphan_branch_and_checkout(
         orphan_branch,
     ).is_err() {
-        die!("Failed to checkout orphan branch");
+        return ioerre!("Failed to checkout orphan branch {}", orphan_branch);
     }
 
     // on a new orphan branch our existing files appear in the stage
@@ -245,20 +260,31 @@ pub fn make_and_checkout_orphan_branch(
     // we are in the root of the repository, but this method
     // should only be called after we cd into the root
     if git_helpers3::remove_index_and_files().is_err() {
-        die!("Failed to remove git indexed files after making orphan");
+        return  ioerre!("Failed to remove git indexed files after making orphan branch {}", orphan_branch);
     }
     if verbose {
         println!("created and checked out orphan branch {}", orphan_branch);
     }
+    Ok(())
 }
 
-pub fn populate_empty_branch_with_remote_commits(
+pub fn make_and_checkout_orphan_branch(
+    orphan_branch: &str,
+    dry_run: bool,
+    verbose: bool,
+) {
+    if let Err(e) = make_and_checkout_orphan_branch_res(orphan_branch, dry_run, verbose) {
+        die!("{}", e);
+    }
+}
+
+pub fn populate_empty_branch_with_remote_commits_res(
     repo_file: &RepoFile,
     input_branch: Option<&str>,
     remote_branch: Option<&str>,
     num_commits: Option<u32>,
     dry_run: bool,
-) {
+) -> io::Result<()> {
     let remote_repo = repo_file.remote_repo.clone();
     let log_p = if dry_run { "   # " } else { "" };
 
@@ -281,10 +307,24 @@ pub fn populate_empty_branch_with_remote_commits(
                 remote_branch,
                 num_commits
             ).is_err() {
-                die!("Failed to pull remote repo {}", remote_string);
+                return ioerre!("Failed to pull remote repo {}", remote_string);
             }
         },
-    };
+    }
+
+    Ok(())
+}
+
+pub fn populate_empty_branch_with_remote_commits(
+    repo_file: &RepoFile,
+    input_branch: Option<&str>,
+    remote_branch: Option<&str>,
+    num_commits: Option<u32>,
+    dry_run: bool,
+) {
+    if let Err(e) = populate_empty_branch_with_remote_commits_res(repo_file, input_branch, remote_branch, num_commits, dry_run) {
+        die!("{}", e);
+    }
 }
 
 pub fn error_if_array_invalid(

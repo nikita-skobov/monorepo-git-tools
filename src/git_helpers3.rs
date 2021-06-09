@@ -41,7 +41,7 @@ pub struct CommitWithBlobs {
 }
 
 /// see: https://www.git-scm.com/docs/git-diff
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Eq, Hash)]
 pub enum DiffStatus {
     Added,
     Copied,
@@ -51,6 +51,12 @@ pub enum DiffStatus {
     TypeChanged,
     Unmerged,
     Unknown,
+}
+
+impl Default for DiffStatus {
+    fn default() -> Self {
+        DiffStatus::Unknown
+    }
 }
 
 impl FromStr for DiffStatus {
@@ -73,7 +79,7 @@ impl FromStr for DiffStatus {
 }
 
 /// see: https://stackoverflow.com/questions/737673/how-to-read-the-mode-field-of-git-ls-trees-output
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Eq, Hash)]
 pub enum FileMode {
     Empty,
     Directory,
@@ -86,6 +92,12 @@ pub enum FileMode {
     // if the above are all of the valid file modes,
     // so in case we cant parse it, we will say its unknown...
     Unknown,
+}
+
+impl Default for FileMode {
+    fn default() -> Self {
+        FileMode::Unknown
+    }
 }
 
 impl FromStr for FileMode {
@@ -229,12 +241,54 @@ pub struct RawBlobSummaryWithoutPath {
     pub dest_sha: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub struct RawBlobSummaryEndState {
+    pub sha: u64,
+    pub file_mode: FileMode,
+    pub status: DiffStatus,
+    pub path_str: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub struct RawBlobSummaryEndStateWithoutPath {
+    pub sha: u64,
+    pub file_mode: FileMode,
+    pub status: DiffStatus,
+}
+
 impl From<RawBlobSummary> for RawBlobSummaryWithoutPath {
     fn from(orig: RawBlobSummary) -> Self {
         RawBlobSummaryWithoutPath {
             src_dest_mode_and_status: orig.src_dest_mode_and_status,
             src_sha: orig.src_sha,
             dest_sha: orig.dest_sha,
+        }
+    }
+}
+
+impl From<RawBlobSummary> for RawBlobSummaryEndState {
+    fn from(orig: RawBlobSummary) -> Self {
+        let (status, src_mode, dest_mode) = orig.src_dest_mode_and_status.into();
+        let (use_mode, use_sha) = match status {
+            DiffStatus::Deleted => (src_mode, orig.src_sha),
+            _ => (dest_mode, orig.dest_sha),
+        };
+        RawBlobSummaryEndState {
+            status,
+            sha: use_sha,
+            file_mode: use_mode,
+            path_str: orig.path_str,
+        }
+    }
+}
+
+impl From<RawBlobSummary> for RawBlobSummaryEndStateWithoutPath {
+    fn from(orig: RawBlobSummary) -> Self {
+        let orig: RawBlobSummaryEndState = orig.into();
+        RawBlobSummaryEndStateWithoutPath {
+            sha: orig.sha,
+            file_mode: orig.file_mode,
+            status: orig.status,
         }
     }
 }
@@ -637,13 +691,22 @@ pub fn get_current_ref() -> Result<String, String> {
 }
 
 pub fn get_all_commits_from_ref(
-    refname: &str
+    refname: &str,
+    num_commits: Option<usize>,
 ) -> Result<Vec<Commit>, String> {
     // TODO: in the future might want more info than
     // just the hash and summary
-    let exec_args = [
+    let mut exec_args = vec![
         "git", "log", refname, "--format=%H [%p] %s",
     ];
+    let mut n_str = "".to_string();
+    if let Some(n) = num_commits {
+        n_str = n.to_string();
+    }
+    if ! n_str.is_empty() {
+        exec_args.push("-n");
+        exec_args.push(&n_str);
+    }
     let mut commits = vec![];
     let out_str = match exec_helpers::execute(&exec_args) {
         Err(e) => return Err(e.to_string()),
@@ -695,6 +758,50 @@ pub fn get_all_commits_from_ref(
     Ok(commits)
 }
 
+pub fn stash(pop: bool) -> io::Result<()> {
+    let mut args = vec!["git", "stash"];
+    if pop {
+        args.push("pop");
+    }
+    match exec_helpers::execute(&args) {
+        Ok(o) => match o.status {
+            0 => Ok(()),
+            _ => Err(ioerr!("{}", o.stderr)),
+        }
+        Err(e) => Err(e),
+    }
+}
+
+pub fn has_modified_files() -> io::Result<bool> {
+    let args = ["git", "ls-files", "--modified"];
+    match exec_helpers::execute(&args) {
+        Ok(o) => match o.status {
+            0 => {
+                // if stdout is empty, then there are no
+                // modified files
+                Ok(! o.stdout.trim_end().trim_start().is_empty())
+            },
+            _ => Err(ioerr!("{}", o.stderr)),
+        }
+        Err(e) => Err(e),
+    }
+}
+
+pub fn has_staged_files() -> io::Result<bool> {
+    let args = ["git", "diff", "--name-only", "--cached"];
+    match exec_helpers::execute(&args) {
+        Ok(o) => match o.status {
+            0 => {
+                // if stdout is empty, then there are no
+                // staged files
+                Ok(! o.stdout.trim_end().trim_start().is_empty())
+            },
+            _ => Err(ioerr!("{}", o.stderr)),
+        }
+        Err(e) => Err(e),
+    }
+}
+
 pub fn get_number_of_commits_in_ref(refname: &str) -> Result<usize, String> {
     let exec_args = [
         "git", "log", refname, "--format=%H",
@@ -738,6 +845,26 @@ pub fn get_repo_root() -> Result<String, String> {
     }
 }
 
+pub fn fetch_branch(remote: &str, branch: &str) -> Result<(), String> {
+    let args = [
+        "git", "fetch",
+        remote, branch,
+        "--no-tags",
+    ];
+
+    let err_msg = match exec_helpers::execute(&args) {
+        Err(e) => Some(format!("{}", e)),
+        Ok(o) => match o.status {
+            0 => None,
+            _ => Some(o.stderr),
+        },
+    };
+    if let Some(err) = err_msg {
+        return Err(err);
+    }
+    Ok(())
+}
+
 pub fn get_all_files_in_repo() -> Result<String, String> {
     let exec_args = [
         "git", "ls-tree", "-r", "HEAD", "--name-only", "--full-tree"
@@ -771,6 +898,51 @@ pub fn reset_stage() -> Result<String, String> {
     }
 }
 
+/// basically does:
+/// git rebase -i --onto onto from~<from_n> from
+/// and feeds in the interactive text to the standard input.
+/// git rebase interactive will read from the standard input
+/// instead of asking user's input. This lets you do
+/// git rebase --interactive programatically.
+/// the interactive_text should be a string with newlines
+/// where each line contains one of the possible commands
+/// for an interactive rebase, eg:
+/// ```
+/// let interactive_text = "pick a022bf message\nfixup bdb0452 other message";
+/// ```
+pub fn rebase_interactively_with_commits(
+    onto: &str,
+    from: &str,
+    from_n: usize,
+    interactive_text: &str,
+) -> Result<(), String> {
+    let from_n_str = format!("{}~{}", from, from_n);
+    let args = [
+        "git", "rebase", "-i",
+        "--onto", onto,
+        &from_n_str, from,
+    ];
+    let rebase_data_str = format!("echo \"{}\" >", interactive_text);
+
+    let err_msg = match exec_helpers::execute_with_env(
+        &args,
+        &["GIT_SEQUENCE_EDITOR"],
+        &[rebase_data_str.as_str()],
+    ) {
+        Err(e) => Some(format!("{}", e)),
+        Ok(o) => {
+            match o.status {
+                0 => None,
+                _ => Some(o.stderr.lines().next().unwrap().to_string()),
+            }
+        },
+    };
+    if let Some(e) = err_msg {
+        return Err(e);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -792,7 +964,7 @@ mod test {
     #[test]
     #[cfg_attr(not(feature = "gittests"), ignore)]
     fn get_all_commits_from_ref_works() {
-        let data = get_all_commits_from_ref("HEAD");
+        let data = get_all_commits_from_ref("HEAD", None);
         assert!(data.is_ok());
         let data = data.unwrap();
         // this only passes if the test is running from

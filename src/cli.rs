@@ -45,7 +45,7 @@ pub struct MgtCommandDifflog {
     #[options(free)]
     pub branches: Vec<String>,
 
-    #[options(short = "m", help = "(not implemented yet) Valid modes are [topbase, rewind, fullbase]. default is rewind")]
+    #[options(short = "m", help = "(fullbase not implemented yet) Valid modes are [topbase, rewind, fullbase]. default is rewind")]
     pub traversal_mode: Option<ABTraversalMode>,
 
     #[options(short = "w", help = "Force specify a width to display the log. default is to use whole terminal")]
@@ -140,6 +140,15 @@ pub struct MgtCommandSync {
 
     #[options(help = "when iterating the sync of multiple repo files, if a single one fails, do not sync the rest")]
     pub fail_fast: bool,
+
+    #[options(short = "b", help = "by default, we fetch the remote HEAD when looking for updates to sync. With --ask-branches you will be asked which remote branch you wish to fetch for each remote url we fetch")]
+    pub ask_branches: bool,
+
+    #[options(help = "specify a maximum number of attempts when being asked an interactive question. Default is infinite. This is useful only for scripts to prevent them from hanging")]
+    pub max_interactive_attempts: Option<usize>,
+
+    #[options(help = "only show the summary of the potential sync, but do not perform any filter, pull, or push operations")]
+    pub summary_only: bool,
 }
 
 #[derive(Debug, Options)]

@@ -2,9 +2,11 @@ use std::io;
 use terminal_size::{Width, terminal_size};
 
 
+use super::topbase::ABTraversalMode;
 use super::cli::MgtCommandDifflog;
 use super::topbase::find_a_b_difference2;
 use super::git_helpers3::Commit;
+use crate::topbase::{NopCB, BlobHashingMode};
 
 pub fn format_right_string(
     commit: &str,
@@ -165,10 +167,21 @@ pub fn run_actual(cmd: &mut MgtCommandDifflog) -> io::Result<()> {
         }
     };
 
+    let should_rewind = if let Some(mode) = cmd.traversal_mode {
+        match mode {
+            ABTraversalMode::TopbaseRewind => true,
+            _ => false,
+        }
+    } else {
+        false
+    };
+
+    // TODO: make this a cli option
+    let hashing_mode = BlobHashingMode::Full;
     // TODO: make this a cli option
     let traverse_at_a_time = 500;
-    let topbase_res = find_a_b_difference2(
-        branch_left, branch_right, Some(traverse_at_a_time), true)?;
+    let topbase_res = find_a_b_difference2::<_, NopCB>(
+        branch_left, branch_right, Some(traverse_at_a_time), hashing_mode, should_rewind, None)?;
     let successful_topbase = match topbase_res {
         Some(s) => s,
         None => {
@@ -178,7 +191,7 @@ pub fn run_actual(cmd: &mut MgtCommandDifflog) -> io::Result<()> {
     };
 
     let left_group = successful_topbase.top_commits;
-    let right_group = vec![];
+    let right_group = successful_topbase.top_right_commits;
 
     let left_fork = vec![successful_topbase.fork_point.0];
     let right_fork = vec![successful_topbase.fork_point.1];
