@@ -170,3 +170,79 @@ function setup() {
     echo "$git_branches_after"
     [[ "$git_branches_before" == "$git_branches_after" ]]
 }
+
+@test 'sync out --fail-fast will exit on first error it sees' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    # fork point:
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    git checkout -b newbranch
+    echo "diverge" > xyz.txt && git add xyz.txt && git commit -m "xyz"
+    git checkout -
+    echo "REMOTE:"
+    echo "$(git log --all --decorate --oneline --graph)"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+
+    include=[\"abc.txt\", \"xyz.txt\"]
+    "
+    echo "$repo_file_contents" > repo_file.rf
+    repo_file_contents="
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+
+    include=[\"abc.txt\"]
+    "
+    echo "$repo_file_contents" > repo_file2.rf
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    # this is the local commit we have that can be pushed up to remote
+    echo "xyz" > xyz.txt && git add xyz.txt && git commit -m "xyz"
+    echo "LOCAL:"
+    echo "$(git log --oneline)"
+    git_branches_before="$(git branch)"
+
+    # 1. select push
+    # <ENTER>. name of branch for remote to use
+    # for the second repo file:
+    # 1. select push
+    # <ENTER>, default branch name
+    expected_remote_branch="newbranch"
+    interact="1\n$expected_remote_branch\n1\n\n"
+    echo -e "$interact" > interact.txt
+
+    # Without --fail-fast, we should fail to sync the first repo file,
+    # but the second one should succeed because the first error should be properly
+    # cleaned up
+    run $PROGRAM_PATH sync repo_file.rf repo_file2.rf --max-interactive-attempts 1 < interact.txt
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ $output == *"You can push"* ]]
+    [[ $output != *"You can pull"* ]]
+    [[ $output == *"rejected"* ]] # git should reject the push
+    # we should see up to date show up for the second repo file
+    [[ $output == *"Up to date"* ]]
+
+    # no lingering branches, and we should still be on our original branch
+    echo "Git branches before:"
+    echo "$git_branches_before"
+    git_branches_after="$(git branch)"
+    echo "Git branches after:"
+    echo "$git_branches_after"
+    [[ "$git_branches_before" == "$git_branches_after" ]]
+
+    # But now, we pass --fail-fast, so we should NOT see the second repo file be
+    # synced, so we shouldnt see "Up to date"
+    run $PROGRAM_PATH sync repo_file.rf repo_file2.rf --fail-fast --max-interactive-attempts 1 < interact.txt
+    echo "$output"
+    [[ $status != "0" ]]
+    [[ $output == *"You can push"* ]]
+    [[ $output != *"You can pull"* ]]
+    [[ $output == *"rejected"* ]] # git should reject the push
+    # we should NOT see up to date show up for the second repo file
+    [[ $output != *"Up to date"* ]]
+}
