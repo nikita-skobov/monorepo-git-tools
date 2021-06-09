@@ -152,3 +152,58 @@ function setup() {
     [[ "$git_branches_before" != "$git_branches_after" ]]
     [[ "$git_branch_before" != "$git_branch_after" ]]
 }
+
+
+# like the above test, but now we pass 2. for the
+# second option, so we should not merge, and instead
+# remain on the temp branch
+@test 'can specify a remote branch to fetch from with --ask-branches' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    # fork point:
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    # the topbase alg will only detect updates on the updateshere
+    # branch, otherwise, the main branch will just be the fork point
+    # so mgt sync would report no updates
+    git checkout -b updateshere
+    echo "xyz" > xyz.txt && git add xyz.txt && git commit -m "xyz"
+    echo "REMOTE:"
+    echo "$(git log --oneline)"
+    git checkout -
+    echo "REMOTE without updates:"
+    echo "$(git log --oneline)"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+
+    include=[\"abc.txt\", \"xyz.txt\"]
+    "
+    echo "$repo_file_contents" > repo_file.rf
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+
+    # first we try what happens without ask branches
+    # it should report there is nothing to update
+    interact="1\n2\n"
+    echo -e "$interact" > interact.txt
+
+    run $PROGRAM_PATH sync repo_file.rf --max-interactive-attempts 1 < interact.txt
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ $output == *"Up to date"* ]]
+
+    # but now, if we pass --ask-branches
+    # and also provide the name of the branch in the interaction
+    # then we should find the xyz commit to pull
+    interact="updateshere\n1\n2\n"
+    echo -e "$interact" > interact.txt
+
+    run $PROGRAM_PATH sync repo_file.rf --max-interactive-attempts 1 --ask-branches < interact.txt
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ $output != *"Up to date"* ]]
+    [[ $output == *"You can pull"* ]]
+    [[ $output != *"You can push"* ]]
+}
