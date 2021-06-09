@@ -224,7 +224,7 @@ pub fn try_rebase_onto(
         onto_fork_point, top_name, top_num_commits, interactive_rebase_str);
 
     if let Err(err) = rebase_res {
-        // TODO: I dont think it makes sense to cleanup on a failed rebase right?
+        // I dont think it makes sense to cleanup on a failed rebase right?
         // the user probably wants to look at it/potentially clean it up themselves?
         return ioerre!("Failed to rebase top {} commits of {} onto {} because\n{}\nLeaving you with a git interactive rebase in progress. Go back with 'git rebase --abort', or otherwise rebase manually and then finish with 'git rebase --continue'", top_num_commits, top_name, onto_fork_point, err);
     }
@@ -421,7 +421,6 @@ pub fn try_fast_forward_merge(
     Ok(())
 }
 
-// TODO: do these :)
 // AKA: pull remote changes into local
 pub fn try_sync_in(
     cmd: &MgtCommandSync,
@@ -689,8 +688,6 @@ pub fn sync_repo_file(
     let repo_file = repo_file::parse_repo_file_from_toml_path_res(
         repo_file_path)?;
     let default_branch = "HEAD".to_string();
-    // TODO: do repo files support specifying a branch name for the remote?
-    // is defaulting to HEAD ok?
     let repo_url = repo_file.remote_repo.as_ref()
         .ok_or(ioerr!("Failed to find a remote repo in the repo file: {:?}", repo_file_path))?;
     let repo_branch = repo_file.remote_branch.as_ref().unwrap_or(&default_branch);
@@ -740,8 +737,7 @@ pub fn sync_repo_file(
     let (sync_type, topbase_ok) = match topbase_ok {
         None => (SyncType::Disjoint, None),
         Some(o) => {
-            // TODO: still not sure if this is how I want to handle
-            // merge commit filtering. This is the simplest solution:
+            // This is how we handle merge commit filtering. This is the simplest solution:
             // just dont allow merge commits, and dont show them to the
             // user. Because if we allow a merge commit, then when we
             // do an interactive rebase after filtering, the merge commit
@@ -764,12 +760,6 @@ pub fn sync_repo_file(
             // that could be an issue if that is ever possible.
             let local_empty = o.top_commits.is_empty();
             let remote_empty = o.top_right_commits.is_empty();
-            // TODO: handle merge commit filtering here.
-            // if user provides --allow-merges option
-            // then we consider a merge commit a potential divergence,
-            // otherwise, we have to check the bottom case here
-            // and if one of the branches only contains merge commits,
-            // we pretend they dont exist.
             let sync_type = match (local_empty, remote_empty) {
                 (true, true) => SyncType::UpToDate,
                 (true, false) => SyncType::RemoteAhead,
@@ -796,26 +786,6 @@ pub fn canonicalize_all_repo_file_paths(paths: &Vec<PathBuf>) -> Vec<PathBuf> {
     }
     out_paths
 }
-
-// TODO: need a way to cleanup if any error...
-// couple things here:
-// 1. cleanup should be on an individual sync item level
-// ie: if syncing branch A fails, then that sync operation
-// should fix itself, so if the user wants to continue to syncing
-// branch B, the repo is in a valid state to continue syncing.
-// 2. operations while syncing should be reversible.
-// ie: we need to know before doing something what the appropriate
-// action would be if we fail. consider for example
-// doing a pull --rebase... obviously there could be conflicts.
-// and if so, we want to be able to get the user's local branch
-// back to the exact state it started in...
-
-// TODO: rewrite sync repo file to not actually topbase/filter
-// we can do what the check command does, and just get the FETCH_HEAD
-// for each repo file, and then perform a topbase search without path
-// hash mode, and based on that output we will find out
-// what we want to know for sync, ie:
-// are we ahead of remote, are we behind, both?, or neither ahead nor behind (ie: no fork point)?
 
 pub fn run_sync(cmd: &mut MgtCommandSync) {
     // before we go to the repo root, we want to canonicalize
@@ -849,10 +819,6 @@ pub fn run_sync(cmd: &mut MgtCommandSync) {
         if let Err(e) = sync_repo_file(&starting_branch_name, &repo_file, cmd) {
             eprintln!("{}\n{}", potential_err, e);
             if cmd.fail_fast {
-                // TODO: do we need a single global cleanup?
-                // or only cleanup on a per item basis?
-                // leaning towards just cleaning up each individual sync...
-                // attempt_cleanup_or_die(branches_to_delete, starting_branch_name);
                 std::process::exit(1);
             }
         }
