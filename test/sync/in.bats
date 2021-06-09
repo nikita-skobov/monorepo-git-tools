@@ -207,3 +207,55 @@ function setup() {
     [[ $output == *"You can pull"* ]]
     [[ $output != *"You can push"* ]]
 }
+
+
+@test '--summary-only works for sync in' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    # fork point:
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "xyz" > xyz.txt && git add xyz.txt && git commit -m "xyz"
+    echo "REMOTE:"
+    echo "$(git log --oneline)"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+
+    include=[\"abc.txt\", \"xyz.txt\"]
+    "
+    echo "$repo_file_contents" > repo_file.rf
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "LOCAL:"
+    echo "$(git log --oneline)"
+    git_branches_before="$(git branch)"
+
+    # this test should not have any interactive options
+    # because we pass --summary-only, but just in case
+    # we will fill the interaction file with non-valid
+    # options that will cause an error:
+    # 7. not valid
+    interact="7\n7\n"
+    echo -e "$interact" > interact.txt
+
+    # fork point should be calculated at abc commit, and then sync command
+    # should report that we can pull in updates from the remote
+    # repo.
+    run $PROGRAM_PATH sync repo_file.rf --max-interactive-attempts 1 --summary-only < interact.txt
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ $output == *"You can pull"* ]]
+    [[ $output != *"You can push"* ]]
+    # even though it says "You can pull", it should
+    # not actually give you the choice to perform a pull operation
+    [[ $output != *"1. pull"* ]]
+
+    echo "Git branches before:"
+    echo "$git_branches_before"
+    git_branches_after="$(git branch)"
+    echo "Git branches after:"
+    echo "$git_branches_after"
+    [[ "$git_branches_before" == "$git_branches_after" ]]
+}
