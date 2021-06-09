@@ -434,7 +434,7 @@ pub fn try_sync_in(
     let filter_rules = split_in::generate_gitfilter_filterrules(&repo_file, is_verbose);
     let random_number = match repo_file.remote_repo {
         Some(ref s) => s.len(),
-        None => 123531421321, // very secure, got it from some .gov website
+        None => 12353143, // very secure, got it from some .gov website
     };
     println!("- Making temporary branch");
     let random_branch = make_random_branch_name(random_number);
