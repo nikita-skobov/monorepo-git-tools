@@ -1,0 +1,154 @@
+function make_temp_repo() {
+    cd $BATS_TMPDIR
+    mkdir -p $1
+    cd $1
+    if [[ ! -d .git ]]; then
+        git init
+        git config --local user.email "temp"
+        git config --local user.name "temp"
+        echo "name of repo: $1" > $1.txt
+        git add $1.txt
+        git commit -m "initial commit for $1"
+    fi
+}
+
+function set_seperator() {
+    # I wanna use these tests for both windows (git bash)
+    # and linux, so I need to change the separator
+    if [[ -d /c/ ]]; then
+        SEP="\\\\"
+    else
+        SEP="/"
+    fi
+}
+
+function teardown() {
+    cd $BATS_TMPDIR
+    if [[ -d test_remote_repo ]]; then
+        rm -rf test_remote_repo
+    fi
+    if [[ -d test_remote_repo2 ]]; then
+        rm -rf test_remote_repo2
+    fi
+    cd ..
+    if [[ -d check ]]; then
+        rm -rf check/
+    fi
+}
+
+function setup() {
+    test_folder="$BATS_TMPDIR/sync"
+    mkdir -p "$test_folder"
+    BATS_TMPDIR="$test_folder"
+    cd $test_folder
+    set_seperator
+    make_temp_repo test_remote_repo
+    test_remote_repo="test_remote_repo"
+    make_temp_repo test_remote_repo2
+    test_remote_repo2="test_remote_repo2"
+    cd $BATS_TMPDIR/test_remote_repo
+}
+
+
+
+@test 'should stay on starting branch and not leave any lingering branches after sync in' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    # fork point:
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "xyz" > xyz.txt && git add xyz.txt && git commit -m "xyz"
+    echo "REMOTE:"
+    echo "$(git log --oneline)"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+
+    include=[\"abc.txt\", \"xyz.txt\"]
+    "
+    echo "$repo_file_contents" > repo_file.rf
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "LOCAL:"
+    echo "$(git log --oneline)"
+    git_branches_before="$(git branch)"
+
+    # mgt sync is an interactive command, we put a list of our inputs into
+    # a text file and feed that to its stdin.
+    # this series of inputs should be:
+    # 1. select pull
+    # 1. merge branch
+    interact="1\n1\n"
+    echo -e "$interact" > interact.txt
+
+    # fork point should be calculated at abc commit, and then sync command
+    # should report that we can pull in updates from the remote
+    # repo.
+    run $PROGRAM_PATH sync repo_file.rf < interact.txt
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ $output == *"You can pull"* ]]
+    [[ $output != *"You can push"* ]]
+
+    echo "Git branches before:"
+    echo "$git_branches_before"
+    git_branches_after="$(git branch)"
+    echo "Git branches after:"
+    echo "$git_branches_after"
+    [[ "$git_branches_before" == "$git_branches_after" ]]
+}
+
+# like the above test, but now we pass 2. for the
+# second option, so we should not merge, and instead
+# remain on the temp branch
+@test 'should stay on temp branch sync in' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    # fork point:
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "xyz" > xyz.txt && git add xyz.txt && git commit -m "xyz"
+    echo "REMOTE:"
+    echo "$(git log --oneline)"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+
+    include=[\"abc.txt\", \"xyz.txt\"]
+    "
+    echo "$repo_file_contents" > repo_file.rf
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "LOCAL:"
+    echo "$(git log --oneline)"
+    git_branches_before="$(git branch)"
+    git_branch_before="$(git branch --show)"
+
+    # mgt sync is an interactive command, we put a list of our inputs into
+    # a text file and feed that to its stdin.
+    # this series of inputs should be:
+    # 1. select pull
+    # 2. stay on temp branch
+    interact="1\n2\n"
+    echo -e "$interact" > interact.txt
+
+    # fork point should be calculated at abc commit, and then sync command
+    # should report that we can pull in updates from the remote
+    # repo.
+    run $PROGRAM_PATH sync repo_file.rf < interact.txt
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ $output == *"You can pull"* ]]
+    [[ $output != *"You can push"* ]]
+
+    echo "Git branches before:"
+    echo "$git_branches_before"
+    git_branches_after="$(git branch)"
+    git_branch_after="$(git branch --show)"
+    echo "Git branches after:"
+    echo "$git_branches_after"
+    [[ "$git_branches_before" != "$git_branches_after" ]]
+    [[ "$git_branch_before" != "$git_branch_after" ]]
+}
