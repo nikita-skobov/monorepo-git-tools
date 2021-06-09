@@ -142,7 +142,7 @@ function teardown() {
     [[ $status != "0" ]]
     [[ "$(git branch --show-current)" == "master" ]]
     [[ "$git_log_before" == "$git_log_after" ]]
-    [[ $output == *"modified changes"* ]]
+    [[ $output == *"modified or staged changes"* ]]
 }
 
 @test 'can split in to a specific output branch' {
