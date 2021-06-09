@@ -202,11 +202,13 @@ pub fn try_rebase_onto(
 }
 
 pub fn try_get_output_branch_name(
+    cmd: &MgtCommandSync,
     random_branch: &str,
     starting_branch_name: &str,
 ) -> io::Result<String> {
     let message = "Enter the desired branch name to be created on the remote repo (hit Enter to use an auto-generated branch name)";
-    let interact_choice = interact::InteractChoices::choose_word(&message);
+    let mut interact_choice = interact::InteractChoices::choose_word(&message);
+    interact_choice.max_loop = cmd.max_interactive_attempts;
     let push_branch_name = interact::interact_word(interact_choice)
         .map_err(|err| {
             // failed to interact, but instead of just exiting here,
@@ -366,6 +368,7 @@ pub fn get_rebase_interactive_string_and_number(
 
 /// returns true if user wants to merge
 pub fn try_get_merge_choice(
+    cmd: &MgtCommandSync,
     branch_name: &str,
     starting_branch_name: &str,
 ) -> io::Result<bool> {
@@ -377,6 +380,7 @@ pub fn try_get_merge_choice(
     ];
     let mut merge_choices: interact::InteractChoices = (&merge_options[..]).into();
     let description = "Would you like to merge your original branch into the newly filtered branch?".to_string();
+    merge_choices.max_loop = cmd.max_interactive_attempts;
     merge_choices.description = Some(description);
     let finalize_choice = interact::interact_number(merge_choices);
     let finalize_choice = match finalize_choice {
@@ -412,6 +416,7 @@ pub fn try_fast_forward_merge(
 // TODO: do these :)
 // AKA: pull remote changes into local
 pub fn try_sync_in(
+    cmd: &MgtCommandSync,
     repo_file: &RepoFile,
     starting_branch_name: &str,
     fork_point_local: &str,
@@ -445,7 +450,7 @@ pub fn try_sync_in(
 
     // TODO: what about cli arguments to not ask this:
     // eg: --always-merge or something
-    let user_wants_to_merge = try_get_merge_choice(&random_branch, starting_branch_name)?;
+    let user_wants_to_merge = try_get_merge_choice(cmd, &random_branch, starting_branch_name)?;
     if user_wants_to_merge {
         // to fast forward merge i believe we have to be
         // on the starting branch to do that...
@@ -477,6 +482,7 @@ pub fn try_sync_in(
 // just rebase onto that fork point thats currently
 // in our FETCH_HEAD
 pub fn try_sync_out(
+    cmd: &MgtCommandSync,
     repo_file: &RepoFile,
     repo_remote_url: &str,
     starting_branch_name: &str,
@@ -509,7 +515,7 @@ pub fn try_sync_out(
     println!("- Rebasing onto calculated fork point");
     try_rebase_onto(fork_point_remote, &random_branch, num_commits_to_push, &rebase_interactive_string)?;
 
-    let push_branch_name = try_get_output_branch_name(&random_branch, starting_branch_name)?;
+    let push_branch_name = try_get_output_branch_name(cmd, &random_branch, starting_branch_name)?;
     println!("- git push {} {}:{}", repo_remote_url, random_branch, push_branch_name);
     try_push_out(repo_remote_url, &random_branch, &push_branch_name, starting_branch_name)?;
 
@@ -621,7 +627,8 @@ pub fn handle_sync2(
     choices.reverse();
 
     println!();
-    let i_choices: interact::InteractChoices = (&choices[..]).into();
+    let mut i_choices: interact::InteractChoices = (&choices[..]).into();
+    i_choices.max_loop = cmd.max_interactive_attempts;
     let selection = interact::interact_number(i_choices)?;
     let selection_index = selection - 1;
     let selection = choices[selection_index];
@@ -632,13 +639,13 @@ pub fn handle_sync2(
         "pull" => {
             let local_fork = &topbase_success.fork_point.0.commit.id.hash;
             let take_commits = &topbase_success.top_right_commits;
-            try_sync_in(&repo_file, starting_branch_name,
+            try_sync_in(cmd, &repo_file, starting_branch_name,
                 local_fork, take_commits)
         },
         "push" => {
             let remote_fork = &topbase_success.fork_point.1.commit.id.hash;
             let take_commits = &topbase_success.top_commits;
-            try_sync_out(&repo_file, remote_url,
+            try_sync_out(cmd, &repo_file, remote_url,
                 starting_branch_name, remote_fork, take_commits)
         }
 
@@ -686,6 +693,7 @@ pub fn sync_repo_file(
             &format!("What remote branch would you like to fetch? (hit Enter to use {})", repo_branch));
         let description = format!("About to fetch {}", repo_url);
         desired_branch_choice.description = Some(description);
+        desired_branch_choice.max_loop = cmd.max_interactive_attempts;
         let desired_branch = interact::interact_word(desired_branch_choice)
             .map_err(|e| ioerr!("Failed to get user's input for a desired remote branch\n{}", e))?;
         let desired_branch = desired_branch.trim_start().trim_end();

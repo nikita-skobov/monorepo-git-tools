@@ -143,6 +143,9 @@ pub struct MgtCommandSync {
 
     #[options(short = "b", help = "by default, we fetch the remote HEAD when looking for updates to sync. With --ask-branches you will be asked which remote branch you wish to fetch for each remote url we fetch")]
     pub ask_branches: bool,
+
+    #[options(help = "specify a maximum number of attempts when being asked an interactive question. Default is infinite. This is useful only for scripts to prevent them from hanging")]
+    pub max_interactive_attempts: Option<usize>,
 }
 
 #[derive(Debug, Options)]

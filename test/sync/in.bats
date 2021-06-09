@@ -85,7 +85,7 @@ function setup() {
     # fork point should be calculated at abc commit, and then sync command
     # should report that we can pull in updates from the remote
     # repo.
-    run $PROGRAM_PATH sync repo_file.rf < interact.txt
+    run $PROGRAM_PATH sync repo_file.rf --max-interactive-attempts 1 < interact.txt
     echo "$output"
     [[ $status == "0" ]]
     [[ $output == *"You can pull"* ]]
@@ -137,7 +137,7 @@ function setup() {
     # fork point should be calculated at abc commit, and then sync command
     # should report that we can pull in updates from the remote
     # repo.
-    run $PROGRAM_PATH sync repo_file.rf < interact.txt
+    run $PROGRAM_PATH sync repo_file.rf --max-interactive-attempts 1 < interact.txt
     echo "$output"
     [[ $status == "0" ]]
     [[ $output == *"You can pull"* ]]
