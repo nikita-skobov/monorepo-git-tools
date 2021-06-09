@@ -1,6 +1,6 @@
 # `mgt`
 
-> this file was automatically generated on 2021-04-09
+> this file was automatically generated on 2021-06-09
 
 Below you'll find a list of links to documentation pages, as well as the
 automatically generated output of `mgt --help`
@@ -19,7 +19,7 @@ automatically generated output of `mgt --help`
 ## `mgt help`
 
 ```
-mgt 4.5.0 e7d6d9d
+mgt 5.0.0 36c4480
 Nikita Skobov
 Git tools that enable easy bidirectional sync between multiple repositories
 
@@ -34,6 +34,8 @@ FLAGS:
 
 Available commands:
   help
+  sync              Interactively sync one or more repo files between local and remote repositorie(s)
+  diff-log          View a log comparing two branches that have potentially unrelated history using a topbase algorithm
   check             check if there are changes ready to be pushed or pulled
   topbase           rebase top branch onto bottom branch but stop the rebase after the first shared commit
   split-in          fetch and rewrite a remote repository's history onto a new branch according to the repo file rules
