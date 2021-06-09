@@ -61,10 +61,14 @@ pub fn make_random_branch_name(backup_number: usize) -> String {
     }
 }
 
+/// returns an error message string.
+/// the same string is returned for result ok or result err.
+/// result ok means it was able to checkout back to starting branch
+/// result err means it was not.
 pub fn try_checkout_back_to_starting_branch<E: Display>(
     starting_branch_name: &str,
     original_error: E,
-) -> io::Result<()> {
+) -> Result<String, String> {
     // cleanup operation?
     // probably none? most likely this is a branch
     // that already existed, so no need to
@@ -80,14 +84,46 @@ pub fn try_checkout_back_to_starting_branch<E: Display>(
             true
         }
     };
+    let mut is_on_starting_branch = ! should_try_to_checkout_back;
     if should_try_to_checkout_back {
         eprintln!("- Switching back to {}", starting_branch_name);
         if let Err(e) = git_helpers3::checkout_branch(starting_branch_name, false) {
             err_msg = format!("{}\nALSO: failed to checkout back to {} because:\n{}\nThis is probably a bug; please report this.", err_msg, starting_branch_name, e);
+        } else {
+            // success
+            is_on_starting_branch = true;
         }
     }
 
-    return ioerre!("{}", err_msg);
+    if is_on_starting_branch {
+        Ok(err_msg)
+    } else {
+        Err(err_msg)
+    }
+}
+
+pub fn try_back_to_start_and_delete_branch<E: Display>(
+    starting_branch_name: &str,
+    branch: &str,
+    original_error: E,
+) -> io::Error {
+    let err_msg = try_checkout_back_to_starting_branch(starting_branch_name, &original_error);
+    let err_msg = match err_msg {
+        Ok(msg) => msg,
+        Err(e) => return ioerr!("{}", e),
+    };
+    let err_msg = result_same_get_either(try_delete_branch(&branch, &err_msg));
+    return ioerr!("{}", err_msg);
+}
+
+/// convenience function for unwrapping the result of `try_checkout_back_to_starting_branch`
+/// sometimes we care if it was successful or not, but other times, we just want
+/// the string thats in the result, regardless if there was an error or not.
+pub fn result_same_get_either<T>(res: Result<T, T>) -> T {
+    match res {
+        Ok(t) => t,
+        Err(t) => t,
+    }
 }
 
 pub fn try_checkout_new_branch(
@@ -98,7 +134,8 @@ pub fn try_checkout_new_branch(
     let branch_made = git_helpers3::checkout_branch(&branch, make_new);
     if let Err(e) = branch_made {
         let err_msg = format!("Failed to create a temporary branch {} because:\n{}\nDoes this branch already exist maybe?", branch, e);
-        return try_checkout_back_to_starting_branch(starting_branch_name, err_msg);
+        let err_msg = result_same_get_either(try_checkout_back_to_starting_branch(starting_branch_name, err_msg));
+        return ioerre!("{}", err_msg);
     }
 
     Ok(())
@@ -114,7 +151,8 @@ pub fn try_making_branch_from(
     ];
     if let Some(err) = exechelper::executed_with_error(&exec_args) {
         let err_msg = format!("Failed to create a temporary branch {} because:\n{}Does this branch already exist maybe?", branch_name, err);
-        return try_checkout_back_to_starting_branch(starting_branch_name, err_msg);
+        let err_msg = result_same_get_either(try_checkout_back_to_starting_branch(starting_branch_name, err_msg));
+        return ioerre!("{}", err_msg);
     }
 
     // TODO: like i pointed out in a comment in the try_sync_out
@@ -125,7 +163,8 @@ pub fn try_making_branch_from(
     let branch_made = git_helpers3::checkout_branch(branch_name, make_new);
     if let Err(e) = branch_made {
         let err_msg = format!("Failed to checkout to temporary branch {} because:\n{}", branch_name, e);
-        return try_checkout_back_to_starting_branch(starting_branch_name, err_msg);
+        let err_msg = result_same_get_either(try_checkout_back_to_starting_branch(starting_branch_name, err_msg));
+        return ioerre!("{}", err_msg);
     }
 
     Ok(())
@@ -134,13 +173,13 @@ pub fn try_making_branch_from(
 pub fn try_delete_branch<E: Display>(
     branch: &str,
     original_error: E,
-) -> io::Result<()> {
+) -> Result<String, String> {
     eprintln!("- Deleting {}", branch);
     if let Err(e) = git_helpers3::delete_branch(branch) {
-        return ioerre!("{}\nALSO: Failed to delete branch {} when trying to recover because\n{}", original_error, branch, e);
+        return Err(format!("{}\nALSO: Failed to delete branch {} when trying to recover because\n{}", original_error, branch, e));
     }
 
-    Ok(())
+    Ok(original_error.to_string())
 }
 
 pub fn try_perform_gitfilter(
@@ -165,21 +204,11 @@ pub fn try_perform_gitfilter(
         // clear the stage index, and then go back to the
         // starting branch... could be several things wrong here.
         let err_msg = format!("Failed to perform gitfilter on branch {} because\n{}", branch, e);
-        let err_msg = if let Err(e) = try_checkout_back_to_starting_branch(starting_branch_name, &err_msg) {
-            // failed to go back to starting branch
-            // TODO: need to do anything else here?
-            return Err(e);
-        } else {
-            // succeeded in going back to our starting branch,
-            // now lets try to delete the temporary branch that
-            // we wanted to filter:
-            if let Err(e) = try_delete_branch(&branch, &err_msg) {
-                return Err(e);
-            }
-            err_msg
-        };
-
-
+        let err_msg = try_checkout_back_to_starting_branch(starting_branch_name, &err_msg)
+            .map_err(|e| ioerr!("{}", e))?;
+        // if we reached this point, we were successful in going back to our starting branch, so
+        // now lets delete the temporary branch:
+        let err_msg = result_same_get_either(try_delete_branch(&branch, &err_msg));
         return ioerre!("{}", err_msg);
     }
     Ok(branch)
@@ -195,6 +224,8 @@ pub fn try_rebase_onto(
         onto_fork_point, top_name, top_num_commits, interactive_rebase_str);
 
     if let Err(err) = rebase_res {
+        // TODO: I dont think it makes sense to cleanup on a failed rebase right?
+        // the user probably wants to look at it/potentially clean it up themselves?
         return ioerre!("Failed to rebase top {} commits of {} onto {} because\n{}\nLeaving you with a git interactive rebase in progress. Go back with 'git rebase --abort', or otherwise rebase manually and then finish with 'git rebase --continue'", top_num_commits, top_name, onto_fork_point, err);
     }
 
@@ -209,18 +240,13 @@ pub fn try_get_output_branch_name(
     let message = "Enter the desired branch name to be created on the remote repo (hit Enter to use an auto-generated branch name)";
     let mut interact_choice = interact::InteractChoices::choose_word(&message);
     interact_choice.max_loop = cmd.max_interactive_attempts;
-    let push_branch_name = interact::interact_word(interact_choice)
-        .map_err(|err| {
-            // failed to interact, but instead of just exiting here,
-            // we still need to cleanup.
-            if let Err(e) = try_checkout_back_to_starting_branch(starting_branch_name, &err) {
-                return e;
-            }
-            if let Err(e) = try_delete_branch(&random_branch, &err) {
-                return e;
-            }
-            err
-        })?;
+    let push_branch_name_res = interact::interact_word(interact_choice);
+    let push_branch_name = match push_branch_name_res {
+        Ok(bn) => bn,
+        Err(err) => {
+            return Err(try_back_to_start_and_delete_branch(starting_branch_name, random_branch, err));
+        }
+    };
     let push_branch_name = push_branch_name.trim_end().trim_start();
     let push_branch_name = if push_branch_name.is_empty() {
         // if its empty, user hit enter, and then we use the default
@@ -255,29 +281,26 @@ pub fn try_push_out(
         "git", "push", remote_url, &push_branch_ref
     ];
 
-    let child = exechelper::spawn_with_env_ex(
+    let child_res = exechelper::spawn_with_env_ex(
         &exec_args, &[], &[], Some(Stdio::inherit()),
-        Some(Stdio::piped()), Some(Stdio::piped())).map_err(|err| {
+        Some(Stdio::piped()), Some(Stdio::piped()));
+    let child = match child_res {
+        Ok(c) => c,
+        Err(err) => {
             // failed to start child, but instead of just exiting here,
             // we still need to cleanup.
-            if let Err(e) = try_checkout_back_to_starting_branch(starting_branch_name, &err) {
-                return e;
-            }
-            if let Err(e) = try_delete_branch(&random_branch, &err) {
-                return e;
-            }
-            err
-        })?;
-    let output = child.wait_with_output().map_err(|err| {
-        // failed to run command successfully to the end
-        if let Err(e) = try_checkout_back_to_starting_branch(starting_branch_name, &err) {
-            return e;
+            return Err(try_back_to_start_and_delete_branch(starting_branch_name, random_branch, err));
         }
-        if let Err(e) = try_delete_branch(&random_branch, &err) {
-            return e;
+    };
+    let output_res = child.wait_with_output();
+    let output = match output_res {
+        Ok(o) => o,
+        Err(err) => {
+            // failed to run command successfully to the end
+            return Err(try_back_to_start_and_delete_branch(starting_branch_name, random_branch, err));
         }
-        err
-    })?;
+    };
+
     let out_err = if ! output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let err = format!("Failed to run git push command:\n{}", stderr);
@@ -285,18 +308,7 @@ pub fn try_push_out(
     } else { None };
     if let Some(orig_err) = out_err {
         // failed to run command successfully to the end
-        let err = try_checkout_back_to_starting_branch(starting_branch_name, &orig_err)
-            .map_err(|e| {
-                match try_delete_branch(&random_branch, &e) {
-                    Ok(_) => e.to_string(),
-                    Err(e2) => e2.to_string(),
-                }
-            });
-        if let Err(e) = err {
-            return ioerre!("{}", e);
-        } else {
-            return ioerre!("{}", orig_err);
-        }
+        return Err(try_back_to_start_and_delete_branch(starting_branch_name, random_branch, orig_err));
     }
 
     // At this point we have made a successful git push
@@ -330,11 +342,9 @@ pub fn try_get_new_commits_after_filter(
 ) -> io::Result<Vec<Commit>> {
     match get_new_commits_after_filter(filtered_branch_name, commits_before_filter) {
         Ok(c) => Ok(c),
-        Err(e) => {
+        Err(err) => {
             // failed, try to recover:
-            try_checkout_back_to_starting_branch(starting_branch_name, &e)?;
-            try_delete_branch(&filtered_branch_name, &e)?;
-            return ioerre!("{}", e);
+            return Err(try_back_to_start_and_delete_branch(starting_branch_name, filtered_branch_name, err));
         }
     }
 }
@@ -385,11 +395,9 @@ pub fn try_get_merge_choice(
     let finalize_choice = interact::interact_number(merge_choices);
     let finalize_choice = match finalize_choice {
         Ok(c) => c,
-        Err(e) => {
+        Err(err) => {
             // failed, try to recover:
-            try_checkout_back_to_starting_branch(starting_branch_name, &e)?;
-            try_delete_branch(branch_name, &e)?;
-            return ioerre!("{}", e);
+            return Err(try_back_to_start_and_delete_branch(starting_branch_name, branch_name, err));
         }
     };
     Ok(finalize_choice == 1)
