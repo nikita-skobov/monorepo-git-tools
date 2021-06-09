@@ -28,9 +28,12 @@ series:
   - parallel:
     - run_unit_tests
     - run_e2e_test test/general
+    - run_e2e_test test/check
     - run_e2e_test test/splitout
     - run_e2e_test test/splitin
     - run_e2e_test test/splitinas
     - run_e2e_test test/topbase
     - run_e2e_test test/splitoutas
-    - run_e2e_test test/check
+  - name: syncseperateiguess
+    series:
+      - run_e2e_test test/sync
