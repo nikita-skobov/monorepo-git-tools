@@ -246,3 +246,68 @@ function setup() {
     # we should NOT see up to date show up for the second repo file
     [[ $output != *"Up to date"* ]]
 }
+
+
+@test 'sync out can stash index changes and then pop them afterwards' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    # fork point:
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "REMOTE:"
+    echo "$(git log --oneline)"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+
+    include=[\"abc.txt\", \"xyz.txt\"]
+    "
+    echo "$repo_file_contents" > repo_file.rf
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    # this is the local commit we have that can be pushed up to remote
+    echo "xyz" > xyz.txt && git add xyz.txt && git commit -m "xyz"
+    # this is just a local change that should be stashed because
+    # its not committed:
+    echo "qqq" > abc.txt
+    echo "LOCAL:"
+    echo "$(git log --oneline)"
+    git_branches_before="$(git branch)"
+
+    # mgt detects unclean index, so it asks what we want to do:
+    # 1. stash changes
+    # 1. select push
+    # <ENTER>. name of branch for remote to use
+    expected_remote_branch="remotebranchhere"
+    interact="1\n1\n$expected_remote_branch\n"
+    echo -e "$interact" > interact.txt
+
+    # fork point should be calculated at abc commit, and then sync command
+    # should report that we can push in updates to the remote repo
+    run $PROGRAM_PATH sync repo_file.rf --max-interactive-attempts 1 < interact.txt
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ $output == *"You can push"* ]]
+    [[ $output != *"You can pull"* ]]
+
+    # no lingering branches, and we should still be on our original branch
+    echo "Git branches before:"
+    echo "$git_branches_before"
+    git_branches_after="$(git branch)"
+    echo "Git branches after:"
+    echo "$git_branches_after"
+    [[ "$git_branches_before" == "$git_branches_after" ]]
+
+    # now test that the remote repo received the expected branch
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    remote_has_branches="$(git branch)"
+    echo "Remote has branches now:"
+    echo "$remote_has_branches"
+    [[ "$remote_has_branches" == *"$expected_remote_branch"* ]]
+
+    cd "$curr_dir"
+    # now test that our abc.txt file is back to qqq:
+    abc_contents="$(cat abc.txt)"
+    [[ "$abc_contents" == *"qqq"* ]]
+}

@@ -758,6 +758,20 @@ pub fn get_all_commits_from_ref(
     Ok(commits)
 }
 
+pub fn stash(pop: bool) -> io::Result<()> {
+    let mut args = vec!["git", "stash"];
+    if pop {
+        args.push("pop");
+    }
+    match exec_helpers::execute(&args) {
+        Ok(o) => match o.status {
+            0 => Ok(()),
+            _ => Err(ioerr!("{}", o.stderr)),
+        }
+        Err(e) => Err(e),
+    }
+}
+
 pub fn has_modified_files() -> io::Result<bool> {
     let args = ["git", "ls-files", "--modified"];
     match exec_helpers::execute(&args) {

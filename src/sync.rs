@@ -866,6 +866,11 @@ pub fn run_sync(cmd: &mut MgtCommandSync) {
         // to proceed, or otherwise ask the user what they want to do
         how_to_proceed()
     };
+    if should_stash_pop {
+        if let Err(e) = git_helpers3::stash(false) {
+            die!("Failed to perform git stash:\n{}\nExiting...", e);
+        }
+    }
 
     let starting_branch_name = core::get_current_ref().unwrap_or_else(|| {
         die!("Failed to get current branch name. Cannot continue")
@@ -879,8 +884,19 @@ pub fn run_sync(cmd: &mut MgtCommandSync) {
         if let Err(e) = sync_repo_file(&starting_branch_name, &repo_file, cmd, can_pull_push) {
             eprintln!("{}\n{}", potential_err, e);
             if cmd.fail_fast {
+                if should_stash_pop {
+                    if let Err(e) = git_helpers3::stash(true) {
+                        die!("Failed to perform git stash pop:\n{}\nThis might be because the sync operation resulted in your files being modified. Check if you have a conflict and resolve it. Otherwise if this error occurred, but you do not have a conflict, then this is an unexpected error and you should report it.", e);
+                    }
+                }
                 std::process::exit(1);
             }
+        }
+    }
+
+    if should_stash_pop {
+        if let Err(e) = git_helpers3::stash(true) {
+            die!("Failed to perform git stash pop:\n{}\nThis might be because the sync operation resulted in your files being modified. Check if you have a conflict and resolve it. Otherwise if this error occurred, but you do not have a conflict, then this is an unexpected error and you should report it.", e);
         }
     }
 }
