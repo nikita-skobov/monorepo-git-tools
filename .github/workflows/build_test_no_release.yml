@@ -100,3 +100,7 @@ jobs:
         run: bash -c "bats test/check"
         env:
           PROGRAM_PATH: mgt
+      - name: e2e_test_sync
+        run: bash -c "bats test/sync"
+        env:
+          PROGRAM_PATH: mgt
