@@ -146,6 +146,9 @@ pub struct MgtCommandSync {
 
     #[options(help = "specify a maximum number of attempts when being asked an interactive question. Default is infinite. This is useful only for scripts to prevent them from hanging")]
     pub max_interactive_attempts: Option<usize>,
+
+    #[options(help = "only show the summary of the potential sync, but do not perform any filter, pull, or push operations")]
+    pub summary_only: bool,
 }
 
 #[derive(Debug, Options)]

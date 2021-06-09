@@ -804,6 +804,51 @@ pub fn canonicalize_all_repo_file_paths(paths: &Vec<PathBuf>) -> Vec<PathBuf> {
     out_paths
 }
 
+pub fn ask_user_how_to_proceed() -> (bool, bool) {
+    // if its not safe to proceed, we offer the user
+    // some options of what they want to do:
+    let choices = [
+        "Stash changes and continue (mgt will pop this for you afterwards)",
+        "Preview the sync without being able to pull/push",
+        "Exit and manually stash/commit changes",
+    ];
+    let mut interact_choice: interact::InteractChoices = (&choices[..]).into();
+    let description = "You have staged and/or modified changes. mgt cannot safely sync unless the index is clean. What would you like to do?".to_string();
+    interact_choice.description = Some(description);
+    let selection = interact::interact_number(interact_choice);
+    let selection = match selection {
+        Ok(s) => s,
+        Err(e) => {
+            die!("Failed to get a response from user because:\n{}\nExiting...", e)
+        }
+    };
+    if selection == 3 {
+        println!("Exiting");
+        std::process::exit(0);
+    } else if selection == 2 {
+        // no need to stash pop at the end,
+        // but user cannot pull/push:
+        (false, false)
+    } else {
+        // user can pull/push, but we need
+        // to stash pop at the end
+        (true, true)
+    }
+}
+
+/// returns (should_stash_pop, can_pull_push)
+pub fn how_to_proceed() -> (bool, bool) {
+    match core::safe_to_proceed_res() {
+        Err(e) => die!("Failed to determine state of your index:\n{}\nThis is probably a bug, please report this.", e),
+        Ok(is_safe) => match is_safe {
+            // safe to proceed, so no need to stash, and user
+            // is free to pull/push/etc.
+            true => (false, true),
+            false => ask_user_how_to_proceed(),
+        }
+    }
+}
+
 pub fn run_sync(cmd: &mut MgtCommandSync) {
     // before we go to the repo root, we want to canonicalize
     // all of the paths the user provided, otherwise they wont work anymore
@@ -812,44 +857,14 @@ pub fn run_sync(cmd: &mut MgtCommandSync) {
     core::verify_dependencies();
     core::go_to_repo_root();
 
-    let (should_stash_pop, can_pull_push) = match core::safe_to_proceed_res() {
-        Err(e) => die!("Failed to determine state of your index:\n{}\nThis is probably a bug, please report this.", e),
-        Ok(is_safe) => match is_safe {
-            // safe to proceed, so no need to stash, and user
-            // is free to pull/push/etc.
-            true => (false, true),
-            false => {
-                // if its not safe to proceed, we offer the user
-                // some options of what they want to do:
-                let choices = [
-                    "Stash changes and continue (mgt will pop this for you afterwards)",
-                    "Preview the sync without being able to pull/push",
-                    "Exit and manually stash/commit changes",
-                ];
-                let mut interact_choice: interact::InteractChoices = (&choices[..]).into();
-                let description = "You have staged and/or modified changes. mgt cannot safely sync unless the index is clean. What would you like to do?".to_string();
-                interact_choice.description = Some(description);
-                let selection = interact::interact_number(interact_choice);
-                let selection = match selection {
-                    Ok(s) => s,
-                    Err(e) => {
-                        die!("Failed to get a response from user because:\n{}\nExiting...", e)
-                    }
-                };
-                if selection == 3 {
-                    println!("Exiting");
-                    std::process::exit(0);
-                } else if selection == 2 {
-                    // no need to stash pop at the end,
-                    // but user cannot pull/push:
-                    (false, false)
-                } else {
-                    // user can pull/push, but we need
-                    // to stash pop at the end
-                    (true, true)
-                }
-            }
-        }
+    // if --summary-only is passed, then we do not need to
+    // stash pop at the end, but the user cannot perform pull/push operations
+    let (should_stash_pop, can_pull_push) = if cmd.summary_only {
+        (false, false)
+    } else {
+        // otherwise figure out from the index if its safe
+        // to proceed, or otherwise ask the user what they want to do
+        how_to_proceed()
     };
 
     let starting_branch_name = core::get_current_ref().unwrap_or_else(|| {
