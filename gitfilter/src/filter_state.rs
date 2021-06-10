@@ -57,7 +57,7 @@ impl FilterState {
 
     // returns true if mark is an ancestor of ANY of the parents,
     // and false if the mark is NOT an ancestor of any parent
-    pub fn is_ancestor_of_any(&self, mark: usize, parents: &Vec<usize>) -> bool {
+    pub fn is_ancestor_of_any(&self, mark: usize, parents: &[usize]) -> bool {
         let mut mark_exists_in_a_parent = false;
         for p in parents {
             if self.is_ancestor(mark, *p) {
@@ -75,7 +75,7 @@ impl FilterState {
         }
     }
 
-    pub fn is_direct_ancestor_of_any(&self, mark: usize, parents: &Vec<usize>) -> bool {
+    pub fn is_direct_ancestor_of_any(&self, mark: usize, parents: &[usize]) -> bool {
         let mut mark_exists_in_a_parent = false;
         for p in parents {
             if self.is_direct_ancestor(mark, *p) {
