@@ -212,6 +212,7 @@ pub fn perform_filter(
     commit: &mut StructuredCommit,
     filter_rules: &FilterRules,
 ) -> Result<FilterResponse, FilterError> {
+    // eprintln!("We see:\n{:#?}", commit);
     let newfileops = apply_filter_rules_to_fileops(default_include, filter_state, commit, filter_rules);
     // if we have pruned all of the file operations,
     // then we dont want to use this object as a commit, but rather
@@ -220,31 +221,34 @@ pub fn perform_filter(
     // from :THIS
     // then they will instead do:
     // from :THIS_PARENT
+    
+    // TODO: this is for temporary compatibility...
+    // get rid of this. theres no reason to make this a string
+    let mut from = match commit.merges.first() {
+        Some(f) => Some(f.to_string()),
+        None => None,
+    };
+    let mark = commit.mark.to_string();
+
     if newfileops.is_empty() {
-        match (&commit.from, &commit.mark) {
-            (Some(from), Some(mark)) => {
-                let insert_with = match filter_state.mark_map.get(from) {
-                    Some(transitive_parent) => Some(transitive_parent.clone()),
-                    None => None,
-                };
-                match insert_with {
-                    Some(transitive_parent) => {
-                        // eprintln!("A {} -> {}", mark, transitive_parent);
-                        filter_state.mark_map.insert(mark.clone(), transitive_parent.clone());
-                    }
-                    None => {
-                        // eprintln!("B {} -> {}", mark, "");
-                        filter_state.mark_map.insert(mark.clone(), "".into());
-                    }
+        if let Some(from) = from {
+            let insert_with = match filter_state.mark_map.get(&from) {
+                Some(transitive_parent) => Some(transitive_parent.clone()),
+                None => None,
+            };
+            match insert_with {
+                Some(transitive_parent) => {
+                    // eprintln!("A {} -> {}", mark, transitive_parent);
+                    filter_state.mark_map.insert(mark.clone(), transitive_parent.clone());
                 }
-            },
-            (None, Some(mark)) => {
-                // eprintln!("D {:?} -> {:?}", commit.mark, commit.from);
-                filter_state.mark_map.insert(mark.clone(), "".into());
-            },
-            // im not sure these other cases
-            // are possible?
-            _ => {},
+                None => {
+                    // eprintln!("B {} -> {}", mark, "");
+                    filter_state.mark_map.insert(mark.clone(), "".into());
+                }
+            }
+        } else {
+            // eprintln!("D {:?} -> {:?}", commit.mark, commit.from);
+            filter_state.mark_map.insert(mark.clone(), "".into());
         }
         return Ok(FilterResponse::DontUse);
     }
@@ -253,7 +257,7 @@ pub fn perform_filter(
     // if this merge doesnt pertain to anything we know about
     // just skip it, dont bother entering it in
     if !commit.merges.is_empty() {
-        let has_from = match &commit.from {
+        let has_from = match &from {
             Some(from) => filter_state.has_nonempty_mark(from),
             None => false,
         };
@@ -261,7 +265,7 @@ pub fn perform_filter(
         // test if a mark exists and is non emtpy. basically
         // dont repeat this code over and over:
         let has_all_merges = commit.merges.iter()
-            .all(|m| filter_state.has_nonempty_mark(m));
+            .all(|m| filter_state.has_nonempty_mark(&m.to_string()));
 
         if !has_from && !has_all_merges {
             // eprintln!("Dont use because it doesnt has from and it doesnt have merges");
@@ -269,7 +273,15 @@ pub fn perform_filter(
         } else if has_from && !has_all_merges {
             // if the from exists, but the merges dont, then
             // remove all merges that dont exist:
-            commit.merges.retain(|merge| filter_state.has_nonempty_mark(merge));
+            let mut is_fist_merge = true;
+            commit.merges.retain(|merge| {
+                if is_fist_merge {
+                    is_fist_merge = false;
+                    true
+                } else {
+                    filter_state.has_nonempty_mark(&merge.to_string())
+                }
+            });
         }
     }
 
@@ -279,22 +291,22 @@ pub fn perform_filter(
     // from :X
     // then we want it to say from :X, and not
     // from :Parent_of_X
-    if let Some(mark) = &commit.mark {
+    // if let Some(mark) = &mark {
         // eprintln!("C {} -> {}", mark, mark);
         filter_state.mark_map.insert(mark.clone(), mark.clone());
-    }
+    // }
 
     // if we havent used a commit yet, but this is our first,
     // then we want this to not have a from line:
     if !filter_state.have_used_a_commit {
-        commit.from = None;
+        from = None;
     }
     // if we are X, and we depend on Z, we should
     // check if Z points to something else.
     // as mentioned above, if Z was filtered out, we have a
     // filter_state.mark_map that contains some parent of Z
     let mut from_pruned = false;
-    if let Some(ref mut from) = commit.from {
+    if let Some(ref mut from) = from {
         match filter_state.mark_map.get(from) {
             Some(mapto) => {
                 if mapto.is_empty() {
@@ -323,26 +335,26 @@ pub fn perform_filter(
     // in that case, we want to keep all of their current parents
     // and then traverse them later to find the one that we
     // should map to instead
-    let is_merge_commit = commit.from.is_some() && !commit.merges.is_empty();
+    let has_merges_other_than_from = commit.merges.len() > 1;
+    let is_merge_commit = from.is_some() && has_merges_other_than_from;
     let old_merge_points_to = if is_merge_commit {
         let mut pointers = vec![];
         // if the from was pruned, no point in keeping
         // track of it as a parent...
         if !from_pruned {
-            if let Some(from) = &commit.from {
+            if let Some(from) = &from {
                 pointers.push(from.clone());
             }
         }
         // but we do want to potentially keep track
         // of the merges... these will be checked below
-        for merge in &commit.merges {
-            pointers.push(merge.clone());
+        for merge in commit.merges.iter().skip(1) {
+            pointers.push(merge.to_string());
         }
         Some(pointers)
     } else { None };
 
     if from_pruned {
-        commit.from = None;
         commit.merges = vec![];
     }
     // we also want to do the same thing we did above for the from lines
@@ -350,10 +362,10 @@ pub fn perform_filter(
     // merge :X
     // to say:
     // merge :SOME_PARENT_OF_X
-    for merge in &mut commit.merges {
-        match filter_state.mark_map.get_mut(merge) {
+    for merge in commit.merges.iter_mut().skip(1) {
+        match filter_state.mark_map.get_mut(&merge.to_string()) {
             Some(mapto) => {
-                *merge = mapto.clone();
+                *merge = mapto.parse::<usize>().unwrap_or(0);
             }
             None => {}
         }
@@ -367,31 +379,32 @@ pub fn perform_filter(
     // if you want to allow empty merge commits, maybe have some setting
     // that keeps this commit with just the message but no changes
     if is_merge_commit {
-        if commit.merges.is_empty() && commit.from.is_none() {
+        let no_commit_besides_from = commit.merges.len() <= 1;
+        if no_commit_besides_from && from.is_none() {
             // try to add a statement to the map that says
             // we now point to one of our parents. we have to iterate
             // our parents here to find one that still exists.
             if let Some(pointers) = &old_merge_points_to {
-                if let Some(mark) = &commit.mark {
-                    // try the pointers in order of:
-                    // FROM, MERGE 1, MERGE 2, ...
-                    // and use the first one we find
-                    for pointer_option in pointers {
-                        // eprintln!("We used to point to: {}", &pointer_option);
-                        let pointed_to = match filter_state.mark_map.get(pointer_option) {
-                            Some(pointing_to) => {
-                                if !pointing_to.is_empty() {
-                                    Some(pointing_to.clone())
-                                } else { None }
-                            }
-                            None => None,
-                        };
-                        if let Some(pointing_to) = pointed_to {
-                            filter_state.mark_map.insert(mark.clone(), pointing_to);
-                            return Ok(FilterResponse::DontUse);
+                // if let Some(mark) = &commit.mark {
+                // try the pointers in order of:
+                // FROM, MERGE 1, MERGE 2, ...
+                // and use the first one we find
+                for pointer_option in pointers {
+                    // eprintln!("We used to point to: {}", &pointer_option);
+                    let pointed_to = match filter_state.mark_map.get(pointer_option) {
+                        Some(pointing_to) => {
+                            if !pointing_to.is_empty() {
+                                Some(pointing_to.clone())
+                            } else { None }
                         }
+                        None => None,
+                    };
+                    if let Some(pointing_to) = pointed_to {
+                        filter_state.mark_map.insert(mark.clone(), pointing_to);
+                        return Ok(FilterResponse::DontUse);
                     }
                 }
+                // }
             }
             // regardless if we were able to find a parent to map to,
             // we still dont want to be used
@@ -427,21 +440,21 @@ pub fn perform_filter(
                     None => false,
                 };
                 if x_is_ancestor_of_y || y_is_ancestor_of_x {
-                    if let Some(mark) = &commit.mark {
-                        // eprintln!("NOT USING {} Because its a merge commit whose ancestors ({:?}) are direct parents of each other. Its mark map is: {:?}", mark, pointers, filter_state.mark_map.get(mark));
-                        // remember to update map. we want to then point to the
-                        // most recent child, so we check specifically which case we got:
-                        if x_is_ancestor_of_y {
-                            // in this case we have: THIS_COMMIT -> X -> Y
-                            // so we want to say our mark points to X
-                            filter_state.mark_map.insert(mark.clone(), parent_x.clone());
-                        } else {
-                            // otherwise y is ancestor of x
-                            // in this case we have: THIS_COMMIT -> Y -> X
-                            // so we want to say our mark points to Y
-                            filter_state.mark_map.insert(mark.clone(), parent_y.clone());
-                        }
+                    // if let Some(mark) = &commit.mark {
+                    // eprintln!("NOT USING {} Because its a merge commit whose ancestors ({:?}) are direct parents of each other. Its mark map is: {:?}", mark, pointers, filter_state.mark_map.get(mark));
+                    // remember to update map. we want to then point to the
+                    // most recent child, so we check specifically which case we got:
+                    if x_is_ancestor_of_y {
+                        // in this case we have: THIS_COMMIT -> X -> Y
+                        // so we want to say our mark points to X
+                        filter_state.mark_map.insert(mark.clone(), parent_x.clone());
+                    } else {
+                        // otherwise y is ancestor of x
+                        // in this case we have: THIS_COMMIT -> Y -> X
+                        // so we want to say our mark points to Y
+                        filter_state.mark_map.insert(mark.clone(), parent_y.clone());
                     }
+                    // }
 
                     return Ok(FilterResponse::DontUse);
                 }
@@ -451,19 +464,20 @@ pub fn perform_filter(
 
     // update the current graph to say that
     // we are X, and we have parent(s) Y/Z:
-    match &commit.mark {
-        Some(mark) => {
-            let mut parents = match &commit.from {
-                Some(parent1) => vec![parent1.clone()],
-                None => vec![]
-            };
-            for merge in &commit.merges {
-                parents.push(merge.clone());
-            }
-            filter_state.graph.insert(mark.clone(), parents.clone());
-        }
-        _ => {},
+    let mut parents = match &from {
+        Some(parent1) => vec![parent1.clone()],
+        None => vec![]
+    };
+    for merge in commit.merges.iter().skip(1) {
+        parents.push(merge.to_string());
     }
+    filter_state.graph.insert(mark.clone(), parents.clone());
+    // match &commit.mark {
+    //     Some(mark) => {
+
+    //     }
+    //     _ => {},
+    // }
 
     Ok(FilterResponse::UseAsIs)
 }

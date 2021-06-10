@@ -50,7 +50,7 @@ pub fn owned_string_option(orig: Option<&str>) -> Option<String> {
 #[derive(Debug, Default)]
 pub struct StructuredCommit {
     pub commit_ref: String,
-    pub mark: Option<String>,
+    pub mark: usize,
 
     // we require it because we pass --show-original-ids to fast-export
     pub original_oid: String,
@@ -59,8 +59,14 @@ pub struct StructuredCommit {
     // this is both the header and summary of the commit message
     pub commit_message: String,
 
-    pub from: Option<String>,
-    pub merges: Vec<String>,
+    // first entry should always be the 'from'
+    // i suppose merges can be empty as well, like
+    // in the case of first commits? they dont have merge or from i think
+    // so 3 cases:
+    // 0 = initial commit or something
+    // 1 = regular commit
+    // 2 or more = merge commit
+    pub merges: Vec<usize>,
     pub fileops: Vec<FileOpsOwned>,
 }
 
@@ -76,7 +82,7 @@ impl StructuredCommit {
 
 #[derive(Debug, Default)]
 pub struct StructuredBlob {
-    pub mark: Option<String>,
+    pub mark: usize,
     pub original_oid: String,
     pub data: Vec<u8>,
 }
@@ -199,14 +205,14 @@ impl Default for AuthorPerson {
 
 #[derive(Debug, Default)]
 pub struct BlobObject<'a> {
-    mark: Option<&'a str>,
+    mark: usize,
     oid: &'a str,
 }
 
 #[derive(Default, Debug)]
 pub struct CommitObject<'a> {
     refname: &'a str,
-    mark: Option<&'a str>,
+    mark: usize,
     // technically this is optional, but the way we call git-fast-export
     // we should always be given an oid
     oid: &'a str,
@@ -275,6 +281,21 @@ pub struct AfterDataObject<'a> {
     fileops: Vec<FileOps<'a>>,
 }
 
+/// a mark of 0 is an error
+/// because git fast-import/export never has marks of 0
+/// ie: they start at 1.
+pub fn parse_mark_to_usize(mark: &str) -> usize {
+    let colon_index = match mark.find(':') {
+        Some(i) => i,
+        None => return 0,
+    };
+    let num_string = match mark.trim_end().get((colon_index + 1)..) {
+        Some(m) => m,
+        None => return 0,
+    };
+    num_string.parse::<usize>().unwrap_or(0)
+}
+
 pub fn set_object_property<'a>(
     value: &'a str,
     object: &mut BeforeDataObject<'a>,
@@ -284,13 +305,13 @@ pub fn set_object_property<'a>(
         if let Oid = next_word_type {
             commit_obj.oid = value;
         } else if let Mark = next_word_type {
-            commit_obj.mark = Some(value);
+            commit_obj.mark = parse_mark_to_usize(value);
         }
     } else if let ObjectType::Blob(blob_obj) = &mut object.object {
         if let Oid = next_word_type {
             blob_obj.oid = value;
         } else if let Mark = next_word_type {
-            blob_obj.mark = Some(value);
+            blob_obj.mark = parse_mark_to_usize(value);
         }
     }
 }
@@ -614,9 +635,23 @@ pub fn parse_after_data<'a>(after_data_str: &'a String) -> Option<AfterDataObjec
     Some(output_obj)
 }
 
+pub fn get_merges(after_data_obj: &AfterDataObject) -> Vec<usize> {
+    // from has to be first if there is one:
+    let mut out = vec![];
+    if let Some(from) = after_data_obj.from {
+        out.push(parse_mark_to_usize(from));
+    }
+    for merge in after_data_obj.merges.iter() {
+        out.push(parse_mark_to_usize(merge));
+    }
+
+    out
+}
+
 pub fn parse_into_structured_object(unparsed: UnparsedFastExportObject) -> StructuredExportObject {
     // print!("{}", unparsed.before_data_str);
     // print!("{}", unparsed.after_data_str);
+    // TODO: do NOT EXPECT HERE>... this cannot fail and just kill the program...
     let before_data_obj = parse_before_data(&unparsed.before_data_str).expect("Failed to parse before data section");
     let after_data_obj = parse_after_data(&unparsed.after_data_str).expect("Failed to parse after data section");
     
@@ -644,22 +679,22 @@ pub fn parse_into_structured_object(unparsed: UnparsedFastExportObject) -> Struc
                 }
             };
     
+            let merges = get_merges(&after_data_obj);
             let structured_commit = StructuredCommit {
                 commit_ref: commit_obj.refname.into(),
-                mark: owned_string_option(commit_obj.mark),
+                mark: commit_obj.mark,
                 original_oid: commit_obj.oid.into(),
                 committer: (&commit_obj.committer).into(),
                 author: author_type,
                 commit_message: String::from_utf8_lossy(&unparsed.data).into(),
-                from: owned_string_option(after_data_obj.from),
-                merges: after_data_obj.merges.iter().map(|x| String::from(*x)).collect(),
+                merges,
                 fileops: after_data_obj.fileops.iter().map(|x| x.into()).collect(),
             };
             StructuredObjectType::Commit(structured_commit)
         }
         ObjectType::Blob(blob_obj) => {
             let structured_blob = StructuredBlob {
-                mark: owned_string_option(blob_obj.mark), 
+                mark: blob_obj.mark, 
                 original_oid: blob_obj.oid.into(),
                 data: unparsed.data,
             };

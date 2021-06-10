@@ -228,6 +228,7 @@ pub fn write_person_info(write_data: &mut Vec<u8>, person: &CommitPersonOwned, i
 /// structured export object is formatted properly for git-fast-import
 /// to read it in.
 pub fn write_to_stream<W: Write>(stream: W, obj: StructuredExportObject) -> io::Result<()> {
+    // eprintln!("Using: {:#?}", obj);
     let mut stream = stream;
     let mut write_data: Vec<u8> = vec![];
     if obj.has_feature_done {
@@ -251,11 +252,9 @@ pub fn write_to_stream<W: Write>(stream: W, obj: StructuredExportObject) -> io::
         write_data.extend(b"commit ");
         write_data.extend(commit_obj.commit_ref.as_bytes());
         write_data.push(b'\n');
-        if let Some(mark) = &commit_obj.mark {
-            write_data.extend(b"mark ");
-            write_data.extend(mark.as_bytes());
-            write_data.push(b'\n');
-        }
+        write_data.extend(b"mark :");
+        write_data.extend(commit_obj.mark.to_string().as_bytes());
+        write_data.push(b'\n');
         write_data.extend(b"original-oid ");
         write_data.extend(commit_obj.original_oid.as_bytes());
         write_data.push(b'\n');
@@ -269,15 +268,19 @@ pub fn write_to_stream<W: Write>(stream: W, obj: StructuredExportObject) -> io::
         write_data.extend(commit_obj.commit_message.as_bytes());
         write_data.push(b'\n');
 
-        if let Some(from) = commit_obj.from {
-            write_data.extend(b"from ");
-            write_data.extend(from.as_bytes());
-            write_data.push(b'\n');
-        }
+        let mut first_merge = true;
         for merge_info in commit_obj.merges {
-            write_data.extend(b"merge ");
-            write_data.extend(merge_info.as_bytes());
-            write_data.push(b'\n');
+            if first_merge {
+                // first merge should be a 'from'
+                first_merge = false;
+                write_data.extend(b"from :");
+                write_data.extend(merge_info.to_string().as_bytes());
+                write_data.push(b'\n');
+            } else {
+                write_data.extend(b"merge :");
+                write_data.extend(merge_info.to_string().as_bytes());
+                write_data.push(b'\n');
+            }
         }
         for fileop in commit_obj.fileops {
             match fileop {
@@ -320,11 +323,9 @@ pub fn write_to_stream<W: Write>(stream: W, obj: StructuredExportObject) -> io::
         write_data.push(b'\n');
     } else if let StructuredObjectType::Blob(blob_obj) = obj.object_type {
         write_data.extend(b"blob\n");
-        if let Some(mark) = blob_obj.mark {
-            write_data.extend(b"mark ");
-            write_data.extend(mark.as_bytes());
-            write_data.push(b'\n');
-        }
+        write_data.extend(b"mark :");
+        write_data.extend(blob_obj.mark.to_string().as_bytes());
+        write_data.push(b'\n');
         write_data.extend(b"original-oid ");
         write_data.extend(blob_obj.original_oid.as_bytes());
         write_data.push(b'\n');
@@ -354,7 +355,7 @@ mod tests {
         parse_git_filter_export_via_channel_and_n_parsing_threads(
             None, false, 4, NO_LOCATION, |obj| {
                 if let StructuredObjectType::Commit(commit_obj) = obj.object_type {
-                    let mark_str = commit_obj.mark.unwrap();
+                    let mark_str = format!(":{}", commit_obj.mark);
                     let expected_mark_str = format!(":{}", expected_count);
                     assert_eq!(expected_mark_str, mark_str);
                 } else {
@@ -374,11 +375,11 @@ mod tests {
         parse_git_filter_export_via_channel_and_n_parsing_threads(
             None, true, 4, NO_LOCATION, |obj| {
                 if let StructuredObjectType::Commit(commit_obj) = obj.object_type {
-                    let mark_str = commit_obj.mark.unwrap();
+                    let mark_str = format!(":{}", commit_obj.mark);
                     let expected_mark_str = format!(":{}", expected_count);
                     assert_eq!(expected_mark_str, mark_str);
                 } else if let StructuredObjectType::Blob(blob_obj) = obj.object_type {
-                    let mark_str = blob_obj.mark.unwrap();
+                    let mark_str = format!(":{}", blob_obj.mark);
                     let expected_mark_str = format!(":{}", expected_count);
                     assert_eq!(expected_mark_str, mark_str);
                 }
