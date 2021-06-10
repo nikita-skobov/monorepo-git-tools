@@ -21,13 +21,13 @@ pub struct Filter {
     pub branch: Option<String>,
 
     #[options(help = "path to filter")]
-    pub path: Option<String>,
+    pub path: Vec<String>,
 
     #[options(help = "path to filter rename, syntax: --path-rename src:dest")]
     pub path_rename: Option<String>,
 
     #[options(help = "path to exclude filter")]
-    pub exclude_path: Option<String>,
+    pub exclude_path: Vec<String>,
 
     #[options(help = "the default is to implicitly exclude everything, by using --default-include you implicitly INCLUDE everything, and can explicitly choose to exclude specific paths")]
     pub default_include: bool,
@@ -71,11 +71,11 @@ fn main() {
     let mut filter_rules = vec![];
 
     // include has precedence over exclude
-    if let Some(filter_include) = filter.path {
-        filter_rules.push(FilterRulePathInclude(filter_include));
+    for include in filter.path.iter() {
+        filter_rules.push(FilterRulePathInclude(include.to_string()));
     }
-    if let Some(filter_exclude) = filter.exclude_path {
-        filter_rules.push(FilterRulePathExclude(filter_exclude));
+    for exclude in filter.exclude_path.iter() {
+        filter_rules.push(FilterRulePathExclude(exclude.to_string()));
     }
     if let Some(filter_rename) = filter.path_rename {
         let mut split = filter_rename.split(':');
