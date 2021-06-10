@@ -140,7 +140,7 @@ pub enum NextWordType {
     Merge,
 }
 use NextWordType::*;
-use crate::ioerr;
+use crate::{ioerre, ioerr};
 
 /// here we diverge from git-fast-import spec a bit.
 /// the fast-import spec has several commands, but we only handle
@@ -326,8 +326,9 @@ pub fn parse_next_word<'a>(
     object: &mut BeforeDataObject<'a>,
     next_word_type: NextWordType,
     parse_mode: &mut BeforeDataParserMode,
-) -> Option<()> {
-    let next_word = word_split.next()?;
+) -> io::Result<()> {
+    let next_word = word_split.next()
+        .ok_or(ioerr!("Failed to parse: insufficient input"))?;
     match next_word_type {
         Oid | Mark => set_object_property(next_word, object, next_word_type),
         CommitRef => {
@@ -347,7 +348,7 @@ pub fn parse_next_word<'a>(
             // if we need to handle this, then wed modify the BeforeDataObject
             // to have a Vec<ResetInfo>
             if object.has_reset.is_some() {
-                panic!("This object already has a reset?");
+                return ioerre!("Failed to parse next word for before data object: {:?} This object already has a reset?", object);
             }
             object.has_reset = Some(next_word);
             *parse_mode = BeforeDataParserMode::Reset;
@@ -358,7 +359,7 @@ pub fn parse_next_word<'a>(
         // not relevant to the before data object
         _ => {},
     }
-    Some(())
+    Ok(())
 }
 
 
@@ -369,8 +370,9 @@ pub fn parse_next_word2<'a>(
     object: &mut AfterDataObject<'a>,
     next_word_type: NextWordType,
     parse_mode: &mut AfterDataParserMode,
-) -> Option<()> {
-    let next_word = word_split.next()?;
+) -> io::Result<()> {
+    let next_word = word_split.next()
+        .ok_or(ioerr!("Failed to parse next word"))?;
     match next_word_type {
         From => {
             object.from = Some(next_word);
@@ -384,18 +386,28 @@ pub fn parse_next_word2<'a>(
         // to the after data object
         _ => {},
     }
-    Some(())
+    Ok(())
+}
+
+pub fn get_n_captures<const N: usize>(
+    cb: fn(&str) -> Option<Captures>,
+    s: &str,
+) -> Option<[&str; N]> {
+    let mut arr = [""; N];
+    let captures = cb(s)?;
+    for i in 0..N {
+        arr[i] = captures.get(i + 1)?.as_str();
+    }
+    Some(arr)
 }
 
 pub fn parse_author_or_committer_line<'a>(
     line: &'a str,
     object: &mut BeforeDataObject<'a>,
     is_author: bool,
-) -> Option<()> {
-    let captures = get_regex_authorline(line)?;
-    let name = captures.get(1)?.as_str();
-    let email = captures.get(2)?.as_str();
-    let timestr = captures.get(3)?.as_str();
+) -> io::Result<()> {
+    let [name, email, timestr] = get_n_captures::<3>(
+        get_regex_authorline, line).ok_or(ioerr!("Failed to parse author_or_committer line: {}", line))?;
 
     let person = CommitPerson {
         name: if name.is_empty() { None } else { Some(name) },
@@ -409,102 +421,82 @@ pub fn parse_author_or_committer_line<'a>(
             commit_obj.committer = person;
         }
     }
-
-    Some(())
+    Ok(())
 }
 
 pub fn parse_filemodify_line<'a>(
     line: &'a str,
     object: &mut AfterDataObject<'a>,
     parse_mode: &mut AfterDataParserMode,
-) -> Option<()> {
-    let captures = get_regex_filemodifyline(line)?;
-    let mode = captures.get(1)?.as_str();
-    let dataref = captures.get(2)?.as_str();
-    let path = captures.get(3)?.as_str();
-
+) -> io::Result<()> {
+    let [mode, dataref, path] = get_n_captures::<3>(
+        get_regex_filemodifyline, line).ok_or(ioerr!("Failed to parse filemodify line: {}", line))?;
     let fileop = FileOps::FileModify(mode, dataref, path);
-
     object.fileops.push(fileop);
     *parse_mode = AfterMerge;
-
-    Some(())
+    Ok(())
 }
 
 pub fn parse_filedelete_line<'a>(
     line: &'a str,
     object: &mut AfterDataObject<'a>,
     parse_mode: &mut AfterDataParserMode,
-) -> Option<()> {
-    let captures = get_regex_filedeleteline(line)?;
-    let path = captures.get(1)?.as_str();
-
+) -> io::Result<()> {
+    let [path] = get_n_captures::<1>(get_regex_filedeleteline, line)
+        .ok_or(ioerr!("Failed to parse filedelete line: {}", line))?;
     let fileop = FileOps::FileDelete(path);
-
     object.fileops.push(fileop);
     *parse_mode = AfterMerge;
-
-    Some(())
+    Ok(())
 }
 
 pub fn parse_filecopy_line<'a>(
     line: &'a str,
     object: &mut AfterDataObject<'a>,
     parse_mode: &mut AfterDataParserMode,
-) -> Option<()> {
-    let captures = get_regex_filecopyline(line)?;
-    let src_path = captures.get(1)?.as_str();
-    let dest_path = captures.get(2)?.as_str();
-
+) -> io::Result<()> {
+    let [src_path, dest_path] = get_n_captures::<2>(
+        get_regex_filecopyline, line).ok_or(ioerr!("Failed to parse filecopy line: {}", line))?;
     let fileop = FileOps::FileCopy(src_path, dest_path);
-
     object.fileops.push(fileop);
     *parse_mode = AfterMerge;
-
-    Some(())
+    Ok(())
 }
 
 pub fn parse_filerename_line<'a>(
     line: &'a str,
     object: &mut AfterDataObject<'a>,
     parse_mode: &mut AfterDataParserMode,
-) -> Option<()> {
-    let captures = get_regex_filerenameline(line)?;
-    let src_path = captures.get(1)?.as_str();
-    let dest_path = captures.get(2)?.as_str();
-
+) -> io::Result<()> {
+    let [src_path, dest_path] = get_n_captures::<2>(
+        get_regex_filerenameline, line).ok_or(ioerr!("Failed to parse filerename line: {}", line))?;
     let fileop = FileOps::FileRename(src_path, dest_path);
-
     object.fileops.push(fileop);
     *parse_mode = AfterMerge;
-
-    Some(())
+    Ok(())
 }
 
 pub fn parse_notemodify_line<'a>(
     line: &'a str,
     object: &mut AfterDataObject<'a>,
     parse_mode: &mut AfterDataParserMode,
-) -> Option<()> {
-    let captures = get_regex_notemodifyline(line)?;
-    let dataref = captures.get(1)?.as_str();
-    let commitish = captures.get(2)?.as_str();
-
+) -> io::Result<()> {
+    let [dataref, commitish] = get_n_captures::<2>(
+        get_regex_notemodifyline, line).ok_or(ioerr!("Failed to parse notemodify line: {}", line))?;
     let fileop = FileOps::NoteModify(dataref, commitish);
-
     object.fileops.push(fileop);
     *parse_mode = AfterMerge;
-
-    Some(())
+    Ok(())
 }
 
 pub fn parse_before_data_line<'a>(
     line: &'a str,
     parse_mode: &mut BeforeDataParserMode,
     object: &mut BeforeDataObject<'a>,
-) -> Option<()> {
+) -> io::Result<()> {
     let mut word_split = line.split_whitespace();
-    let first_word = word_split.next()?;
+    let first_word = word_split.next()
+        .ok_or(ioerr!("Failed to parse before data line: {}", line))?;
 
     match parse_mode {
         // in the initial state we are looking for one of several words
@@ -517,7 +509,7 @@ pub fn parse_before_data_line<'a>(
                 object.object = ObjectType::Blob(BlobObject::default());
                 *parse_mode = Blob;
             }
-            _ => panic!("Unknown initial parsing?\n{}", line),
+            _ => return ioerre!("Unknown initial parsing?\n{}", line),
         },
 
         // if we are not in initial parsing mode, then we are parsing
@@ -529,7 +521,7 @@ pub fn parse_before_data_line<'a>(
         Reset => match first_word {
             "from" => parse_next_word(&mut word_split, object, ResetFrom, parse_mode)?,
             "commit" => parse_next_word(&mut word_split, object, CommitRef, parse_mode)?,
-            _ => panic!("Unknown reset parsing?\n{}", line),
+            _ => return ioerre!("Unknown reset parsing?\n{}", line),
         },
 
         // commit has a lot of stuff to parse out
@@ -541,27 +533,28 @@ pub fn parse_before_data_line<'a>(
             // I dont think we need to handle this because we do --reencode=yes
             "encoding" => (),
             "data" => parse_next_word(&mut word_split, object, Data, parse_mode)?,
-            _ => panic!("Unknown commit parsing?\n{}", line),
+            _ => return ioerre!("Unknown commit parsing?\n{}", line),
         },
 
         Blob => match first_word {
             "mark" => parse_next_word(&mut word_split, object, Mark, parse_mode)?,
             "original-oid" => parse_next_word(&mut word_split, object, Oid, parse_mode)?,
             "data" => parse_next_word(&mut word_split, object, Data, parse_mode)?,
-            _ => panic!("Unknown blob parsing?\n{}", line),
+            _ => return ioerre!("Unknown blob parsing?\n{}", line),
         }
     }
 
-    Some(())
+    Ok(())
 }
 
 pub fn parse_after_data_line<'a>(
     line: &'a str,
     parse_mode: &mut AfterDataParserMode,
     object: &mut AfterDataObject<'a>,
-) -> Option<()> {
+) -> io::Result<()> {
     let mut word_split = line.split_whitespace();
-    let first_word = word_split.next()?;
+    let first_word = word_split.next()
+        .ok_or(ioerr!("Failed to parse after data line: {}", line))?;
 
     match parse_mode {
         AfterDataParserMode::Initial => match first_word {
@@ -576,7 +569,7 @@ pub fn parse_after_data_line<'a>(
                 object.fileops.push(FileOps::FileDeleteAll);
                 *parse_mode = AfterMerge;
             }
-            _ => panic!("Unknown after data parsing?\n{}", line),
+            _ => return ioerre!("Unknown after data parsing?\n{}", line),
         },
         // if we have already seen a 'from' keyword
         // then that cannot appear again, so we dont
@@ -592,7 +585,7 @@ pub fn parse_after_data_line<'a>(
                 object.fileops.push(FileOps::FileDeleteAll);
                 *parse_mode = AfterMerge;
             }
-            _ => panic!("Unknown after data parsing?\n{}", line),
+            _ => return ioerre!("Unknown after data parsing?\n{}", line),
         },
 
         // if we have gotten past merge, then we only need to look at potential fileops
@@ -606,14 +599,16 @@ pub fn parse_after_data_line<'a>(
                 object.fileops.push(FileOps::FileDeleteAll);
                 *parse_mode = AfterMerge;
             }
-            _ => panic!("Unknown after data parsing?\n{}", line),
+            _ => return ioerre!("Unknown after data parsing?\n{}", line),
         },
     }
 
-    Some(())
+    Ok(())
 }
 
-pub fn parse_before_data<'a>(before_data_str: &'a String) -> Option<BeforeDataObject<'a>> {
+pub fn parse_before_data<'a>(
+    before_data_str: &'a String
+) -> io::Result<BeforeDataObject<'a>> {
     let mut parser_mode = BeforeDataParserMode::Initial;
     let mut output_obj = BeforeDataObject::default();
     for line in before_data_str.lines() {
@@ -621,10 +616,12 @@ pub fn parse_before_data<'a>(before_data_str: &'a String) -> Option<BeforeDataOb
         parse_before_data_line(line, &mut parser_mode, &mut output_obj)?;
     }
 
-    Some(output_obj)
+    Ok(output_obj)
 }
 
-pub fn parse_after_data<'a>(after_data_str: &'a String) -> Option<AfterDataObject<'a>> {
+pub fn parse_after_data<'a>(
+    after_data_str: &'a String
+) -> io::Result<AfterDataObject<'a>> {
     let mut parser_mode = AfterDataParserMode::Initial;
     let mut output_obj = AfterDataObject::default();
 
@@ -633,7 +630,7 @@ pub fn parse_after_data<'a>(after_data_str: &'a String) -> Option<AfterDataObjec
         parse_after_data_line(line, &mut parser_mode, &mut output_obj)?;
     }
 
-    Some(output_obj)
+    Ok(output_obj)
 }
 
 pub fn get_merges(after_data_obj: &AfterDataObject) -> Vec<usize> {
@@ -660,11 +657,8 @@ pub fn parse_into_structured_object(
 ) -> io::Result<StructuredExportObject> {
     // print!("{}", unparsed.before_data_str);
     // print!("{}", unparsed.after_data_str);
-    // TODO: do NOT EXPECT HERE>... this cannot fail and just kill the program...
-    let before_data_obj = parse_before_data(&unparsed.before_data_str)
-        .ok_or(ioerr!("Failed to parse before data section"))?;
-    let after_data_obj = parse_after_data(&unparsed.after_data_str)
-        .ok_or(ioerr!("Failed to parse after data section"))?;
+    let before_data_obj = parse_before_data(&unparsed.before_data_str)?;
+    let after_data_obj = parse_after_data(&unparsed.after_data_str)?;
     
     // println!("---------------------");
     // println!("{:?}", before_data_obj);
