@@ -13,7 +13,7 @@ use num_cpus;
 use std::collections::BinaryHeap;
 use std::cmp::Reverse;
 use std::io::Write;
-use std::{path::{PathBuf, Path}, io};
+use std::{path::{PathBuf, Path}, io, fmt::Display};
 // use std::time::Instant;
 // use std::time::Duration;
 
@@ -42,27 +42,28 @@ impl PartialOrd for WaitObj {
     }
 }
 
-pub fn parse_git_filter_export<O, E, P: AsRef<Path>>(
+pub fn parse_git_filter_export<O, E: Display + From<io::Error>, P: AsRef<Path>>(
     export_branch: Option<String>,
     with_blobs: bool,
     location: Option<P>,
     cb: impl FnMut(StructuredExportObject) -> Result<O, E>,
-) -> Result<(), Error> {
+) -> io::Result<()> {
     let mut cb = cb;
     parse_git_filter_export_with_callback(export_branch, with_blobs, location, |unparsed| {
-        let parsed = parse_into_structured_object(unparsed);
-        cb(parsed)
-    })?;
-    Ok(())
+        match parse_into_structured_object(unparsed) {
+            Ok(parsed) => cb(parsed),
+            Err(e) => Err(E::from(e)),
+        }
+    })
 }
 
-pub fn parse_git_filter_export_via_channel_and_n_parsing_threads<O, E, P: AsRef<Path>>(
+pub fn parse_git_filter_export_via_channel_and_n_parsing_threads<O, E: Display, P: AsRef<Path>>(
     export_branch: Option<String>,
     with_blobs: bool,
     n_parsing_threads: usize,
     location: Option<P>,
     cb: impl FnMut(StructuredExportObject) -> Result<O, E>,
-) -> Result<(), E> {
+) -> io::Result<()> {
     let mut cb = cb;
     let mut spawned_threads = vec![];
     let (tx, rx) = mpsc::channel();
@@ -94,13 +95,13 @@ pub fn parse_git_filter_export_via_channel_and_n_parsing_threads<O, E, P: AsRef<
     // will then pass the PARSED message back to our main thread
     let thread_handle = thread::spawn(move || {
         let mut counter = 0;
-        let _ = parse_git_filter_export_with_callback(export_branch, with_blobs, location, |x| {
+        parse_git_filter_export_with_callback(export_branch, with_blobs, location, |x| {
             let thread_index = counter % n_parsing_threads as usize;
             let (parse_tx, _) = &spawned_threads[thread_index];
             let res = parse_tx.send((counter, x));
             counter += 1;
             res
-        });
+        })
     });
 
     // eprintln!("Using threads {}", n_parsing_threads);
@@ -118,14 +119,15 @@ pub fn parse_git_filter_export_via_channel_and_n_parsing_threads<O, E, P: AsRef<
     // let mut out_vec = vec![];
     let mut wait_heap = BinaryHeap::new();
     for received in rx {
+        let received_obj = received.1?;
         if received.0 == expected {
             // out_vec.push(received.1);
-            cb(received.1)?;
+            cb(received_obj).map_err(|e| ioerr!("{}", e))?;
             expected += 1;
         } else {
             let wait_obj = WaitObj {
                 index: received.0,
-                obj: received.1,
+                obj: received_obj,
             };
             wait_heap.push(Reverse(wait_obj));
         }
@@ -134,7 +136,7 @@ pub fn parse_git_filter_export_via_channel_and_n_parsing_threads<O, E, P: AsRef<
             let wait_obj = wait_obj.0;
             if wait_obj.index == expected {
                 // out_vec.push(wait_obj.obj);
-                cb(wait_obj.obj)?;
+                cb(wait_obj.obj).map_err(|e| ioerr!("{}", e))?;
                 expected += 1;
             } else {
                 wait_heap.push(Reverse(wait_obj));
@@ -148,10 +150,10 @@ pub fn parse_git_filter_export_via_channel_and_n_parsing_threads<O, E, P: AsRef<
         }
     }
 
-    let _ = thread_handle.join().unwrap();
-    // eprintln!("Last received at {:?}", std::time::Instant::now());
-
-    Ok(())
+    match thread_handle.join() {
+        Err(_) => ioerre!("Failed to join thread!"),
+        Ok(filter_res) => filter_res,
+    }
 }
 
 
@@ -162,12 +164,12 @@ pub fn parse_git_filter_export_via_channel_and_n_parsing_threads<O, E, P: AsRef<
 /// 2. parse the data section
 /// then it can pass that parsed data to the main thread
 /// which can finish the more intensive parsing/transformations
-pub fn parse_git_filter_export_via_channel<O, E, P: AsRef<Path>>(
+pub fn parse_git_filter_export_via_channel<O, E: Display, P: AsRef<Path>>(
     export_branch: Option<String>,
     with_blobs: bool,
     location: Option<P>,
     cb: impl FnMut(StructuredExportObject) -> Result<O, E>,
-) -> Result<(), E> {
+) -> io::Result<()> {
     let mut cb = cb;
     let cpu_count = num_cpus::get() as isize;
     // minus 2 because we are already using 2 threads.
@@ -194,15 +196,17 @@ pub fn parse_git_filter_export_via_channel<O, E, P: AsRef<Path>>(
     });
 
     for received in rx {
-        let parsed = parse_into_structured_object(received);
+        let parsed = parse_into_structured_object(received)?;
         // here we know the order we receive is the exact same as the order
         // they were parsed, so we can callback right away.
-        cb(parsed)?;
+        cb(parsed).map_err(|e| ioerr!("{}", e))?;
     }
 
     // eprintln!("Counted {} objects from git fast-export", parsed_objects.len());
-    let _ = thread_handle.join().unwrap();
-    Ok(())
+    match thread_handle.join() {
+        Ok(filter_res) => filter_res,
+        Err(_) => ioerre!("Failed to join thread!"),
+    }
 }
 
 
@@ -363,7 +367,7 @@ mod tests {
                 }
                 expected_count += 1;
                 if 1 == 2 {
-                    return Err(());
+                    return Err("a");
                 }
                 Ok(())
             }).unwrap();
@@ -385,7 +389,7 @@ mod tests {
                 }
                 expected_count += 1;
                 if 1 == 2 {
-                    return Err(());
+                    return Err("a");
                 }
                 Ok(())
             }).unwrap();
@@ -395,7 +399,7 @@ mod tests {
     fn test1() {
         let now = std::time::Instant::now();
         parse_git_filter_export_via_channel(None, false, NO_LOCATION,
-            |_| { if 1 == 1 { Ok(()) } else { Err(()) } }).unwrap();
+            |_| { if 1 == 1 { Ok(()) } else { Err("a") } }).unwrap();
         eprintln!("total time {:?}", now.elapsed());
     }
 
@@ -403,7 +407,7 @@ mod tests {
     fn works_with_blobs() {
         let now = std::time::Instant::now();
         parse_git_filter_export_via_channel(None, true, NO_LOCATION,
-            |_| { if 1 == 1 { Ok(()) } else { Err(()) } }).unwrap();
+            |_| { if 1 == 1 { Ok(()) } else { Err("a") } }).unwrap();
         eprintln!("total time {:?}", now.elapsed());
     }
 }

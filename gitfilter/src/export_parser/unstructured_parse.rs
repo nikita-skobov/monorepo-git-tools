@@ -1,5 +1,6 @@
-use std::io::{BufReader, Error, ErrorKind, BufRead, Read};
-use std::{path::Path, process::Stdio};
+use std::io::{BufReader, Error, ErrorKind, BufRead, Read, self};
+use std::{path::Path, process::Stdio, fmt::Display};
+use crate::ioerre;
 
 pub enum ParseState {
     BeforeData,
@@ -14,11 +15,6 @@ pub struct UnparsedFastExportObject {
 }
 
 pub type StrOption<'a> = Option<&'a str>;
-
-pub fn make_stdio_err(message: &str) -> Error {
-    let kind = ErrorKind::InvalidInput;
-    Error::new(kind, message)
-}
 
 pub fn make_expected_progress_string(progress_num: u32) -> String {
     let mut s = String::with_capacity(32);
@@ -42,12 +38,12 @@ pub fn make_expected_progress_string(progress_num: u32) -> String {
 /// sections.
 /// optionally specify a path to the
 /// git repo if you are not currently in it.
-pub fn parse_git_filter_export_with_callback<O, E, P: AsRef<Path>>(
+pub fn parse_git_filter_export_with_callback<O, E: Display, P: AsRef<Path>>(
     export_branch: Option<String>,
     with_blobs: bool,
     repo_location: Option<P>,
     cb: impl FnMut(UnparsedFastExportObject) -> Result<O, E>,
-) -> Result<(), Error>{
+) -> io::Result<()> {
     // let now = Instant::now();
     let export_branch = export_branch.unwrap_or("master".into());
     let mut fast_export_command = vec!["git", "fast-export", "--show-original-ids",
@@ -67,7 +63,7 @@ pub fn parse_git_filter_export_with_callback<O, E, P: AsRef<Path>>(
 
     let child_stdout = match child.stdout.take() {
         Some(s) => s,
-        None => return Err(make_stdio_err("failed to take child.stdout")),
+        None => return ioerre!("failed to take child.stdout"),
     };
 
     let mut cb = cb;
@@ -122,9 +118,9 @@ pub fn parse_git_filter_export_with_callback<O, E, P: AsRef<Path>>(
                     };
                     match cb(unparsed_obj) {
                         Ok(_) => {},
-                        Err(_) => { // TODO: add bound on E that it should be debug?
+                        Err(e) => { // TODO: add bound on E that it should be debug?
                             let _ = child.kill();
-                            return Err(make_stdio_err("Error from callback, closing fast-export stream"));
+                            return ioerre!("Error from callback:\n{}\nclosing fast-export stream", e);
                         }
                     }
 
