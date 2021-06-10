@@ -261,6 +261,15 @@ pub fn perform_filter2_for_regular_commit(
         return Err(FilterError(err_str));
     };
 
+    // TODO: I think checking/storing parent mark isnt enough unfortunately
+    // there can be cases where a merge commit is filtered to just have
+    // 1 parent, but the contents of this merge commit are the same as
+    // the parent.. therefore the merge commit would be empty, and ideally
+    // pruned. we would need to probably hash the contents
+    // of the fileops of each commit, and then check here
+    // if our contents are the same as our parents, and if they are
+    // the same, then we skip this commit.
+
     // now we are ready to be used, but we have to update
     // ourselves depending on what our parent is actually pointing to:
     if use_parent == 0 {
@@ -344,7 +353,16 @@ pub fn perform_filter2_for_merge_commit(
             return Err(FilterError(err_str));
         }
     }
-    commit.merges = actual_parents;
+    // we checked the actual parents right to left, now we should also
+    // check left to right:
+    let mut actual_parents2 = vec![];
+    for (i, p) in actual_parents.iter().enumerate() {
+        if ! filter_state.is_direct_ancestor_of_any(*p, &actual_parents[i..]) {
+            actual_parents2.push(*p);
+        }
+    }
+    // eprintln!("Now merge parents are {:?}", actual_parents2);
+    commit.merges = actual_parents2;
     // now its possible we could have filtered out our parents
     // so we check again to see if we are still a merge commit.
     // if we are not, then we can pass back up to the other
