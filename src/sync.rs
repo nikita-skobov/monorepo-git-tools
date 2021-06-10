@@ -565,6 +565,7 @@ pub fn handle_sync2(
     starting_branch_name: &str,
     can_push_pull: bool,
 ) -> io::Result<()> {
+    let only_summary = ! can_push_pull;
     let (left_ahead, right_ahead) = match sync_type {
         SyncType::LocalAhead |
         SyncType::RemoteAhead |
@@ -635,7 +636,17 @@ pub fn handle_sync2(
     // they have an unclean index. in this case,
     // we dont present any interaction choices. we just
     // show the output above, and continue
-    if ! can_push_pull {
+    if only_summary {
+        return Ok(());
+    }
+
+    // we had commits to pull/push, but when we iterated over them
+    // it turns out they were all merge commits, so in this
+    // case, we don't want to show to the user that
+    // they can use these. So treat this as
+    // the same case as UpToDate:
+    if !can_pull && !can_push {
+        println!("Up to date. Nothing to do.");
         return Ok(());
     }
 
