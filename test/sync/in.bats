@@ -382,3 +382,53 @@ function setup() {
     # our git status should have a conflict:
     [[ "$(git status)" == *"both added"* ]]
 }
+
+@test 'should show up to date if the only commits to take are merge commits sync in' {
+    curr_dir="$PWD"
+    cd "$BATS_TMPDIR/test_remote_repo2"
+    # fork point:
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    git checkout -b m1
+    echo "xyz" > xyz.txt && git add xyz.txt && git commit -m "xyz"
+    git checkout -
+    echo "qqq" > qqq.txt && git add qqq.txt && git commit -m "qqq"
+    git merge --no-ff m1
+
+    echo "REMOTE:"
+    echo "$(git log --oneline)"
+    cd "$curr_dir"
+
+    repo_file_contents="
+    [repo]
+    remote = \"..$SEP$test_remote_repo2\"
+    
+
+    include=[\"abc.txt\"]
+    "
+    echo "$repo_file_contents" > repo_file.rf
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    echo "LOCAL:"
+    echo "$(git log --oneline)"
+    git_branches_before="$(git branch)"
+
+    # it should not ask anything because it should show up to date
+    interact=""
+    echo -e "$interact" > interact.txt
+
+    # fork point should be calculated at abc commit, and then sync command
+    # should report that we can pull in updates from the remote
+    # repo.
+    run $PROGRAM_PATH sync repo_file.rf --max-interactive-attempts 1 < interact.txt
+    echo "$output"
+    [[ $status == "0" ]]
+    [[ $output != *"You can pull"* ]]
+    [[ $output != *"You can push"* ]]
+    [[ $output == *"Up to date"* ]]
+
+    echo "Git branches before:"
+    echo "$git_branches_before"
+    git_branches_after="$(git branch)"
+    echo "Git branches after:"
+    echo "$git_branches_after"
+    [[ "$git_branches_before" == "$git_branches_after" ]]
+}
