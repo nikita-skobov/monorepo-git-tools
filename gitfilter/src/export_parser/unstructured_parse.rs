@@ -1,6 +1,6 @@
 use std::io::{BufReader, Error, ErrorKind, BufRead, Read, self};
 use std::{path::Path, process::Stdio, fmt::Display};
-use crate::ioerre;
+use crate::{ioerr, ioerre};
 
 pub enum ParseState {
     BeforeData,
@@ -87,8 +87,8 @@ pub fn parse_git_filter_export_with_callback<O, E: Display, P: AsRef<Path>>(
                 let line = String::from_utf8_lossy(&line_vec[..]);
                 if line.starts_with("data ") {
                     let data_size_index = 5; // data + space is 5 chars
-                    let data_size = line.get(data_size_index..).unwrap();
-                    let data_size: usize = data_size.parse().unwrap();
+                    let data_size = line.get(data_size_index..).ok_or(ioerr!("Failed to parse data line"))?;
+                    let data_size: usize = data_size.parse().map_err(|e| ioerr!("Failed to parse data line:\n{}", e))?;
                     parse_state = ParseState::Data(data_size);
                 }
                 before_data_str.push_str(&line);
