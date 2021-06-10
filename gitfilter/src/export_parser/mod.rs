@@ -71,10 +71,15 @@ pub fn parse_git_filter_export_via_channel_and_n_parsing_threads<O, E: Display, 
         let (parse_tx, parse_rx) = mpsc::channel();
         let parse_consumer_tx_clone = tx.clone();
         let parse_thread = thread::spawn(move || {
+            let mut err = Ok(());
             for (counter, received) in parse_rx {
                 let parsed = export_parser::parse_into_structured_object(received);
-                parse_consumer_tx_clone.send((counter, parsed)).unwrap();
+                if let Err(e) = parse_consumer_tx_clone.send((counter, parsed)) {
+                    err = Err(e);
+                    break;
+                }
             }
+            err
         });
         spawned_threads.push((parse_tx, parse_thread));
     }
@@ -102,10 +107,9 @@ pub fn parse_git_filter_export_via_channel_and_n_parsing_threads<O, E: Display, 
             counter += 1;
             res
         })
+        // TODO: do we need to join all of the spawned
+        // parsing threads?
     });
-
-    // eprintln!("Using threads {}", n_parsing_threads);
-
 
     // we want our vec of parsed objects
     // to be in the same order as they were received. so
