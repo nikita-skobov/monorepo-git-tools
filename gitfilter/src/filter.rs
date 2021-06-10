@@ -529,7 +529,7 @@ pub fn filter_with_cb<P: AsRef<Path>, T: Write, F: Into<FilterOptions<T>>>(
     let mut stream = options.stream;
     let mut cb = cb;
     export_parser::parse_git_filter_export_via_channel(
-        options.branch, options.with_blobs, location,
+        options.branch, options.with_blobs, None, location,
         |mut obj| {
             let succeeded = cb(&mut obj)?;
             if succeeded {

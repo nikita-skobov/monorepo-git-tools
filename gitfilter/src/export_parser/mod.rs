@@ -57,13 +57,46 @@ pub fn parse_git_filter_export<O, E: Display + From<io::Error>, P: AsRef<Path>>(
     })
 }
 
-pub fn parse_git_filter_export_via_channel_and_n_parsing_threads<O, E: Display, P: AsRef<Path>>(
+/// uses mpsc channel to parse a bit faster. the rationale
+/// is that the thread that spawns the git fast-export command
+/// only needs to:
+/// 1. read from the stdout of that command
+/// 2. parse the data section
+/// then it can pass that parsed data to the main thread
+/// which can finish the more intensive parsing/transformations
+/// Pass `n_parsing_threads = None` if you want to find a number
+/// of CPUs available on the system, otherwise, pass Some(n)
+/// to limit to a specific number of CPUs.
+/// passing 1 here is still faster than using the above
+/// `parse_git_filter_export` because it will still read via
+/// a channel, rather than be blocking
+pub fn parse_git_filter_export_via_channel<O, E: Display, P: AsRef<Path>>(
     export_branch: Option<String>,
     with_blobs: bool,
-    n_parsing_threads: usize,
+    n_parsing_threads: Option<usize>,
     location: Option<P>,
     cb: impl FnMut(StructuredExportObject) -> Result<O, E>,
 ) -> io::Result<()> {
+    let n_parsing_threads = match n_parsing_threads {
+        Some(n) => n,
+        None => {
+            // if user didnt provide n parsing threads,
+            // we try to get number of cpus
+            // and if we fail to do that, or theres not enough,
+            // we will just use 1.
+            let cpu_count = num_cpus::get() as isize;
+            // minus 2 because we are already using 2 threads:
+            // one for outbound processing,
+            // one for starting the fast-export stream
+            let spawn_parser_threads = cpu_count - 2;
+            if spawn_parser_threads <= 0 {
+                1
+            } else {
+                spawn_parser_threads as usize
+            }
+        }
+    };
+
     let mut cb = cb;
     let mut spawned_threads = vec![];
     let (tx, rx) = mpsc::channel();
@@ -159,60 +192,6 @@ pub fn parse_git_filter_export_via_channel_and_n_parsing_threads<O, E: Display, 
         Ok(filter_res) => filter_res,
     }
 }
-
-
-/// uses mpsc channel to parse a bit faster. the rationale
-/// is that the thread that spawns the git fast-export command
-/// only needs to:
-/// 1. read from the stdout of that command
-/// 2. parse the data section
-/// then it can pass that parsed data to the main thread
-/// which can finish the more intensive parsing/transformations
-pub fn parse_git_filter_export_via_channel<O, E: Display, P: AsRef<Path>>(
-    export_branch: Option<String>,
-    with_blobs: bool,
-    location: Option<P>,
-    cb: impl FnMut(StructuredExportObject) -> Result<O, E>,
-) -> io::Result<()> {
-    let mut cb = cb;
-    let cpu_count = num_cpus::get() as isize;
-    // minus 2 because we are already using 2 threads.
-    let spawn_parser_threads = cpu_count - 2;
-
-    let location: Option<PathBuf> = match location {
-        Some(p) => Some(p.as_ref().to_path_buf()),
-        None => None,
-    };
-
-    if spawn_parser_threads > 1 {
-        return parse_git_filter_export_via_channel_and_n_parsing_threads(
-            export_branch, with_blobs, spawn_parser_threads as usize, location, cb);
-    }
-
-    // otherwise here we will use only 2 threads: on the main
-    // thread we will run the parsing and filtering, and on the spawned
-    // thread we will be collecting and splitting the git fast-export output
-    let (tx, rx) = mpsc::channel();
-    let thread_handle = thread::spawn(move || {
-        parse_git_filter_export_with_callback(export_branch, with_blobs, location, |x| {
-            tx.send(x)
-        })
-    });
-
-    for received in rx {
-        let parsed = parse_into_structured_object(received)?;
-        // here we know the order we receive is the exact same as the order
-        // they were parsed, so we can callback right away.
-        cb(parsed).map_err(|e| ioerr!("{}", e))?;
-    }
-
-    // eprintln!("Counted {} objects from git fast-export", parsed_objects.len());
-    match thread_handle.join() {
-        Ok(filter_res) => filter_res,
-        Err(_) => ioerre!("Failed to join thread!"),
-    }
-}
-
 
 pub fn write_person_info(write_data: &mut Vec<u8>, person: &CommitPersonOwned, is_author: bool) {
     if is_author {
@@ -360,8 +339,8 @@ mod tests {
     #[test]
     fn using_multiple_parsing_threads_keeps_order_the_same() {
         let mut expected_count = 1;
-        parse_git_filter_export_via_channel_and_n_parsing_threads(
-            None, false, 4, NO_LOCATION, |obj| {
+        parse_git_filter_export_via_channel(
+            None, false, Some(4), NO_LOCATION, |obj| {
                 if let StructuredObjectType::Commit(commit_obj) = obj.object_type {
                     let mark_str = format!(":{}", commit_obj.mark);
                     let expected_mark_str = format!(":{}", expected_count);
@@ -380,8 +359,8 @@ mod tests {
     #[test]
     fn using_blobs_and_multiple_parsing_threads_keeps_order_the_same() {
         let mut expected_count = 1;
-        parse_git_filter_export_via_channel_and_n_parsing_threads(
-            None, true, 4, NO_LOCATION, |obj| {
+        parse_git_filter_export_via_channel(
+            None, true, Some(4), NO_LOCATION, |obj| {
                 if let StructuredObjectType::Commit(commit_obj) = obj.object_type {
                     let mark_str = format!(":{}", commit_obj.mark);
                     let expected_mark_str = format!(":{}", expected_count);
@@ -402,7 +381,7 @@ mod tests {
     #[test]
     fn test1() {
         let now = std::time::Instant::now();
-        parse_git_filter_export_via_channel(None, false, NO_LOCATION,
+        parse_git_filter_export_via_channel(None, false, Some(1), NO_LOCATION,
             |_| { if 1 == 1 { Ok(()) } else { Err("a") } }).unwrap();
         eprintln!("total time {:?}", now.elapsed());
     }
@@ -410,7 +389,7 @@ mod tests {
     #[test]
     fn works_with_blobs() {
         let now = std::time::Instant::now();
-        parse_git_filter_export_via_channel(None, true, NO_LOCATION,
+        parse_git_filter_export_via_channel(None, true, Some(1), NO_LOCATION,
             |_| { if 1 == 1 { Ok(()) } else { Err("a") } }).unwrap();
         eprintln!("total time {:?}", now.elapsed());
     }
