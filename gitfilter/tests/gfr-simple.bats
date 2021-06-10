@@ -394,3 +394,139 @@ function git_add_all_and_commit() {
     git checkout master
     git branch -D gitfilter filterrepo
 }
+
+@test 'can handle simple merge commits that have conflict resolutions (without rename)' {
+    echo "$PWD"
+    echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+    git checkout -b m1
+    echo "xyz" > xyz.txt && git add xyz.txt && git commit -m "xyz"
+    git checkout -
+    echo "qqq" > xyz.txt && git add xyz.txt && git commit -m "qqq"
+    run git merge --no-ff m1
+    # there is a merge conflict. we manually resolve it:
+    echo "resolved" > xyz.txt && git add xyz.txt && git commit --no-edit
+
+    echo "Expected master log graph:"
+    echo "$(git log --oneline --graph master)"
+
+    xyz_expected_contents="$(cat xyz.txt)"
+    [[ "$xyz_expected_contents" == *"resolved"* ]]
+
+    # 3 commits, and a merge commit
+    [[ "$(num_commits)" == 4 ]]
+
+    git checkout -b filterrepo
+    git filter-repo --force --refs filterrepo --path abc.txt --path xyz.txt --dry-run
+    cat .git/filter-repo/fast-export.filtered | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
+    git reset --hard
+
+    echo "Expected filterrepo log graph:"
+    echo "$(git log --oneline --graph filterrepo)"
+
+    # should still have 4 commits.
+    [[ "$(num_commits)" == 4 ]]
+    # contents of xyz.txt should be qqq because
+    # we resolved conflict in favor of our commit
+    [[ -f xyz.txt ]]
+    [[ -f abc.txt ]]
+    xyz_contents="$(cat xyz.txt)"
+    [[ "$xyz_contents" == "$xyz_expected_contents" ]]
+
+    # now try doing the same thing but using our new tool:
+    git checkout master
+    git checkout -b gitfilter
+    [[ "$(num_commits)" == 4 ]]
+    [[ -f xyz.txt ]]
+    [[ -f abc.txt ]]
+    xyz_contents="$(cat xyz.txt)"
+    [[ "$xyz_contents" == "$xyz_expected_contents" ]]
+
+    "$GITFILTERCLI" --branch gitfilter --path abc.txt --path xyz.txt > filtered.txt
+    cat filtered.txt
+    cat filtered.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
+    git reset --hard
+
+    echo "Expected gitfilter log graph:"
+    echo "$(git log --oneline --graph gitfilter)"
+
+    # should still have merge commit
+    [[ "$(num_commits)" == 4 ]]
+    [[ -f abc.txt ]]
+    [[ -f xyz.txt ]]
+
+    # contents should still be qqq
+    xyz_contents="$(cat xyz.txt)"
+    [[ "$xyz_contents" == "$xyz_expected_contents" ]]
+
+    rm filtered.txt
+    git checkout master
+    git branch -D gitfilter filterrepo
+}
+
+@test 'can handle simple merge commits that have conflict resolutions (with rename)' {
+    echo "$PWD"
+    mkdir -p lib
+    echo "abc" > lib/abc.txt && git add lib/abc.txt && git commit -m "abc"
+    git checkout -b m1
+    echo "xyz" > lib/xyz.txt && git add lib/xyz.txt && git commit -m "xyz"
+    git checkout -
+    echo "qqq" > lib/xyz.txt && git add lib/xyz.txt && git commit -m "qqq"
+    git merge --no-ff m1 -X ours
+
+    echo "Expected master log graph:"
+    echo "$(git log --oneline --graph master)"
+
+    xyz_expected_contents="$(cat lib/xyz.txt)"
+    [[ "$xyz_expected_contents" == *"qqq"* ]]
+
+    # 3 commits, and a merge commit
+    [[ "$(num_commits)" == 4 ]]
+
+    git checkout -b filterrepo
+    git filter-repo --force --refs filterrepo --path-rename lib/: --dry-run
+    cat .git/filter-repo/fast-export.filtered | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
+    git reset --hard
+
+    echo "Expected filterrepo log graph:"
+    echo "$(git log --oneline --graph filterrepo)"
+
+    # should still have 4 commits.
+    [[ "$(num_commits)" == 4 ]]
+    # contents of xyz.txt should be qqq because
+    # we resolved conflict in favor of our commit
+    [[ -f xyz.txt ]]
+    [[ -f abc.txt ]]
+    xyz_contents="$(cat xyz.txt)"
+    [[ "$xyz_contents" == "$xyz_expected_contents" ]]
+
+    # now try doing the same thing but using our new tool:
+    git checkout master
+    git checkout -b gitfilter
+    [[ "$(num_commits)" == 4 ]]
+    [[ -f lib/xyz.txt ]]
+    [[ -f lib/abc.txt ]]
+    [[ ! -f abc.txt ]]
+    xyz_contents="$(cat lib/xyz.txt)"
+    [[ "$xyz_contents" == "$xyz_expected_contents" ]]
+
+    "$GITFILTERCLI" --branch gitfilter --path-rename lib/: > filtered.txt
+    cat filtered.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
+    git reset --hard
+
+    echo "Expected gitfilter log graph:"
+    echo "$(git log --oneline --graph gitfilter)"
+
+    # should still have merge commit
+    [[ "$(num_commits)" == 4 ]]
+    [[ -f abc.txt ]]
+    [[ -f xyz.txt ]]
+    [[ ! -f lib/abc.txt ]]
+
+    # contents should still be qqq
+    xyz_contents="$(cat xyz.txt)"
+    [[ "$xyz_contents" == "$xyz_expected_contents" ]]
+
+    rm filtered.txt
+    git checkout master
+    git branch -D gitfilter filterrepo
+}
