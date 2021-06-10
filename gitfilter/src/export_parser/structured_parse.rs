@@ -2,7 +2,7 @@ use super::UnparsedFastExportObject;
 use regex::Regex;
 use regex::Captures;
 use once_cell::sync::OnceCell;
-use std::str::SplitWhitespace;
+use std::{io, str::SplitWhitespace};
 
 macro_rules! regex_capture {
     ($text:tt, $reg:tt) => {
@@ -140,6 +140,7 @@ pub enum NextWordType {
     Merge,
 }
 use NextWordType::*;
+use crate::ioerr;
 
 /// here we diverge from git-fast-import spec a bit.
 /// the fast-import spec has several commands, but we only handle
@@ -417,7 +418,7 @@ pub fn parse_filemodify_line<'a>(
     object: &mut AfterDataObject<'a>,
     parse_mode: &mut AfterDataParserMode,
 ) -> Option<()> {
-    let captures = get_regex_filemodifyline(line).unwrap();
+    let captures = get_regex_filemodifyline(line)?;
     let mode = captures.get(1)?.as_str();
     let dataref = captures.get(2)?.as_str();
     let path = captures.get(3)?.as_str();
@@ -648,12 +649,22 @@ pub fn get_merges(after_data_obj: &AfterDataObject) -> Vec<usize> {
     out
 }
 
-pub fn parse_into_structured_object(unparsed: UnparsedFastExportObject) -> StructuredExportObject {
+// TODO: this was made into an io::Result<>
+// but most of the above calls are Option<>....
+// a lot of times if they fail to find something, we should
+// treat that as an error and report to the user
+// so TODO is to rewrite those in order
+// to return an error to the user correctly
+pub fn parse_into_structured_object(
+    unparsed: UnparsedFastExportObject
+) -> io::Result<StructuredExportObject> {
     // print!("{}", unparsed.before_data_str);
     // print!("{}", unparsed.after_data_str);
     // TODO: do NOT EXPECT HERE>... this cannot fail and just kill the program...
-    let before_data_obj = parse_before_data(&unparsed.before_data_str).expect("Failed to parse before data section");
-    let after_data_obj = parse_after_data(&unparsed.after_data_str).expect("Failed to parse after data section");
+    let before_data_obj = parse_before_data(&unparsed.before_data_str)
+        .ok_or(ioerr!("Failed to parse before data section"))?;
+    let after_data_obj = parse_after_data(&unparsed.after_data_str)
+        .ok_or(ioerr!("Failed to parse after data section"))?;
     
     // println!("---------------------");
     // println!("{:?}", before_data_obj);
@@ -706,7 +717,7 @@ pub fn parse_into_structured_object(unparsed: UnparsedFastExportObject) -> Struc
 
     // println!("{:#?}", output_object);
 
-    output_object
+    Ok(output_object)
 }
 
 
