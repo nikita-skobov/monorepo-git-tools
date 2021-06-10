@@ -24,54 +24,14 @@ pub fn make_expected_progress_string(progress_num: u32) -> String {
     s
 }
 
-// TODO:
-// add a way to allow parsing from a read stream, and not necessarily
-// opening a new git fast-export command.
-// this would be useful to read from a file that contains
-// the fast-export text without running the command
-// repeatedly for every time you want to split.
-
-/// This 'parser' will only parse the data section
-/// and put the rest of the info into a 'metadata' string
-/// for future parsing. the rationale is that we need to parse the data section
-/// seperately anyway since we need to know when to resume parsing the other
-/// sections.
-/// optionally specify a path to the
-/// git repo if you are not currently in it.
-pub fn parse_git_filter_export_with_callback<O, E: Display, P: AsRef<Path>>(
-    export_branch: Option<String>,
-    with_blobs: bool,
-    repo_location: Option<P>,
+pub fn parse_from_stream<R: BufRead, O, E: Display>(
+    bufreader: &mut R,
     cb: impl FnMut(UnparsedFastExportObject) -> Result<O, E>,
 ) -> io::Result<()> {
-    // let now = Instant::now();
-    let export_branch = export_branch.unwrap_or("master".into());
-    let mut fast_export_command = vec!["git", "fast-export", "--show-original-ids",
-        "--signed-tags=strip", "--tag-of-filtered-object=drop",
-        "--fake-missing-tagger","--reference-excluded-parents",
-        "--reencode=yes", "--use-done-feature", &export_branch,
-        "--progress", "1"
-    ];
-    if !with_blobs {
-        fast_export_command.push("--no-data");
-    }
-
-    let mut child = exechelper::spawn_with_env_ex2(
-        &fast_export_command, &[], &[], repo_location,
-        Some(Stdio::null()), Some(Stdio::null()), Some(Stdio::piped()),
-    )?;
-
-    let child_stdout = match child.stdout.take() {
-        Some(s) => s,
-        None => return ioerre!("failed to take child.stdout"),
-    };
-
     let mut cb = cb;
     let mut parse_state = ParseState::BeforeData;
     let mut expected_object = 1;
     let mut expected_progress_string = make_expected_progress_string(expected_object);
-    let mut bufreader = BufReader::new(child_stdout);
-    // let mut bufreader = BufReader::new(child_stdout).lines();
     
     let mut before_data_str = String::new();
     let mut data_vec: Vec<u8> = vec![];
@@ -116,16 +76,9 @@ pub fn parse_git_filter_export_with_callback<O, E: Display, P: AsRef<Path>>(
                     let unparsed_obj = UnparsedFastExportObject {
                         before_data_str, data: data_vec, after_data_str
                     };
-                    match cb(unparsed_obj) {
-                        Ok(_) => {},
-                        Err(e) => { // TODO: add bound on E that it should be debug?
-                            let _ = child.kill();
-                            return ioerre!("Error from callback:\n{}\nclosing fast-export stream", e);
-                        }
+                    if let Err(e) = cb(unparsed_obj) {
+                        return ioerre!("Error from callback:\n{}", e);
                     }
-
-                    // TODO: handle error from callback
-                    // and close stream then return io error ourselves
 
                     before_data_str = String::new();
                     data_vec = vec![];
@@ -139,6 +92,51 @@ pub fn parse_git_filter_export_with_callback<O, E: Display, P: AsRef<Path>>(
         }
     }
 
-    // eprintln!("Spent {:?} on reading the git stream", now.elapsed());
+
+    Ok(())
+}
+
+/// This 'parser' will only parse the data section
+/// and put the rest of the info into a 'metadata' string
+/// for future parsing. the rationale is that we need to parse the data section
+/// seperately anyway since we need to know when to resume parsing the other
+/// sections.
+/// optionally specify a path to the
+/// git repo if you are not currently in it.
+pub fn parse_git_filter_export_with_callback<O, E: Display, P: AsRef<Path>>(
+    export_branch: Option<String>,
+    with_blobs: bool,
+    repo_location: Option<P>,
+    cb: impl FnMut(UnparsedFastExportObject) -> Result<O, E>,
+) -> io::Result<()> {
+    // let now = Instant::now();
+    let export_branch = export_branch.unwrap_or("master".into());
+    let mut fast_export_command = vec!["git", "fast-export", "--show-original-ids",
+        "--signed-tags=strip", "--tag-of-filtered-object=drop",
+        "--fake-missing-tagger","--reference-excluded-parents",
+        "--reencode=yes", "--use-done-feature", &export_branch,
+        "--progress", "1"
+    ];
+    if !with_blobs {
+        fast_export_command.push("--no-data");
+    }
+
+    let mut child = exechelper::spawn_with_env_ex2(
+        &fast_export_command, &[], &[], repo_location,
+        Some(Stdio::null()), Some(Stdio::null()), Some(Stdio::piped()),
+    )?;
+
+    let child_stdout = match child.stdout.take() {
+        Some(s) => s,
+        None => return ioerre!("failed to take child.stdout"),
+    };
+
+    let mut bufreader = BufReader::new(child_stdout);
+    if let Err(e) = parse_from_stream(&mut bufreader, cb) {
+        let _ = child.kill();
+        return ioerre!("{}\nclosing fast-export stream", e);
+    }
+
+    child.wait()?;
     Ok(())
 }
