@@ -245,7 +245,7 @@ pub enum FileOps<'a> {
     FileDeleteAll,
     NoteModify(&'a str, &'a str),
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Hash)]
 pub enum FileOpsOwned {
     FileModify(String, String, String),
     FileDelete(String),

@@ -1,4 +1,8 @@
 use std::collections::HashMap;
+use crate::export_parser::FileOpsOwned;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
 
 /// would start with 4000 * (4 * 3) = 48000 bytes allocated
 pub const MARK_MAP_DEFAULT_CAPACITY: usize = 4000;
@@ -117,9 +121,29 @@ pub struct FilterState {
     pub have_used_a_commit: bool,
     pub graph: MarkMap,
     pub mark_map: Vec<usize>,
+    pub contents_hash_map: HashMap<usize, u64>,
+}
+
+fn calculate_hash<T: Hash>(t: &T) -> u64 {
+    let mut s = DefaultHasher::new();
+    t.hash(&mut s);
+    s.finish()
 }
 
 impl FilterState {
+    pub fn using_commit_with_contents(&mut self, mark: usize, contents: &Vec<FileOpsOwned>) {
+        let hash = calculate_hash(contents);
+        self.contents_hash_map.insert(mark, hash);
+    }
+
+    pub fn contents_are_same_as(&self, parent: usize, contents: &Vec<FileOpsOwned>) -> Option<bool> {
+        let hash = calculate_hash(contents);
+        match self.contents_hash_map.get(&parent) {
+            Some(parent_hash) => Some(*parent_hash == hash),
+            None => None
+        }
+    }
+
     pub fn extend_mark_map_until(&mut self, mark: usize) {
         let len = self.mark_map.len();
         let desired_len = mark + 1;
