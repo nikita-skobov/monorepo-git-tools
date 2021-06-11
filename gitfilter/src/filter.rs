@@ -2,6 +2,8 @@ use super::export_parser;
 use export_parser::{StructuredExportObject, StructuredCommit};
 use export_parser::FileOpsOwned;
 use super::filter_state::FilterState;
+use super::filter_state::MAPS_TO_EMPTY;
+use super::filter_state::UNKNOWN_MAP;
 use std::io::Write;
 use std::process::Stdio;
 use std::{path::{PathBuf, Path}, io};
@@ -209,6 +211,106 @@ pub fn apply_filter_rules_to_fileops(
     newfileops
 }
 
+pub fn get_mapped_mark(
+    filter_state: &mut FilterState,
+    mark: usize
+) -> Result<usize, FilterError> {
+    let mapped_to = match filter_state.get_mapped_mark(mark) {
+        Some(m) => if *m == UNKNOWN_MAP { None } else { Some(*m) },
+        None => None,
+    };
+    match mapped_to {
+        Some(m) => Ok(m),
+        None => {
+            let err_str = format!("Failed to find appropriate mapping of mark {}", mark);
+            Err(FilterError(err_str))
+        },
+    }
+}
+
+/// here we try to reduce a list of merge marks
+/// by checking if they are direct ancestors of each other.
+/// specify `is_left_to_right` depending on which direction
+/// you want to search through. NOTE that we only
+/// check for direct ancestors because thats a O(1) lookup.
+/// not sure if it is necessary to traverse the entire
+/// ancestor graph?
+pub fn filter_ancestor_map(
+    filter_state: &mut FilterState,
+    merges: &mut Vec<usize>,
+    is_left_to_right: bool,
+) {
+    let len = merges.len();
+    match len {
+        0 => return,
+        1 => return,
+        _ => {}
+    }
+
+    if is_left_to_right {
+        let mut new_merges = vec![merges[0]];
+        for m in merges.iter().skip(1) {
+            // only add this to the list of actual
+            // merges we wish to use, if it is not
+            // a direct ancestor of something before it
+            if ! filter_state.is_direct_ancestor_of_any(*m, &new_merges) {
+                new_merges.push(*m);
+            }
+        }
+        *merges = new_merges;
+    } else {
+        let mut new_merges = vec![merges[len - 1]];
+        for m in merges.iter().rev().skip(1) {
+            // only add this to the list of actual
+            // merges we wish to use, if it is not
+            // a direct ancestor of something before it
+            if ! filter_state.is_direct_ancestor_of_any(*m, &new_merges) {
+                new_merges.push(*m);
+            }
+        }
+        *merges = new_merges;
+    }
+}
+
+/// returns a vec of everything that these merge marks
+/// point to. three options here:
+/// 1. none of the merges exist in the mark map,
+/// so basically our parents got filtered out, returns empty vec
+/// 2. our 2 or more merges gets filtered to just 1 marked map,
+/// which basically means we were a merge commit, but now we
+/// only have one parent, so we are now a regular commit.
+/// 3. our 2 or more merges get mapped to their correct parents
+/// and we are still a merge commit, just potentially with different
+/// parents
+pub fn resolve_merges(
+    filter_state: &mut FilterState,
+    merges: &[usize]
+) -> Result<Vec<usize>, FilterError> {
+    let mut out = vec![];
+    for m in merges {
+        let mapped_to = get_mapped_mark(filter_state, *m)?;
+        // only consider it valid if it doesnt point to empty
+        if mapped_to != MAPS_TO_EMPTY {
+            out.push(mapped_to);
+        }
+    }
+
+    // // now it gets tricky because
+    // // its possible that there are duplicated, or
+    // // that one of these just points to the other...
+    // // basically we want to prevent:
+    // // 1. merge commits that look like this:
+    
+    // TODO: actually this might be useful.
+    // eliminates a lot of trivial dumb merges that
+    // we dont need... but need to evaluate
+    // if its worth the cost...
+    // filter_ancestor_map(filter_state, &mut out, true);
+    // filter_ancestor_map(filter_state, &mut out, false);
+
+    Ok(out)
+}
+
 /// we expect the commit.fileops to have already
 /// applied the filter rules, so we have
 /// to check for if we even want this commit
@@ -228,7 +330,7 @@ pub fn perform_filter2_for_initial_commit(
         // We have to EXPLICITLY state that otherwise if they search
         // the filter map and dont find an entry, then thats an error.
         // filter_state.
-        filter_state.set_mark_map(commit.mark, 0);
+        filter_state.set_mark_map(commit.mark, MAPS_TO_EMPTY);
         return Ok(FilterResponse::DontUse);
     }
 
@@ -251,15 +353,18 @@ pub fn perform_filter2_for_regular_commit(
     commit: &mut StructuredCommit,
     parent: usize,
 ) -> Result<FilterResponse, FilterError> {
-    // first find who our parent points to
-    let use_parent = if let Some(our_parent_map) = filter_state.get_mapped_mark(parent) {
-        *our_parent_map
-    } else {
-        // we failed to find our parent?
-        // thats an error!
-        let err_str = format!("Mark {} failed to find parent {}", commit.mark, parent);
-        return Err(FilterError(err_str));
-    };
+    // our parent might not have been included, so we have
+    // to check what our parent points to. If our parent WAS included
+    // then resolved_parent == parent
+    let resolved_parent = get_mapped_mark(filter_state, parent)?;
+
+    // we first check if we are filtered.
+    if commit.fileops.is_empty() {
+        // we were filtered out, so we have to notify future
+        // commits that they should use OUR parent instead of us.
+        filter_state.set_mark_map(commit.mark, resolved_parent);
+        return Ok(FilterResponse::DontUse);
+    }
 
     // TODO: I think checking/storing parent mark isnt enough unfortunately
     // there can be cases where a merge commit is filtered to just have
@@ -272,26 +377,17 @@ pub fn perform_filter2_for_regular_commit(
 
     // now we are ready to be used, but we have to update
     // ourselves depending on what our parent is actually pointing to:
-    if use_parent == 0 {
+    if resolved_parent == MAPS_TO_EMPTY {
         // if our parent maps to 0, that means we actually dont have
         // a parent. Instead, this means we should treat ourselves
         // as an initial commit.
         commit.merges = vec![];
         return perform_filter2_for_initial_commit(filter_state, commit);
-    } else if use_parent == parent {
+    } else if resolved_parent == parent {
         // our parent maps to itself, no need to do anything
     } else {
         // our parent maps to something else, so update our merges vec
-        commit.merges = vec![use_parent];
-    }
-
-    // now check if this commits contents were
-    // filtered out:
-    if commit.fileops.is_empty() {
-        // we were filtered out, so we have to notify future
-        // commits that they should use OUR parent instead of us.
-        filter_state.set_mark_map(commit.mark, use_parent);
-        return Ok(FilterResponse::DontUse);
+        commit.merges = vec![resolved_parent];
     }
 
     // Ok we are ready to be used!
@@ -312,88 +408,66 @@ pub fn perform_filter2_for_merge_commit(
     filter_state: &mut FilterState,
     commit: &mut StructuredCommit,
 ) -> Result<FilterResponse, FilterError> {
-    // first we find all of our actual parents:
-    let mut actual_parents = vec![];
-    for merge_parent in commit.merges.iter() {
-        if let Some(p) = filter_state.get_mapped_mark(*merge_parent) {
-            // if one of our parents got filtered out, it should
-            // have set itself to 0, in which case
-            // we no longer consider it a parent anymore
-            if *p != 0 {
-                // now we also have to check the commit GRAPH
-                // in addition to the map, because we have to make sure
-                // that each of our parents doesnt already exist
-                // in one of the other parents...
-                // basically if we had a situation like this:
-                //  D
-                // | \
-                // C  |
-                // |  B
-                // A /
-                // and D is us, C and B are our parents, but B got filtered out
-                // and now points to A, so our parents at this point are
-                // C and A, and because C is already a descendant of A (important:
-                // in this example it is a child, but we care about descendants, not only
-                // children), that means we can drop A as one of our parents!
-                // TODO: do we need to check every parent/child relationship, ie:
-                // bidirectional?? seems expensive. for now ill just do
-                // if current parent is descendant of previous parent, but maybe in
-                // the future well need to check in the other direction as well...
-                // TODO: I chose to only check for direct ancestors
-                // because it is A LOT faster... not sure if its 100% accurate though...
-                // should this maybe use `is_ancestor_of_any` instead?
-                if ! filter_state.is_direct_ancestor_of_any(*p, &actual_parents) {
-                    actual_parents.push(*p);
-                }
-            }
-        } else {
-            // we failed to find one of our parents?
-            // thats an error!
-            let err_str = format!("Mark {} failed to find one of merge parents {}", commit.mark, merge_parent);
-            return Err(FilterError(err_str));
-        }
-    }
-    // we checked the actual parents right to left, now we should also
-    // check left to right:
-    let mut actual_parents2 = vec![];
-    for (i, p) in actual_parents.iter().enumerate() {
-        if ! filter_state.is_direct_ancestor_of_any(*p, &actual_parents[i..]) {
-            actual_parents2.push(*p);
-        }
-    }
-    // eprintln!("Now merge parents are {:?}", actual_parents2);
-    commit.merges = actual_parents2;
-    // now its possible we could have filtered out our parents
-    // so we check again to see if we are still a merge commit.
-    // if we are not, then we can pass back up to the other
-    // filter functions:
-    match commit.merges.len() {
-        // we are now an initial commit
-        0 => return perform_filter2_for_initial_commit(filter_state, commit),
-        // regular commit with 1 parent
-        1 => {
-            let parent = commit.merges[0];
-            return perform_filter2_for_regular_commit(filter_state, commit, parent)
+    // resolve our parents to one of 3 possible states:
+    // 1. still a merge commit, (resolves to 2 or more parents)
+    // 2. merge commit became a regular commit (resolves to single parent)
+    // 3. merge commit becomes empty (resolves to 0 parents)
+    let resolved = resolve_merges(filter_state, &commit.merges)?;
+    commit.merges = resolved;
+    let new_merges_len = commit.merges.len();
+    match new_merges_len {
+        0 => {
+            // we are now an initial commit, ie: no parents
+            return perform_filter2_for_initial_commit(filter_state, commit);
         },
-        _ => {}
+        1 => {
+            // cause of slowness.. we already looked up the mark map
+            // but then this next function will check again!
+            // TODO: add 'already_mapped' flag to this function
+            // to avoid trying to map again
+            let parent = commit.merges[0];
+            return perform_filter2_for_regular_commit(filter_state, commit, parent);
+        },
+        _ => {},
     }
 
-    // now we KNOW we are a merge commit, but lets
-    // see if we are still desired:
+    // otherwise we KNOW that we have 2 parents.
+    // now we check if this merge commit is desired
+    // if it is NOT DESIRED, but has 2 parents (because its a merge)
+    // then we have 2 choices:
+    // allow this merge to be a dumb empty weird merge thing that looks
+    // like this:
+    // C -- B -- A
+    //  \_______/
+    // or, just go with the highest numbered mark, as that should be
+    // the latest mark in the graph
+    // TODO: IS it possible that the highest number is not necessarily
+    // 'on top' of the commit graph?
+    // the ideal and correct answer is to find whether or not
+    // each merge mark is an ancestor of the other, and only add them
+    // if they are not ancestors of each other. This is
+    // computationally expensive though because we have to recursively
+    // search the graph...
+    // the simplest thing to do is to just allow the dumb
+    // empty merge commit like how filter-repo does and then
+    // do a second pass through afterwards to clean them up, but
+    // ideally id want to avoid multiple passes...
     if commit.fileops.is_empty() {
-        // TODO: is this even possible?
-        // can a merge commit be filtered out, but BOTH of
-        // its parents still exist??
-        // what do we update the mark map with?
-        let err_str = format!("Merge commit ({}) parents all exist: {:?}, but merge commit is filtered out. Please report this error", commit.mark, commit.merges);
-        return Err(FilterError(err_str));
+        // just say its a regular (but undesired) commit with
+        // a single parent:
+        // TODO: we can also pass 'already_mapped' to avoid searching here...
+        let highest = commit.merges.iter().max().unwrap_or(&commit.merges[0]);
+        let highest = *highest;
+        commit.merges = vec![highest];
+        return perform_filter2_for_regular_commit(filter_state, commit, highest);
     }
 
-    // ok we are desired, so now make sure to update the commit map:
+    // otherwise, we are desired.
+    // notify future commits that this mark is valid,
+    // and update the graph
     filter_state.set_mark_map(commit.mark, commit.mark);
-    // also update the graph
     filter_state.update_graph(commit.mark, &commit.merges);
-    return Ok(FilterResponse::UseAsIs)
+    Ok(FilterResponse::UseAsIs)
 }
 
 pub fn perform_filter2(
@@ -421,10 +495,23 @@ pub fn perform_filter2(
         // two or more parents: merge commit
         _ => perform_filter2_for_merge_commit(filter_state, commit)
     };
-
-    // eprintln!("Response says:\n{:#?}", resp);
-
-    resp
+    match resp {
+        Ok(o) => match o {
+            FilterResponse::DontUse => {
+                eprintln!("{} dont use", commit.mark);
+                Ok(o)
+            },
+            FilterResponse::UseAsIs => {
+                eprintln!("{} use as is", commit.mark);
+                Ok(o)
+            },
+            FilterResponse::UseAsReset(_) => {
+                eprintln!("use reset");
+                Ok(o)
+            }
+        }
+        Err(e) => Err(e)
+    }
 }
 
 pub fn filter_with_rules<P: AsRef<Path>, T: Write>(
