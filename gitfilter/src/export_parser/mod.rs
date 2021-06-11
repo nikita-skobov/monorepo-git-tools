@@ -250,9 +250,17 @@ pub fn write_to_stream<W: Write>(stream: W, obj: StructuredExportObject) -> io::
         }
         write_person_info(&mut write_data, &commit_obj.committer, false);
         write_data.extend(b"data ");
-        write_data.extend(obj.data_size.as_bytes());
+        let msg_as_bytes = commit_obj.commit_message.as_bytes();
+        let data_len = msg_as_bytes.len();
+        // since we used string lossy to get the commit message,
+        // its possible its not the same length as it was when we
+        // ran git fast-export. the correct solution
+        // would be to keep the commit message as a byte vec...
+        // but for now, we will just ensure that we output the data length
+        // to be the exact byte count of the commit_message.as_bytes();
+        write_data.extend(data_len.to_string().as_bytes());
         write_data.push(b'\n');
-        write_data.extend(commit_obj.commit_message.as_bytes());
+        write_data.extend(msg_as_bytes);
         write_data.push(b'\n');
 
         let mut first_merge = true;
