@@ -34,7 +34,7 @@ impl FilterState {
         // then insert this final up to date hashmap into
         // the index of this mark.
         let mut parents_merged_map = HashMap::new();
-        for p in parents {
+        for p in parents.iter().rev() {
             match self.contents_hash_map.get(p) {
                 None => {}
                 Some(parent_map) => {
@@ -43,17 +43,17 @@ impl FilterState {
                     }
                 }
             }
-        }
+        }        
         for fileop in contents {
-            let hash_key = match &fileop {
+            let hash_key_str = match &fileop {
                 FileOpsOwned::FileModify(_, _, p) => p,
                 FileOpsOwned::FileDelete(p) => p,
                 FileOpsOwned::FileCopy(_, p) => p,
                 FileOpsOwned::FileRename(_, p) => p,
                 FileOpsOwned::FileDeleteAll => "",
                 FileOpsOwned::NoteModify(_, p) => p,
-            };
-            let hash_key = calculate_hash(&hash_key);
+            }; 
+            let hash_key = calculate_hash(&hash_key_str);
             let hash_value = calculate_hash(fileop);
             parents_merged_map.insert(hash_key, hash_value);
         }
