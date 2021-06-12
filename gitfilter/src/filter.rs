@@ -8,8 +8,6 @@ use std::io::Write;
 use std::process::Stdio;
 use std::{path::{PathBuf, Path}, io};
 
-const DEBUG_MARKS: &[usize] = &[];
-
 #[derive(Clone, Debug)]
 pub enum FilterRule {
     FilterRulePathInclude(String),
@@ -338,9 +336,6 @@ pub fn perform_filter2_for_initial_commit(
     // first check if this commits contents were
     // filtered out:
     if commit.fileops.is_empty() {
-        if DEBUG_MARKS.contains(&commit.mark) {
-            eprintln!("NOT Using {} as an original commit, pointing to EMPTY", commit.mark);
-        }
         // we are an initial commit, and dont have
         // a parent, and we were filtered out. This means
         // we should update the filter map
@@ -353,9 +348,6 @@ pub fn perform_filter2_for_initial_commit(
         return Ok(FilterResponse::DontUse);
     }
 
-    if DEBUG_MARKS.contains(&commit.mark) {
-        eprintln!("Using {} as an original commit, pointing to itself", commit.mark);
-    }
     // otherwise we DO want to use this commit.
     // because we are an initial commit, we dont have to worry
     // about froms/merges.. we are good to go!
@@ -383,9 +375,6 @@ pub fn perform_filter2_for_regular_commit(
 
     // we first check if we are filtered.
     if commit.fileops.is_empty() {
-        if DEBUG_MARKS.contains(&commit.mark) {
-            eprintln!("NOT Using {} as a regular commit, pointing to resolved parent: {}", commit.mark, resolved_parent);
-        }
         // we were filtered out, so we have to notify future
         // commits that they should use OUR parent instead of us.
         filter_state.set_mark_map(commit.mark, resolved_parent);
@@ -405,21 +394,9 @@ pub fn perform_filter2_for_regular_commit(
     if parent_has_same_contents(filter_state, resolved_parent, &commit.fileops)? {
         // we filter ourselves out because we are exactly
         // the same as the parent...
-        if DEBUG_MARKS.contains(&commit.mark) {
-            eprintln!("NOT Using {} as a regular commit because our contents match our parent. pointing to resolved parent: {}", commit.mark, resolved_parent);
-        }
         filter_state.set_mark_map(commit.mark, resolved_parent);
         return Ok(FilterResponse::DontUse);
     }
-
-    // TODO: I think checking/storing parent mark isnt enough unfortunately
-    // there can be cases where a merge commit is filtered to just have
-    // 1 parent, but the contents of this merge commit are the same as
-    // the parent.. therefore the merge commit would be empty, and ideally
-    // pruned. we would need to probably hash the contents
-    // of the fileops of each commit, and then check here
-    // if our contents are the same as our parents, and if they are
-    // the same, then we skip this commit.
 
     // now we are ready to be used, but we have to update
     // ourselves depending on what our parent is actually pointing to:
@@ -428,9 +405,6 @@ pub fn perform_filter2_for_regular_commit(
         commit.merges = vec![resolved_parent];
     }
 
-    if DEBUG_MARKS.contains(&commit.mark) {
-        eprintln!("Using {} as a regular commit and pointing to itself", commit.mark);
-    }
     // Ok we are ready to be used!
     // make sure to let future commits know that we exist!
     filter_state.set_mark_map(commit.mark, commit.mark);
@@ -455,15 +429,11 @@ pub fn perform_filter2_for_merge_commit(
     // 2. merge commit became a regular commit (resolves to single parent)
     // 3. merge commit becomes empty (resolves to 0 parents)
     let resolved = resolve_merges(filter_state, &commit.merges)?;
-    if DEBUG_MARKS.contains(&commit.mark) {
-        eprintln!("New merges: {:?}", resolved);
-    }
     commit.merges = resolved;
     let new_merges_len = commit.merges.len();
     match new_merges_len {
         0 => {
             // we are now an initial commit, ie: no parents
-            // eprintln!("A merge commit resulted in no parents??? {}", commit.mark);
             return perform_filter2_for_initial_commit(filter_state, commit);
         },
         1 => {
@@ -489,9 +459,6 @@ pub fn perform_filter2_for_merge_commit(
     // TODO: how to get this to be in the correct order
     // in the first place without explicitly reversing?
     commit.merges.reverse();
-    if DEBUG_MARKS.contains(&commit.mark) {
-        eprintln!("Using {} as regular merge case. new parents are {:?}", commit.mark, commit.merges);
-    }
 
     // notify future commits that this mark is valid,
     // and update the graph
@@ -510,12 +477,6 @@ pub fn perform_filter2(
     let newfileops = apply_filter_rules_to_fileops(
         default_include, filter_state, commit, filter_rules);
     commit.fileops = newfileops;
-    if DEBUG_MARKS.contains(&commit.mark) {
-        eprintln!("We see:\n{:#?}", commit);
-    }
-    if commit.mark == 328715 {
-        eprintln!("328715 found. data: {}", commit.commit_message.as_bytes().len());
-    }
 
     let resp = match commit.merges.len() {
         // this is an initial commit, doesnt have a from line
@@ -530,27 +491,7 @@ pub fn perform_filter2(
         // two or more parents: merge commit
         _ => perform_filter2_for_merge_commit(filter_state, commit)
     };
-    if DEBUG_MARKS.contains(&commit.mark) {
-        match resp {
-            Ok(o) => match o {
-                FilterResponse::DontUse => {
-                    eprintln!("{} dont use", commit.mark);
-                    Ok(o)
-                },
-                FilterResponse::UseAsIs => {
-                    eprintln!("{} use as is", commit.mark);
-                    Ok(o)
-                },
-                FilterResponse::UseAsReset(_) => {
-                    eprintln!("use reset");
-                    Ok(o)
-                }
-            }
-            Err(e) => Err(e)
-        }
-    } else {
-        resp
-    }
+    resp
 }
 
 pub fn filter_with_rules<P: AsRef<Path>, T: Write>(
