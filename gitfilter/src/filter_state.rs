@@ -3,125 +3,15 @@ use crate::export_parser::FileOpsOwned;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-
-/// would start with 4000 * (4 * 3) = 48000 bytes allocated
-pub const MARK_MAP_DEFAULT_CAPACITY: usize = 4000;
 pub const MAPS_TO_EMPTY: usize = 0;
-pub const MAPS_TO_EMPTY_u32: u32 = 0;
 pub const UNKNOWN_MAP: usize = usize::MAX;
-pub const UNKNOWN_MAP_u32: u32 = u32::MAX;
-
-/// store a vec of marks. we think of it as a map
-/// because our commit mark ids are usize, so we can reference
-/// where it exists in the map very quickly without hashing.
-/// the first index of marks will be empty so that
-/// we don't need to subtract 1 from each mark id (mark ids
-/// are never 0).
-#[derive(Debug)]
-pub struct MarkMap {
-    // instead of using usize, we use
-    // u32 because we guarantee the size of this...
-    // also 32 bits per mark means the maximum number of commits
-    // is theorhetically like 4 billion... is that too low?
-    // i think not, but we will see.. otherwise we can make
-    // this usize, or u64
-    // NOTE that we allocate room for 3 items.
-    // in most cases the third will be empty.
-    // the third element in this array is actually an index
-    // (it needs to be casted to usize) into the extras...
-    // so if you have a commit with 2 parents, (most merge commits)
-    // then the marks entry will look like [A, B, 0]
-    // but if you have 3 parents or more, then the third element
-    // is the index into the extras vec of where the rest of your parents are
-    pub marks: Vec<[u32; 3]>,
-    pub extras: Vec<Vec<usize>>,
-}
-
-impl MarkMap {
-    /// technically should not be necessary because
-    /// we visit marks sequentially 1, 2, 3, ...
-    /// but just in case, if we get a mark of 10,
-    /// and currently our marks vec only has len of 3, then
-    /// we need to insert 7 empty marks.
-    /// this function should guarantee that after calling this
-    /// the length of marks is AT LEAST mark + 1
-    /// (because we want to be able to do self.marks[mark])
-    pub fn extend_marks_until(&mut self, mark: usize) {
-        let desired_len = mark + 1;
-        let current_len = self.marks.len();
-        for _ in current_len..desired_len {
-            // use 0 0 max to indicate not a valid state
-            self.marks.push([MAPS_TO_EMPTY_u32, MAPS_TO_EMPTY_u32, UNKNOWN_MAP_u32]);
-        }
-    }
-
-    /// parents must have at least 1 element!
-    pub fn insert(&mut self, mark: usize, parents: &[usize]) {
-        self.extend_marks_until(mark);
-        let len = parents.len();
-        let mark_segment = &mut self.marks[mark];
-        if len == 1 {
-            *mark_segment = [parents[0] as u32, MAPS_TO_EMPTY_u32, MAPS_TO_EMPTY_u32];
-        } else if len == 2 {
-            *mark_segment = [parents[0] as u32, parents[1] as u32, MAPS_TO_EMPTY_u32];
-        } else if len > 2 {
-            *mark_segment = [parents[0] as u32, parents[1] as u32, MAPS_TO_EMPTY_u32];
-            let mut extra = vec![];
-            for i in 2..len {
-                extra.push(parents[i]);
-            }
-            self.extras.push(extra);
-            let extra_index = self.extras.len() - 1;
-            (*mark_segment)[2] = extra_index as u32;
-        };
-    }
-
-    /// get a vec of marks that are parents of this mark
-    pub fn get_all_mapped(&self, mark: usize) -> Option<Vec<usize>> {
-        if self.marks.len() < mark + 1 {
-            return None;
-        }
-        let mark_segment = &self.marks[mark];
-        // this is an invalid segment, ie: it was never actually set to
-        // anything
-        if *mark_segment == [MAPS_TO_EMPTY_u32, MAPS_TO_EMPTY_u32, UNKNOWN_MAP_u32] {
-            return None;
-        }
-        let mut out = Vec::with_capacity(2);
-        out.push(mark_segment[0] as usize);
-        if mark_segment[1] != MAPS_TO_EMPTY_u32 {
-            out.push(mark_segment[1] as usize);
-        }
-        if mark_segment[2] != MAPS_TO_EMPTY_u32 {
-            let extras_index = mark_segment[2] as usize;
-            for extra in self.extras[extras_index].iter() {
-                out.push(*extra);
-            }
-        }
-
-        Some(out)
-    }
-}
-
-impl Default for MarkMap {
-    fn default() -> Self {
-        let mut marks_vec = Vec::with_capacity(MARK_MAP_DEFAULT_CAPACITY);
-        // we want it to start with one empty!
-        let extras_vec = vec![vec![]];
-        marks_vec.push([0, 0, 0]);
-        MarkMap {
-            marks: marks_vec,
-            extras: extras_vec,
-        }
-    }
-}
 
 #[derive(Debug, Default)]
 pub struct FilterState {
     pub have_used_a_commit: bool,
-    pub graph: MarkMap,
+    pub graph: Vec<Vec<usize>>,
     pub mark_map: Vec<usize>,
-    pub contents_hash_map: HashMap<usize, u64>,
+    pub contents_hash_map: HashMap<usize, HashMap<u64, u64>>,
 }
 
 fn calculate_hash<T: Hash>(t: &T) -> u64 {
@@ -131,15 +21,80 @@ fn calculate_hash<T: Hash>(t: &T) -> u64 {
 }
 
 impl FilterState {
-    pub fn using_commit_with_contents(&mut self, mark: usize, contents: &Vec<FileOpsOwned>) {
-        let hash = calculate_hash(contents);
-        self.contents_hash_map.insert(mark, hash);
+    pub fn using_commit_with_contents(
+        &mut self,
+        mark: usize,
+        parents: &[usize],
+        contents: &Vec<FileOpsOwned>,
+    ) {
+        // merge all of the parents hashmaps
+        // into a new one.
+        // then apply the hashmap from the current contents,
+        // and override the parents
+        // then insert this final up to date hashmap into
+        // the index of this mark.
+        let mut parents_merged_map = HashMap::new();
+        for p in parents {
+            match self.contents_hash_map.get(p) {
+                None => {}
+                Some(parent_map) => {
+                    for (key, value) in parent_map {
+                        parents_merged_map.insert(*key, *value);
+                    }
+                }
+            }
+        }
+        for fileop in contents {
+            let hash_key = match &fileop {
+                FileOpsOwned::FileModify(_, _, p) => p,
+                FileOpsOwned::FileDelete(p) => p,
+                FileOpsOwned::FileCopy(_, p) => p,
+                FileOpsOwned::FileRename(_, p) => p,
+                FileOpsOwned::FileDeleteAll => "",
+                FileOpsOwned::NoteModify(_, p) => p,
+            };
+            let hash_key = calculate_hash(&hash_key);
+            let hash_value = calculate_hash(fileop);
+            parents_merged_map.insert(hash_key, hash_value);
+        }
+        self.contents_hash_map.insert(mark, parents_merged_map);
     }
 
     pub fn contents_are_same_as(&self, parent: usize, contents: &Vec<FileOpsOwned>) -> Option<bool> {
-        let hash = calculate_hash(contents);
         match self.contents_hash_map.get(&parent) {
-            Some(parent_hash) => Some(*parent_hash == hash),
+            Some(parent_hash_map) => {
+                // check if every one of our
+                // fileops exists in the parent map,
+                // and if the hashes are the same:
+                let mut every_fileop_exists = true;
+
+                for fileop in contents {
+                    let hash_key = match &fileop {
+                        FileOpsOwned::FileModify(_, _, p) => p,
+                        FileOpsOwned::FileDelete(p) => p,
+                        FileOpsOwned::FileCopy(_, p) => p,
+                        FileOpsOwned::FileRename(_, p) => p,
+                        FileOpsOwned::FileDeleteAll => "",
+                        FileOpsOwned::NoteModify(_, p) => p,
+                    };
+                    let hash_key = calculate_hash(&hash_key);
+                    match parent_hash_map.get(&hash_key) {
+                        Some(parent_hash_value) => {
+                            let hash_value = calculate_hash(fileop);
+                            if *parent_hash_value != hash_value {
+                                every_fileop_exists = false;
+                                break;
+                            }
+                        }
+                        None => {
+                            every_fileop_exists = false;
+                            break;
+                        }
+                    }
+                }
+
+                Some(every_fileop_exists)
+            },
             None => None
         }
     }
@@ -152,80 +107,66 @@ impl FilterState {
         }
     }
 
+    pub fn extend_ancestry_graph_until(&mut self, mark: usize) {
+        let len = self.graph.len();
+        let desired_len = mark + 1;
+        for _ in len..desired_len {
+            self.graph.push(vec![]);
+        }
+    }
+
     pub fn set_mark_map(&mut self, mark: usize, map: usize) {
         self.extend_mark_map_until(mark);
         self.mark_map[mark] = map;
     }
 
     pub fn update_graph(&mut self, mark: usize, parents: &[usize]) {
-        self.graph.insert(mark, parents);
+        // self.graph.insert(mark, parents);
+        self.extend_ancestry_graph_until(mark);
+
+        // add mark to every single one of the parents
+        // ancestry list. and add it so its
+        // sorted within that list.
+        let mut our_ancestry_table = vec![];
+        let mut parents_sorted = parents.to_vec();
+        parents_sorted.sort();
+        for p in parents_sorted {
+            let parents_ancestry_table = &self.graph[p];
+            our_ancestry_table.extend(parents_ancestry_table);
+            our_ancestry_table.push(p);
+        }
+        our_ancestry_table.sort();
+        our_ancestry_table.dedup();
+        self.graph[mark] = our_ancestry_table;
     }
 
     pub fn get_mapped_mark(&self, mark: usize) -> Option<&usize> {
         self.mark_map.get(mark)
     }
 
-    /// is mark a direct ancestor of parent, ie:
-    /// does mark exist in parent's parents
-    pub fn is_direct_ancestor(&self, mark: usize, parent: usize) -> bool {
+    pub fn is_ancestor(&self, mark: usize, parent: usize) -> bool {
         if mark == parent { return true }
-        match self.graph.get_all_mapped(parent) {
-            Some(parents) => parents.contains(&mark),
-            None => {
-                // this means we failed to find parent in the
-                // graph... TODO: is this an error?
-                false
+
+        let parents_ancestry_table = &self.graph[parent];
+        for ancestor in parents_ancestry_table {
+            if *ancestor == mark {
+                return true;
+            } else if *ancestor > mark {
+                return false;
             }
         }
+
+        false
     }
 
-    pub fn is_direct_ancestor_of_any(&self, mark: usize, parents: &[usize]) -> bool {
+    pub fn is_ancestor_of_any(&self, mark: usize, parents: &[usize]) -> bool {
         let mut mark_exists_in_a_parent = false;
         for p in parents {
-            if self.is_direct_ancestor(mark, *p) {
+            if self.is_ancestor(mark, *p) {
                 mark_exists_in_a_parent = true;
                 break;
             }
         }
         mark_exists_in_a_parent
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn mark_map_works() {
-        let mut map = MarkMap::default();
-        assert_eq!(map.marks.len(), 1);
-        assert_eq!(map.extras.len(), 1);
-
-        // if we insert 10, then
-        // map len should be 11
-        map.insert(10, &[1]);
-        assert_eq!(map.marks.len(), 11);
-        assert_eq!(map.extras.len(), 1);
-
-        // can insert at index 5 now, and len should be the same
-        map.insert(5, &[2, 3]);
-        assert_eq!(map.marks.len(), 11);
-        assert_eq!(map.extras.len(), 1);
-
-        // finally, let's try adding
-        // a mark with more than 2 parents.
-        // the extras should grow now
-        map.insert(11, &[4, 5, 6]);
-        assert_eq!(map.marks.len(), 12);
-        assert_eq!(map.extras.len(), 2);
-
-        // now let's try to retrieve all of the parents
-        // we just put in:
-        let m1 = map.get_all_mapped(10).unwrap();
-        assert_eq!(m1, [1]);
-        let m2 = map.get_all_mapped(5).unwrap();
-        assert_eq!(m2, [2, 3]);
-        let m3 = map.get_all_mapped(11).unwrap();
-        assert_eq!(m3, [4, 5, 6]);
     }
 }
