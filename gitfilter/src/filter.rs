@@ -392,6 +392,16 @@ pub fn perform_filter2_for_regular_commit(
         return Ok(FilterResponse::DontUse);
     }
 
+    // before we check if our parent has same contents
+    // as us, check if our parent maps to empty. if so, then
+    // we are an initial commit, and we dont have to check
+    // our parents contents (because they dont exist)
+    if resolved_parent == MAPS_TO_EMPTY {
+        // treat ourselves as an initial commit:
+        commit.merges = vec![];
+        return perform_filter2_for_initial_commit(filter_state, commit);
+    }
+
     if parent_has_same_contents(filter_state, resolved_parent, &commit.fileops)? {
         // we filter ourselves out because we are exactly
         // the same as the parent...
@@ -413,15 +423,7 @@ pub fn perform_filter2_for_regular_commit(
 
     // now we are ready to be used, but we have to update
     // ourselves depending on what our parent is actually pointing to:
-    if resolved_parent == MAPS_TO_EMPTY {
-        // if our parent maps to 0, that means we actually dont have
-        // a parent. Instead, this means we should treat ourselves
-        // as an initial commit.
-        commit.merges = vec![];
-        return perform_filter2_for_initial_commit(filter_state, commit);
-    } else if resolved_parent == parent {
-        // our parent maps to itself, no need to do anything
-    } else {
+    if resolved_parent != parent {
         // our parent maps to something else, so update our merges vec
         commit.merges = vec![resolved_parent];
     }
