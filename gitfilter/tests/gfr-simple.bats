@@ -182,8 +182,6 @@ function git_add_all_and_commit() {
     git checkout master
     git merge --no-ff --commit tmp1
 
-    git log --oneline
-
     # 3 commits and 1 merge commit
     [[ "$(num_commits)" == 4 ]]
 
@@ -209,6 +207,7 @@ function git_add_all_and_commit() {
     "$GITFILTERCLI" --branch gitfilter --path folder_a/ > filtered.txt
     cat filtered.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
     git reset --hard
+    echo "gitfilter:"
     git log --oneline --decorate --graph
     gitfilter_ls_tree="$(git ls-tree HEAD)"
     echo "gitfilter ls-tree:"
@@ -442,7 +441,7 @@ function git_add_all_and_commit() {
     [[ "$xyz_contents" == "$xyz_expected_contents" ]]
 
     "$GITFILTERCLI" --branch gitfilter --path abc.txt --path xyz.txt > filtered.txt
-    cat filtered.txt
+    # cat filtered.txt
     cat filtered.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
     git reset --hard
 
