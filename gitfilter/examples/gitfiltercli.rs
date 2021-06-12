@@ -93,5 +93,7 @@ fn main() {
     }
 
     let no_location: Option<PathBuf> = None;
-    let _ = filter_with_rules(filter_opts, filter_rules, no_location);
+    if let Err(e) = filter_with_rules(filter_opts, filter_rules, no_location) {
+        eprintln!("{}", e);
+    }
 }
