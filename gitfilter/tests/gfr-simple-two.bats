@@ -174,3 +174,79 @@ function git_add_all_and_commit() {
     git checkout master
     git branch -D gitfilter filterrepo
 }
+
+
+# actually not simple!
+# took me a day of debugging to figure out this is
+# a necessary test case, TODO: make advanced test cases
+
+# TODO: technically this isnt what i want to test....
+# what I want to test is the effect of calling parents.rev()
+# in filter_state.rs.
+# its a difficult test case to reproduce but basically I want to test
+# that the second merge commit gets filtered out becacuse
+# it has fileops that already exist in the remaining parent
+# however, its difficult to come up with a scenario where this
+# merge commit has fileops different from the merge commit
+# its trying to merge into...
+# still, its a good test case because it tests some of the more
+# advanced merge handling, but ideally itd test specifically
+# about the ordering of the merges
+@test 'merge commits get filtered if their contents already exists in their parents' {
+    make_file a.txt
+    make_file b.txt
+    git_add_all_and_commit "a and b"
+    git checkout -b original
+
+    git checkout -b left1
+    echo "a1" > a.txt && git add . && git commit -m "a1"
+    git checkout -
+    git checkout -b right1
+    echo "a2" > a.txt && git add . && git commit -m "a2"
+    echo "b1" > b.txt && git add . && git commit -m "b1"
+    git checkout left1
+    git merge -X ours --no-ff right1 --no-commit
+    git commit -m "first merge that should be included"
+
+    # important: contents should match the left commit
+    a_contents="$(cat a.txt)"
+    [[ $a_contents == "a1" ]]
+
+    echo "ORIGINAL"
+    git log --oneline --graph
+
+
+    # This merge is a merge commit between 2 states:
+    # a commit where we add C, and a commit where we had b1
+    # if we merge this with the last merge commit we made,
+    # we should:
+    # 1. detect that C does not apply to our filter rules,
+    # and thus this merge commit becomes a regular commit
+    # with 1 parent.
+    # 2. because its contents matches the parents contents, it should
+    # be filtered out, ie: this became an empty merge commit
+    git checkout right1
+    make_file c.txt && git_add_all_and_commit "c"
+    git checkout -
+    git merge --no-ff right1 --no-commit
+    git commit -m "weird merge that should be filtered"
+    echo "AFTER WEIRD MERGE THAT SHOULD BE FILTERED"
+    git log --oneline --graph
+
+    git checkout -b gitfilter
+
+    # before we filter, it will have the weird merge
+    git_log="$(git log --oneline gitfilter)"
+    [[ $git_log == *"weird merge"* ]]
+
+    "$GITFILTERCLI" --branch gitfilter --path a.txt --path b.txt > filtered.txt
+    cat filtered.txt | git -c core.ignorecase=false fast-import --date-format=raw-permissive --force
+    git reset --hard
+
+    echo "After gitfilter:"
+    git log --oneline --graph
+
+    # after filter, it should NOT have
+    git_log="$(git log --oneline gitfilter)"
+    [[ $git_log != *"weird merge"* ]]
+}
