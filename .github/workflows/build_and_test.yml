@@ -74,28 +74,28 @@ jobs:
       # should work on any system, so as long as we test them on one
       # we will be good.
       - name: install_git_filter_repo
-        if: ${{ matrix.job.os != 'i686-unknown-linux-gnu' }}
+        if: ${{ matrix.job.target != 'i686-unknown-linux-gnu' }}
         run: bash .github/install-git-filter-repo.sh ${{ matrix.job.os }}
       - name: test_gitfilter_1
-        if: ${{ matrix.job.os != 'i686-unknown-linux-gnu' }}
+        if: ${{ matrix.job.target != 'i686-unknown-linux-gnu' }}
         working-directory: ./gitfilter
         run: cargo build --release --examples --target=${{ matrix.job.target }}
       - name: test_gitfilter_2
-        if: ${{ matrix.job.os != 'i686-unknown-linux-gnu' }}
+        if: ${{ matrix.job.target != 'i686-unknown-linux-gnu' }}
         working-directory: ./gitfilter
         run: cargo test --target=${{ matrix.job.target }}
       - name: test_gitfilter_3
-        if: ${{ matrix.job.os != 'i686-unknown-linux-gnu' }}
+        if: ${{ matrix.job.target != 'i686-unknown-linux-gnu' }}
         working-directory: ./gitfilter
         run: bash -c "bats tests/gfr-simple.bats"
         env:
-          GITFILTERCLI: ./target/${{ matrix.job.target }}/release/examples/gitfiltercli
+          GITFILTERCLI: ${{ github.workspace }}/gitfilter/target/${{ matrix.job.target }}/release/examples/gitfiltercli
       - name: test_gitfilter_4
-        if: ${{ matrix.job.os != 'i686-unknown-linux-gnu' }}
+        if: ${{ matrix.job.target != 'i686-unknown-linux-gnu' }}
         working-directory: ./gitfilter
         run: bash -c "bats tests/gfr-simple-two.bats"
         env:
-          GITFILTERCLI: ./target/${{ matrix.job.target }}/release/examples/gitfiltercli
+          GITFILTERCLI: ${{ github.workspace }}/gitfilter/target/${{ matrix.job.target }}/release/examples/gitfiltercli
       - name: build_executable
         uses: actions-rs/cargo@ae10961054e4aa8b4aa7dffede299aaf087aa33b
         with:
