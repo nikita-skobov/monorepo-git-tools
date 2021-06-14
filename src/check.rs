@@ -383,7 +383,7 @@ fn check_for_updates(
         } else {
             b == upstream_branch
         };
-        blob_path_applies_to_repo_file(&c.path_str, repo_file, this_is_a_remote_blob)
+        blob_path_applies_to_repo_file(&c.path_dest, repo_file, this_is_a_remote_blob)
     };
     let successful_topbase = match topbase::find_a_b_difference2::<CommitWithBlobs, _>(
         a_branch, b_branch, Some(traverse_at_a_time), hashing_mode, should_rewind, Some(should_use_blob_cb))
