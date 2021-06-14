@@ -12,7 +12,7 @@ regex = "1.4.3"
 once_cell = "*"
 
 [dev-dependencies]
-gumdrop = { path = "../gumdrop" }
+gumdrop = { git = "https://github.com/nikita-skobov/gumdrop", rev = "7ee4940bd8e6e41d207aa8bf82ba2a80aa82c1c0" }
 
 [profile.release]
 lto = true
