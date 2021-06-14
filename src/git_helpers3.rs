@@ -557,8 +557,12 @@ pub fn iterate_blob_log<T>(
         // that came from calling child.wait()
         let child_wait_res = child.wait();
         if output.is_ok() {
-            let _ = child_wait_res?;
-        }        
+            let child_res = child_wait_res?;
+            // return an error if the child exited with error:
+            if ! child_res.success() {
+                return ioerre!("git log --raw --oneline -m {} exited unsuccessfully", committish);
+            }
+        }
     }
 
     if let Err(e) = output {
