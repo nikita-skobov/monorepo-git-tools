@@ -430,6 +430,7 @@ pub fn try_sync_in(
     // num_commits_to_pull: usize,
     commits_to_pull: &Vec<CommitWithBlobs>,
 ) -> io::Result<()> {
+    // eprintln!("Try sync in commits to pull: {:#?}", commits_to_pull);
     let is_verbose = false;
     let filter_rules = split_in::generate_gitfilter_filterrules(&repo_file, is_verbose);
     let random_number = match repo_file.remote_repo {
@@ -447,6 +448,7 @@ pub fn try_sync_in(
         random_branch, starting_branch_name, filter_rules)?;
 
     let new_commits_to_pull = try_get_new_commits_after_filter(&random_branch, &commits_to_pull, starting_branch_name)?;
+    // eprintln!("New commits to pull: {:#?}", new_commits_to_pull);
     let (num_commits_to_pull, rebase_interactive_string) = get_rebase_interactive_string_and_number(
         &new_commits_to_pull);
 
