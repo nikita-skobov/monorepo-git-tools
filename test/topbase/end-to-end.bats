@@ -287,7 +287,51 @@ function teardown() {
     [[ "$git_log_after_topbase" != *"_q"* ]]
 }
 
-# TODO:
-# add test that a dry-run will output steps that,
-# if evaluated, will leave the user in exactly the same
-# state as if the user ran mgt without dry run
+@test 'A merge commit can be a fork point for topbase' {
+    # this test is whether or not mgt can
+    # detect a merge commit as a topbase fork point,
+    # especially if the merge commit has a conflict resolved:
+    git checkout -b top_branch
+    # make commits that would separate top_branch from master
+    echo "q" > q.txt && git add q.txt && git commit -m "_q"
+    echo "u" > u.txt && git add u.txt && git commit -m "_u"
+    echo "v" > v.txt && git add v.txt && git commit -m "_v"
+    git checkout -b top-left
+    echo "x1" > x1.txt && git add x1.txt && git commit -m "x1"
+    git checkout -
+    echo "x2" > x1.txt && git add x1.txt && git commit -m "x2"
+    run git merge --no-ff top-left --no-commit
+    echo "resolved" > x1.txt && git add x1.txt
+    git commit -m "mergex1x2"
+    # the state of x1, x2 in the merge commit should be
+    # that they both exist, and contain "x1", and "x2"
+    # respectively
+    # so that was the fork point, now lets make a commit that will
+    # be added to our main branch:
+    echo "a" > a.txt && git add a.txt && git commit -m "_a"
+    git log --raw --oneline -m --no-decorate
+
+    git checkout master
+    # simulate a commit that should be the same as the mergex1x2:
+    echo "resolved" > x1.txt && git add x1.txt
+    git commit -m "master-x1x2"
+
+    git checkout top_branch
+    echo "git log before:"
+    git log --oneline --graph
+    git_log_before_topbase="$(git log --oneline)"
+    # topbase current branch onto master
+    run mgt topbase master --verbose
+    echo "git log after:"
+    git log --oneline --graph
+    git_log_after_topbase="$(git log --oneline)"
+    echo "$output"
+    current_branch="$(git branch --show-current)"
+
+    [[ "$git_log_after_topbase" != "$git_log_before_topbase" ]]
+    [[ $status == 0 ]]
+    # the commit that was rebased from top branch onto master:
+    [[ "$git_log_after_topbase" == *"_a"* ]]
+    # anything before the fork point should not be included:
+    [[ "$git_log_after_topbase" != *"_q"* ]]
+}
