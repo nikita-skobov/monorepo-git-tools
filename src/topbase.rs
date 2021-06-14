@@ -1,4 +1,4 @@
-use std::{io, collections::HashSet, process::Stdio, str::FromStr, hash::Hash};
+use std::{io, collections::HashSet, process::Stdio, str::FromStr, hash::Hash, fmt::Debug};
 use io::{BufReader, BufRead};
 
 use super::ioerr;
@@ -60,7 +60,15 @@ pub fn topbase(
     };
 
     // TODO: make this a cli option:
-    let hashing_mode = BlobHashingMode::Full;
+    // topbasing pretty much always needs to be end state, doesnt it?
+    // because in the case of merge commits you can have
+    // a case where the sha on the base branch is X -> Y,
+    // but on the top branch it is 0 -> Y, and if we dont
+    // use EndState, then we detect those blobs as
+    // being different because they had different origins...
+    // I think the only hashing mode we should care about
+    // would be end state.
+    let hashing_mode = BlobHashingMode::EndState;
     // TODO: make this a cli option:
     let traverse_at_a_time = 500;
     let current_commits_not_in_upstream = find_a_b_difference2::<Commit, NopCB>(
@@ -70,6 +78,8 @@ pub fn topbase(
     let num_commits_to_take = if let Some(valid_topbase) = current_commits_not_in_upstream {
         let mut num_used = 0;
         for c in &valid_topbase.top_commits {
+            // sensible default is to not include merge commits
+            // when topbasing. TODO: make this a cli option
             if c.is_merge { continue; }
             let rebase_interactive_entry = format!("pick {} {}\n", c.id.long(), c.summary);
             rebase_data.push(rebase_interactive_entry);
@@ -400,7 +410,7 @@ pub struct SuccessfulTopbaseResult<T: From<CommitWithBlobs>> {
 /// from git log. Load N commits at a time every time `load_next()` is called.
 /// Load next gets a callback that returns true if you wish to stop reading from the log stream.
 #[derive(Debug, Default)]
-pub struct BranchIterativeCommitLoader<'a, T: Default + From<RawBlobSummary> + Eq + Hash> {
+pub struct BranchIterativeCommitLoader<'a, T: Debug + Default + From<RawBlobSummary> + Eq + Hash> {
     pub n: usize,
     pub branch_name: &'a str,
     pub last_commit_id: Option<String>,
@@ -410,7 +420,7 @@ pub struct BranchIterativeCommitLoader<'a, T: Default + From<RawBlobSummary> + E
     pub should_skip_first_commit: bool,
 }
 
-impl<'a, T: Default + From<RawBlobSummary> + Eq + Hash> BranchIterativeCommitLoader<'a, T> {
+impl<'a, T: Debug + Default + From<RawBlobSummary> + Eq + Hash> BranchIterativeCommitLoader<'a, T> {
     pub fn new(n: usize, branch_name: &'a str) -> BranchIterativeCommitLoader<'a, T> {
         let mut out = BranchIterativeCommitLoader::default();
         out.n = n;
@@ -478,6 +488,10 @@ impl<'a, T: Default + From<RawBlobSummary> + Eq + Hash> BranchIterativeCommitLoa
             // if its a merge commit, its blob set will be empty, so
             // we can insert this because sometimes we might want to look at merge
             // commits
+            // TODO: should find a better way of not allowing
+            // empty sets to be detected as subsets. this logic of
+            // not inserting commits because they dont have blobs
+            // might cause issues in the future
             let can_insert_commit = c.commit.is_merge || ! before_hash.is_empty();
             let blob_set: HashSet<T> = before_hash.drain(..).map(|x| {
                 T::from(x)
@@ -572,7 +586,7 @@ impl From<CommitWithBlobs> for Commit {
 }
 
 pub fn get_rewind_commits_from_loader<
-    T: Default + From<RawBlobSummary> + Eq + Hash,
+    T: Debug + Default + From<RawBlobSummary> + Eq + Hash,
     C: From<CommitWithBlobs>
 >(
     right_side_loader: &mut BranchIterativeCommitLoader<T>,
@@ -593,7 +607,7 @@ pub fn get_rewind_commits_from_loader<
 /// this is called by `find_a_b_difference2` if you
 /// passed a Some(n) for the traverse n at a time.
 pub fn find_a_b_difference2_iterative_traversal<
-    T: Default + From<RawBlobSummary> + Eq + Hash,
+    T: Debug + Default + From<RawBlobSummary> + Eq + Hash,
     C: From<CommitWithBlobs>,
     B: FnMut(&mut RawBlobSummary, &str) -> bool,
 >(
@@ -613,8 +627,6 @@ pub fn find_a_b_difference2_iterative_traversal<
     while ! a_loader.entirely_loaded || ! b_loader.entirely_loaded {
         // we check if A's next blob set is a subset of anything in B we've loaded so far
         a_loader.load_next(&mut should_use_blob_cb, |(a_commit, a_blob_set)| {
-            if a_commit.commit.is_merge { return false; }
-    
             if let Some(b_side_fork) = b_loader.contains_superset_of(a_blob_set) {
                 found_fork_point = Some((a_commit.clone(), b_side_fork));
                 // true because now that we found our fork point we can stop reading the stream
@@ -638,8 +650,6 @@ pub fn find_a_b_difference2_iterative_traversal<
         // if we failed to find the fork point after searching A's next group,
         // then we load B's next group, and search through all of A:
         b_loader.load_next(&mut should_use_blob_cb, |(b_commit, b_blob_set)| {
-            if b_commit.commit.is_merge { return false; }
-
             if let Some(a_side_fork) = a_loader.contains_subset_of(b_blob_set) {
                 found_fork_point = Some((a_side_fork, b_commit.clone()));
                 // true because now that we found our fork point we can stop reading the stream
@@ -669,7 +679,7 @@ pub fn find_a_b_difference2_iterative_traversal<
 pub type NopCB = fn(&mut RawBlobSummary, &str) -> bool;
 
 pub fn find_a_b_difference2_iterative_traversal_opt<
-    T: Default + From<RawBlobSummary> + Eq + Hash,
+    T: Debug + Default + From<RawBlobSummary> + Eq + Hash,
     C: From<CommitWithBlobs>,
     B: FnMut(&mut RawBlobSummary, &str) -> bool,
 >(
@@ -805,15 +815,8 @@ pub fn simplest_topbase_inner<
         };
         let mut found_matching_commit_in_b = None;
         for (b_commit, b_blob_set) in all_b_commits.iter() {
-            if c.commit.is_merge {
-                // if its a merge commit, then (unless we passed the -m option to git log)
-                // it will have no blobs, and thus an empty set is a subset of any other set.
-                // so we dont want to check this...
-                break;
-            }
             if a_blob_set.is_empty() {
                 // if its empty that means its either a merge commit
-                // (which we check for above)
                 // or the user filtered out all of the blobs, ie:
                 // user doesnt want to consider this commit because
                 // none of the blobs apply to what the user is looking for.
@@ -829,7 +832,6 @@ pub fn simplest_topbase_inner<
             // I think that would be the most 'correct'
             // TODO: also remember if you implement checking for B's subsets as well,
             // then need to remember some of B's blob sets might be empty
-            // because they are merge commits
         }
 
         if let Some(matching) = found_matching_commit_in_b {

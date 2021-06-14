@@ -382,3 +382,85 @@ function setup() {
     # our git status should have a conflict:
     [[ "$(git status)" == *"both added"* ]]
 }
+
+# TODO: this test is not currently possible because of how
+# git rebase --rebase-merges works...
+# it does not re-apply the merge conflict resolution during
+# the rebase. Even with rerere enabled, this wouldnt work
+# flawlessly for the user. And besides, to even use
+# --rebase-merges in topbase or in sync, wed have to track
+# the hierarchy of the commits, rather than a linear history...
+# So the only way to do this would be to make a much much more
+# robust git interactive rebase helper which would have
+# the ability to detect hierarchy (which it needs to properyly
+# generate the rebase todo list for the --rebase-merges argument)
+# and to stop and resume the interactive rebase and resolve
+# the known conflicts on behalf of the user...
+# so for now, we will revert to excluding merge commits...
+# @test 'contents of merge commit should show up sync in' {
+#     curr_dir="$PWD"
+#     cd "$BATS_TMPDIR/test_remote_repo2"
+#     # fork point:
+#     echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+#     git checkout -b m1
+#     echo "xyz" > xyz.txt && git add xyz.txt && git commit -m "xyz"
+#     git checkout -
+#     echo "qqq" > xyz.txt && git add xyz.txt && git commit -m "qqq"
+#     run git merge --no-ff m1
+#     echo "qresolved" > xyz.txt && git add xyz.txt && git commit -m "xyz-resolved"
+
+#     echo "REMOTE:"
+#     git log --oneline --graph
+#     echo "REMOTE STATUS:"
+#     echo "$(git status)"
+#     xyz_expected_contents="$(cat xyz.txt)"
+#     echo "xyz.txt should have $xyz_expected_contents"
+#     cd "$curr_dir"
+
+#     repo_file_contents="
+#     [repo]
+#     remote = \"..$SEP$test_remote_repo2\"
+    
+
+#     include=[\"abc.txt\", \"xyz.txt\"]
+#     "
+#     echo "$repo_file_contents" > repo_file.rf
+#     echo "abc" > abc.txt && git add abc.txt && git commit -m "abc"
+#     echo "LOCAL:"
+#     git log --oneline --graph
+#     git_branches_before="$(git branch)"
+
+#     # interactions:
+#     # 1. pull
+#     # 1. merge into local
+#     interact="1\n1\n"
+#     echo -e "$interact" > interact.txt
+
+#     # fork point should be calculated at abc commit, and then sync command
+#     # should report that we can pull in updates from the remote
+#     # repo.
+#     run $PROGRAM_PATH sync repo_file.rf --max-interactive-attempts 1 < interact.txt
+#     echo "$output"
+#     echo "GIT STATUS"
+#     echo "$(git status)"
+#     echo "git log"
+#     echo "$(git log --oneline)"
+#     echo "git branch"
+#     echo "$(git branch)"
+#     echo "git log fetch head"
+#     echo "$(git log --oneline FETCH_HEAD)"
+#     [[ $status == "0" ]]
+#     [[ $output == *"You can pull"* ]]
+#     [[ $output != *"You can push"* ]]
+#     [[ $output != *"Up to date"* ]]
+
+#     echo "Git branches before:"
+#     echo "$git_branches_before"
+#     git_branches_after="$(git branch)"
+#     echo "Git branches after:"
+#     echo "$git_branches_after"
+#     [[ "$git_branches_before" == "$git_branches_after" ]]
+
+#     xyz_actual_contents="$(cat xyz.txt)"
+#     [[ "$xyz_expected_contents" == "$xyz_actual_contents" ]]
+# }

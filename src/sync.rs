@@ -430,6 +430,7 @@ pub fn try_sync_in(
     // num_commits_to_pull: usize,
     commits_to_pull: &Vec<CommitWithBlobs>,
 ) -> io::Result<()> {
+    // eprintln!("Try sync in commits to pull: {:#?}", commits_to_pull);
     let is_verbose = false;
     let filter_rules = split_in::generate_gitfilter_filterrules(&repo_file, is_verbose);
     let random_number = match repo_file.remote_repo {
@@ -447,6 +448,7 @@ pub fn try_sync_in(
         random_branch, starting_branch_name, filter_rules)?;
 
     let new_commits_to_pull = try_get_new_commits_after_filter(&random_branch, &commits_to_pull, starting_branch_name)?;
+    // eprintln!("New commits to pull: {:#?}", new_commits_to_pull);
     let (num_commits_to_pull, rebase_interactive_string) = get_rebase_interactive_string_and_number(
         &new_commits_to_pull);
 
@@ -565,6 +567,7 @@ pub fn handle_sync2(
     starting_branch_name: &str,
     can_push_pull: bool,
 ) -> io::Result<()> {
+    let only_summary = ! can_push_pull;
     let (left_ahead, right_ahead) = match sync_type {
         SyncType::LocalAhead |
         SyncType::RemoteAhead |
@@ -635,7 +638,17 @@ pub fn handle_sync2(
     // they have an unclean index. in this case,
     // we dont present any interaction choices. we just
     // show the output above, and continue
-    if ! can_push_pull {
+    if only_summary {
+        return Ok(());
+    }
+
+    // we had commits to pull/push, but when we iterated over them
+    // it turns out they were all merge commits, so in this
+    // case, we don't want to show to the user that
+    // they can use these. So treat this as
+    // the same case as UpToDate:
+    if !can_pull && !can_push {
+        println!("Up to date. Nothing to do.");
         return Ok(());
     }
 
@@ -744,7 +757,7 @@ pub fn sync_repo_file(
     let should_rewind = true;
     let should_use_blob_cb = |c: &mut RawBlobSummary, b: &str| {
         let this_is_a_remote_blob = b == remote_branch;
-        blob_path_applies_to_repo_file(&c.path_str, &repo_file, this_is_a_remote_blob)
+        blob_path_applies_to_repo_file(&c.path_dest, &repo_file, this_is_a_remote_blob)
     };
     let topbase_ok = topbase::find_a_b_difference2::<CommitWithBlobs, _>(
         local_branch, remote_branch, Some(traverse_at_a_time),
