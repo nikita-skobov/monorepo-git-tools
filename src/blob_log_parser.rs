@@ -239,6 +239,17 @@ impl From<RawBlobSummary> for RawBlobSummaryEndState {
             DiffStatus::Deleted => (src_mode, orig.src_sha),
             _ => (dest_mode, orig.dest_sha),
         };
+        // for end state, we dont want to care about
+        // a file being added or modified. if the end sha and end file mode
+        // are the same, we treat that as the same.
+        // the only statuses that would affect the end state are
+        // deleted and renamed, and just in case: unknown.
+        let status = match status {
+            DiffStatus::Deleted => DiffStatus::Deleted,
+            DiffStatus::Renamed => DiffStatus::Renamed,
+            DiffStatus::Unknown => DiffStatus::Unknown,
+            _ => DiffStatus::Modified,
+        };
         RawBlobSummaryEndState {
             status,
             sha: use_sha,
