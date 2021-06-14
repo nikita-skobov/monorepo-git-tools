@@ -755,7 +755,7 @@ pub fn sync_repo_file(
     let should_rewind = true;
     let should_use_blob_cb = |c: &mut RawBlobSummary, b: &str| {
         let this_is_a_remote_blob = b == remote_branch;
-        blob_path_applies_to_repo_file(&c.path_str, &repo_file, this_is_a_remote_blob)
+        blob_path_applies_to_repo_file(&c.path_dest, &repo_file, this_is_a_remote_blob)
     };
     let topbase_ok = topbase::find_a_b_difference2::<CommitWithBlobs, _>(
         local_branch, remote_branch, Some(traverse_at_a_time),

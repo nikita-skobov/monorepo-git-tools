@@ -14,6 +14,7 @@ mod verify;
 mod core;
 mod sync;
 mod difflog;
+mod blob_log_parser;
 
 fn main() {
     let mgt = cli::get_cli_input();

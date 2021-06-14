@@ -324,6 +324,26 @@ pub fn hex_to_u64(hex: &str) -> u64 {
     out
 }
 
+pub fn u64_to_hex(u: u64) -> [char; 16] {
+    [
+        u64_to_hex_char((u & 0xf0_00_00_00_00_00_00_00) >> 60),
+        u64_to_hex_char((u & 0x0f_00_00_00_00_00_00_00) >> 56),
+        u64_to_hex_char((u & 0x00_f0_00_00_00_00_00_00) >> 52),
+        u64_to_hex_char((u & 0x00_0f_00_00_00_00_00_00) >> 48),
+        u64_to_hex_char((u & 0x00_00_f0_00_00_00_00_00) >> 44),
+        u64_to_hex_char((u & 0x00_00_0f_00_00_00_00_00) >> 40),
+        u64_to_hex_char((u & 0x00_00_00_f0_00_00_00_00) >> 36),
+        u64_to_hex_char((u & 0x00_00_00_0f_00_00_00_00) >> 32),
+        u64_to_hex_char((u & 0x00_00_00_00_f0_00_00_00) >> 28),
+        u64_to_hex_char((u & 0x00_00_00_00_0f_00_00_00) >> 24),
+        u64_to_hex_char((u & 0x00_00_00_00_00_f0_00_00) >> 20),
+        u64_to_hex_char((u & 0x00_00_00_00_00_0f_00_00) >> 16),
+        u64_to_hex_char((u & 0x00_00_00_00_00_00_f0_00) >> 12),
+        u64_to_hex_char((u & 0x00_00_00_00_00_00_0f_00) >> 8),
+        u64_to_hex_char((u & 0x00_00_00_00_00_00_00_f0) >> 4),
+        u64_to_hex_char((u & 0x00_00_00_00_00_00_00_0f) >> 0),
+    ]
+}
 
 
 #[derive(Debug, Clone)]
@@ -440,15 +460,14 @@ pub fn parse_blob_log_line_or_error(line: &str) -> io::Result<BlobLogLine> {
         .ok_or(ioerr!("Failed to parse blob log line: {}", line))
 }
 
-pub fn create_blob_and_insert(
-    blob_list: &mut Vec<RawBlobSummary>,
+pub fn create_blob(
     src_mode: &str,
     dest_mode: &str,
     src_sha: &str,
     dest_sha: &str,
     status: &str,
     path_str: &str,
-) -> io::Result<()> {
+) -> io::Result<RawBlobSummary> {
     let status = DiffStatus::from_str(status).map_err(|e| ioerr!("{}", e))?;
     let src_mode = FileMode::from_str(src_mode).map_err(|e| ioerr!("{}", e))?;
     let dest_mode = FileMode::from_str(dest_mode).map_err(|e| ioerr!("{}", e))?;
@@ -476,8 +495,21 @@ pub fn create_blob_and_insert(
         path_src,
         path_dest,
     };
-    blob_list.push(out);
+    Ok(out)
+}
 
+pub fn create_blob_and_insert(
+    blob_list: &mut Vec<RawBlobSummary>,
+    src_mode: &str,
+    dest_mode: &str,
+    src_sha: &str,
+    dest_sha: &str,
+    status: &str,
+    path_str: &str,
+) -> io::Result<()> {
+    let out = create_blob(src_mode, dest_mode,
+        src_sha, dest_sha, status, path_str)?;
+    blob_list.push(out);
     Ok(())
 }
 
@@ -647,5 +679,41 @@ mod test {
             false
         }).unwrap();
         assert_eq!(num_commits_visited, 1);
+    }
+
+    #[test]
+    fn sha_parsing_works() {
+        let sha1 = "de1acaefe87e";
+        let shau64 = hex_to_u64(sha1);
+        println!("{}", shau64);
+        let sha_back = u64_to_hex(shau64);
+        let sha_back_str: String = sha_back.iter().collect();
+        // the parsed back to string one contains extra leading zeros
+        // so we test if its somewhere inside:
+        assert!(sha_back_str.contains(sha1));
+
+        let sha2 = "000ff";
+        let shau64 = hex_to_u64(sha2);
+        assert_eq!(shau64, 255);
+    }
+
+    #[test]
+    fn parse_blob_line_works() {
+        let line = ":100644 000000 1234567 0000000 D file5";
+        let parsed = parse_blob_log_line(line).unwrap();
+        let parsed = match parsed {
+            BlobLogLine::StartOfMergeCommit(_, _) => panic!(),
+            BlobLogLine::StartOfCommit(_, _) => panic!(),
+            BlobLogLine::Blob(a, b, c, d, e, f) => create_blob(a, b, c, d, e, f).unwrap()
+        };
+        println!("{:#?}", parsed);
+        assert_eq!(parsed.path_dest, "file5");
+        assert_eq!(parsed.path_src, "file5");
+        assert_eq!(parsed.dest_sha, 0);
+        assert!(parsed.src_sha != 0);
+        let (status, src_mode, dest_mode): (DiffStatus, FileMode, FileMode) = parsed.src_dest_mode_and_status.into();
+        assert!(status == DiffStatus::Deleted);
+        assert!(src_mode == FileMode::RegularNonEx);
+        assert!(dest_mode == FileMode::Empty);
     }
 }
