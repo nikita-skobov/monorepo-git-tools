@@ -49,12 +49,9 @@ pub fn iterate_blob_log<T>(
 ) -> io::Result<()>
     where T: FnMut(CommitWithBlobs) -> bool,
 {
-    // TODO: add the '-m' flag if we want to see merge commits with a full blob diff
-    // by default, merge commits do not have a blob summary, which
-    // makes it easy to tell which commits are merges or not. this default
-    // is desirable 9 times out of 10. not sure when -m would be desired though.
     let mut exec_args = vec![
         "git", "--no-pager", "log", "--no-color", "--raw",
+        "-m", "--no-decorate",
         "--pretty=oneline", committish,
     ];
     let n_str = match num_commits {
